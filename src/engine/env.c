@@ -9,7 +9,7 @@
 #include "env.h"
 #include "rail.h"
 
-#define RSTEP 4
+#define RSTEP 4            /* リングの間隔[m] */
 #define NF    5            /* 前方の区間数(20m) */
 #define NB    5            /* 後方の区間数 */
 #define NR    (NF + NB + 1)
@@ -18,23 +18,28 @@
 #define VR_D  38           /* 仮リングまでの距離(1/64m) */
 
 /* 断面(レール=目の位置からの相対。u=右 v=上、8.8 m) */
-static const i16 hex_u[6] = { -256, 256, 486, 307, -307, -486 };
-static const i16 hex_v[6] = {  358, 358,  51, -333, -333,   51 };
+/* 断面(六角形)の頂点は geom.s の hex_tab(レール=目の位置からの相対。u=右 v=上、8.8 m) */
 /* 面 k(頂点 k と k+1 の間)の色。[偶数区間 / 奇数区間][面]
  *   面: 天井, 右上の壁, 右下の壁, 床, 左下の壁, 左上の壁 */
 static const u8 band_cols[2][6] = {
     { 10, 12, 13, 14, 13, 12 },
     { 11, 13, 12, 15, 12, 13 },
 };
+/* raster.s: 辺キャッシュつきの塗り(リングの辺・放射方向の辺を面どうしで共有する) */
 extern const u8 *g_band_col;
-void band_fast(const i16 *sa, const i16 *sb);
+extern const i16 *g_ring_s;
+void eslot_clear(void);
+void band_fast(u8 a, u8 b);
+void hex_fast(u8 r);
 /* 木の枠: 床を除く 5 面に沿った帯。内側の縁 = 頂点をリング中心へ 1/8 寄せた点(画面上で) */
 #define FRAME_IN 224    /* 8.8: 7/8 */
 
-static V3  ring[NR + 1][6];
-static i16 ring_s[NR + 1][12];   /* 投影済みの画面座標 (x, y) × 6 */
-static u8  ring_front[NR + 1];   /* bit k = 頂点 k が z >= NEAR_Z */
-static u8  ring_ok[NR + 1];
+/* リングの頂点(geom.s の ring_make が書く) */
+V3  ring_v[NR + 1][6];
+i16 ring_s[NR + 1][12];          /* 投影済みの画面座標 (x, y) × 6 */
+u8  ring_front[NR + 1];          /* bit k = 頂点 k が z >= NEAR_Z */
+u8  ring_ok[NR + 1];
+void ring_make(u8 idx, const RailPt *p);
 static u16 ring_m0;
 
 /* リング r(-NB..NF)の rail 上の番号(m) */
@@ -43,38 +48,13 @@ static i16 ring_meter(i8 r)
     return (i16)ring_m0 + (i16)r * RSTEP;
 }
 
-/* リング idx を、ワールドのレール点 p(ヨー yaw)から作る */
-static void ring_make(u8 idx, i16 px, i16 py, i16 pz, u16 yaw)
-{
-    V3 c;
-    u8 d, k, fm = 0;
-    i16 cs, sn;
-    V3 *v = ring[idx];
-    i16 *o = ring_s[idx];
-    xform(px, py, pz, &c);
-    d = (u8)((yaw >> 8) - cam_yaw);
-    cs = COS(d);
-    sn = SIN(d);
-    for (k = 0; k < 6; k++, v++, o += 2) {
-        v->x = c.x + fmul(hex_u[k], cs);
-        v->z = c.z - fmul(hex_u[k], sn);
-        v->y = c.y + hex_v[k];
-        if (v->z >= NEAR_Z) {
-            project2(v, o);
-            fm |= 1 << k;
-        }
-    }
-    ring_front[idx] = fm;
-    ring_ok[idx] = 1;
-}
-
 static void ring_calc(i8 r)
 {
     i16 m = ring_meter(r);
     RailPt *p;
     if (m < 0 || m >= (i16)rail_len) return;
     p = &rail[m];
-    ring_make((u8)(r + NB), p->x, p->y, p->z, p->yaw);
+    ring_make((u8)(r + NB), p);
 }
 
 /* リング a と b の間の 6 面。4 頂点とも手前(z >= NEAR_Z)なら投影済みの座標で直接塗り、
@@ -90,7 +70,7 @@ static void band_draw(u8 a, u8 b, u8 par)
     if (!fa && !fb) return;
     if (fa == 0x3F && fb == 0x3F) {
         g_band_col = band_cols[par];
-        band_fast(ring_s[a], ring_s[b]);
+        band_fast(a, b);
         return;
     }
     sa = ring_s[a];
@@ -106,10 +86,10 @@ static void band_draw(u8 a, u8 b, u8 par)
             scr[6] = sb[k * 2];  scr[7] = sb[k * 2 + 1];
             raster(4, band_cols[par][k]);
         } else if (ma + mb) {
-            q[0] = ring[a][k];
-            q[1] = ring[a][k1];
-            q[2] = ring[b][k1];
-            q[3] = ring[b][k];
+            q[0] = ring_v[a][k];
+            q[1] = ring_v[a][k1];
+            q[2] = ring_v[b][k1];
+            q[3] = ring_v[b][k];
             poly3(q, 4, band_cols[par][k]);
         }
     }
@@ -126,10 +106,11 @@ static void seg_draw(i8 r)
 static u8 vring_make(u16 sv)
 {
     V3 p;
-    u16 yaw;
+    RailPt rp;
     if (sv > rail_s_max()) return 0;
-    rail_at(sv, &p, &yaw);
-    ring_make(VR, p.x, p.y, p.z, yaw);
+    rail_at(sv, &p, &rp.yaw);
+    rp.x = p.x; rp.y = p.y; rp.z = p.z;
+    ring_make(VR, &rp);
     return ring_front[VR] == 0x3F;
 }
 
@@ -175,9 +156,8 @@ static u8 cap_ok(i8 r)
 
 static void hex_draw(i8 r, u8 color)
 {
-    u8 idx = (u8)(r + NB), k;
-    for (k = 0; k < 12; k++) scr[k] = ring_s[idx][k];
-    raster(6, color);
+    g_color = color;
+    hex_fast((u8)(r + NB));
 }
 
 static void cap_draw(i8 r)
@@ -193,8 +173,10 @@ void env_draw(u16 s, u8 look)
     i8 r, k, rn;
     u8 capped = 1;
 
-    ring_m0 = (s >> 6) & ~(RSTEP - 1);
+    ring_m0 = (s >> 6) - (s >> 6) % RSTEP;
     for (r = 0; r <= NR; r++) ring_ok[r] = 0;
+    g_ring_s = &ring_s[0][0];
+    eslot_clear();
     for (r = back ? -NB : 0; r <= (fwd ? NF : 1); r++) ring_calc(r);
 
     /* トンネルの内側からは壁が視界を全部覆うので、奥の開口部を黒く塞げば

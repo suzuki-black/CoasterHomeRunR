@@ -4,6 +4,9 @@
 
 volatile i16 bench_sink;
 void bench_mark(u8 id) { bench_sink = id; }
+void bench_fill64(void);
+void bench_nop64(void);
+void bench_push64(void);
 
 static void bench_body(void)
 {
@@ -16,17 +19,22 @@ static void bench_body(void)
     bench_mark(2);
     for (i = 0; i < 1000; i++) acc += (i16)div_slope(i, 37);
     bench_mark(3);
-    for (i = 0; i < 1000; i++) { g_ewx = 0x100000UL; g_ews = 0x8000; ew_run(20, span_a); }
+    for (i = 0; i < 1000; i++) acc += muldiv((i16)i, 3, 7);
     bench_mark(4);
     for (i = 0; i < 1000; i++) acc += (i16)i;
     bench_mark(5);
+    for (i = 0; i < 1000; i++) bench_fill64();
+    bench_mark(6);
+    for (i = 0; i < 1000; i++) bench_nop64();
+    bench_mark(7);
+    for (i = 0; i < 1000; i++) bench_push64();
+    bench_mark(8);
     bench_sink = acc;
 }
 
 void bench_run(void)
 {
-    bench_body();                 /* 割り込みあり */
     __asm__("di");
-    bench_body();                 /* 割り込みなし */
+    bench_body();
     __asm__("ei");
 }

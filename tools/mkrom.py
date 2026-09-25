@@ -15,8 +15,8 @@ import sys
 
 BANK = 0x2000
 ROM_BANKS = 16
-DATA_BASE, DATA_LIMIT = 0xCC00, 0xE000
-CODE_LIMIT = 0xC000
+DATA_BASE, DATA_LIMIT = 0xCC00, 0xDE00   # 0xDE00-0xDFFF は行の左右端(raster.s span_a/span_b)
+CODE_LIMIT = 0x9C00   # 0x9C00-0xBFFF は辺キャッシュ(raster.s ESLOT)
 
 
 def read_ihx(path):

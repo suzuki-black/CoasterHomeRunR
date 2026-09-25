@@ -3,7 +3,9 @@
 #
 #  make            ASCII8 メガロム build/TrolleyHomeRun.rom を生成
 #  make run        openMSX(開発用機種 TH_turboR_dev)で起動して目視
-#  make test       openMSX ヘッドレスで起動〜ゲーム進行を判定(tools/test_game.tcl)
+#  make test       openMSX で起動〜ゲーム進行を判定(tools/test_game.tcl)
+#  make perf       速度の計測(tools/perf.tcl)
+#  make pcprof     PC サンプリングの統計プロファイル(tools/pcprof.tcl)
 #  make machine    開発用機種定義を ~/.openMSX/share/machines にコピー(初回のみ)
 # ============================================================================
 
@@ -28,9 +30,9 @@ MACHINE ?= TH_turboR_dev
 
 CFLAGS  = -mz80 --std-c11 -I$(ENG) --opt-code-speed --max-allocs-per-node 5000
 # コードは RAM 0x4000-0xBFFF、変数は 0xCC00-0xDFFF(仕様書 7.3)
-LDFLAGS = -mz80 --no-std-crt0 --code-loc 0x4008 --data-loc 0xCC00 -Wl-j -Wl-m
+LDFLAGS = -mz80 --no-std-crt0 --code-loc 0x4008 --data-loc 0xCC00 -Wl-j -Wl-m -Wl-u
 
-ASM_SRCS = $(ENG)/crt0.s $(ENG)/sys.s $(ENG)/vdp.s $(ENG)/gfx.s $(ENG)/math.s $(ENG)/raster.s
+ASM_SRCS = $(ENG)/crt0.s $(ENG)/sys.s $(ENG)/vdp.s $(ENG)/gfx.s $(ENG)/math.s $(ENG)/raster.s $(ENG)/geom.s
 C_SRCS   = $(ENG)/main.c $(ENG)/game.c $(ENG)/render.c $(ENG)/rail.c $(ENG)/env.c \
            $(ENG)/hud.c $(ENG)/sound.c $(ENG)/stage_cave.c $(ENG)/trolley.c
 
@@ -49,7 +51,7 @@ HDRS = $(wildcard $(ENG)/*.h)
 
 ROM = $(BUILD)/TrolleyHomeRun.rom
 
-.PHONY: all run test machine clean
+.PHONY: all run test perf pcprof machine clean
 
 all: $(ROM)
 
@@ -67,7 +69,7 @@ $(BUILD)/%.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BUILD)/%.rel: $(ENG)/%.s $(ENG)/r800.inc Makefile | $(BUILD)
-	$(AS) -g -I$(ENG) -o $@ $<
+	$(AS) -g -l -I$(ENG) -o $@ $<
 
 $(BUILD)/engine.ihx: $(RELS)
 	$(CC) $(LDFLAGS) -o $@ $(RELS)
@@ -96,6 +98,23 @@ test: $(ROM)
 	TH_NOI=$(abspath $(BUILD)/engine.noi) TH_OUT=$(abspath $(RUNDIR)) \
 	  timeout $(TIMEOUT) $(OPENMSX_ROM) -script $(abspath $(RUNDIR))/test_game.tcl >/dev/null 2>&1 || true
 	@cat $(RUNDIR)/result.txt
+
+# 速度の計測(tools/perf.tcl)。PERF_FN="_env_draw _raster" のように関数を渡すと区間ごとの時間も出す
+perf: $(ROM)
+	@mkdir -p $(RUNDIR)
+	cp $(TOOLS)/perf.tcl $(RUNDIR)/
+	TH_NOI=$(abspath $(BUILD)/engine.noi) TH_OUT=$(abspath $(RUNDIR)) PERF_FN="$(PERF_FN)" \
+	  timeout $(TIMEOUT) $(OPENMSX_ROM) -script $(abspath $(RUNDIR))/perf.tcl >/dev/null 2>&1 || true
+	@cat $(RUNDIR)/perf.txt
+
+# PC のサンプリングによる統計プロファイル(tools/pcprof.tcl)。関数・ローカルラベル単位の比率
+pcprof: $(ROM)
+	@mkdir -p $(RUNDIR)
+	$(PYTHON) $(TOOLS)/prof_syms.py $(BUILD)/engine.noi $(BUILD) $(BUILD)/prof_syms.txt
+	cp $(TOOLS)/pcprof.tcl $(RUNDIR)/
+	TH_NOI=$(abspath $(BUILD)/engine.noi) TH_OUT=$(abspath $(RUNDIR)) PROF_SYMS=$(abspath $(BUILD)/prof_syms.txt) \
+	  timeout $(TIMEOUT) $(OPENMSX_ROM) -script $(abspath $(RUNDIR))/pcprof.tcl >/dev/null 2>&1 || true
+	@head -40 $(RUNDIR)/pcprof.txt
 
 clean:
 	rm -rf $(BUILD)
