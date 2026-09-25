@@ -1,0 +1,73 @@
+/* hud.c — 描画バッファへの文字・ゲージの上書き */
+#include "hud.h"
+
+static void block(i8 x, i8 y, u8 color, u8 scale)
+{
+    u8 i, j;
+    for (j = 0; j < scale; j++) {
+        i8 yy = y + j;
+        if (yy < 0 || yy >= 48) continue;
+        for (i = 0; i < scale; i++) {
+            i8 xx = x + i;
+            if (xx < 0 || xx >= 64) continue;
+            BUF[(u8)yy * 64 + (u8)xx] = color;
+        }
+    }
+}
+
+static void char_draw(i8 x, i8 y, char ch, u8 color, u8 scale)
+{
+    u8 n, r, bits, c;
+    const u8 *g;
+    if (ch < 0x20 || ch > 0x7F) return;
+    n = font35_map[ch - 0x20];
+    if (n == 0xFF) return;
+    g = &font35[n * 5];
+    for (r = 0; r < 5; r++) {
+        bits = g[r];
+        for (c = 0; c < 3; c++) {
+            if (bits & (4 >> c)) block(x + c * scale, y + r * scale, color, scale);
+        }
+    }
+}
+
+void text_draw(i8 x, i8 y, const char *s, u8 color, u8 scale)
+{
+    for (; *s; s++) {
+        char_draw(x, y, *s, color, scale);
+        x += 4 * scale;
+    }
+}
+
+void text_center(i8 y, const char *s, u8 color, u8 scale)
+{
+    u8 n = 0;
+    const char *p = s;
+    while (*p++) n++;
+    text_draw((i8)((64 - (i8)(n * 4 * scale - scale)) / 2), y, s, color, scale);
+}
+
+void num_draw(i8 x, i8 y, u16 n, u8 digits, u8 color)
+{
+    char buf[6];
+    u8 i = 5;
+    buf[5] = 0;
+    do {
+        buf[--i] = '0' + (n % 10);
+        n /= 10;
+    } while (n && i);
+    x += (i8)((digits - (5 - i)) * 4);
+    text_draw(x, y, &buf[i], color, 1);
+}
+
+void hud_life(u8 life)
+{
+    u8 i;
+    g_rh = 2;
+    buf_fill_rows(C_BLACK, BUF + 46 * 64);
+    for (i = 0; i < 8; i++) {
+        g_rx = 4 + i * 7; g_ry = 46; g_rw = 6; g_rh = 2;
+        g_color = (i < life) ? C_RED : 9;
+        rect_fill();
+    }
+}
