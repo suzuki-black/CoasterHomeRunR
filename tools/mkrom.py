@@ -16,7 +16,7 @@ import sys
 BANK = 0x2000
 ROM_BANKS = 16
 DATA_BASE, DATA_LIMIT = 0xCC00, 0xDE00   # 0xDE00-0xDFFF は行の左右端(raster.s span_a/span_b)
-CODE_LIMIT = 0x9C00   # 0x9C00-0xBFFF は辺キャッシュ(raster.s ESLOT)
+CODE_LIMIT = 0x9B00   # 0x9B00-0x9BFF は塗りの展開ブロック(raster.s FILLBLK)、0x9C00-0xBFFF は辺キャッシュ
 
 
 def read_ihx(path):
@@ -55,7 +55,7 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path):
     bank0 = bytes(boot.get(0x4000 + i, 0xFF) for i in range(BANK))
 
     eng = read_ihx(eng_ihx)
-    code = [a for a in eng if a < 0xC000]
+    code = [a for a in eng if a < 0xC000 and not 0x9B00 <= a < 0x9C00]
     data = [a for a in eng if a >= 0xC000]
     if data:
         sys.exit(f'mkrom: エンジンのイメージに 0x{min(data):04X} 以降(RAM 変数域)のデータがある')
@@ -63,6 +63,8 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path):
         sys.exit('mkrom: エンジンが 0x4000 より前にある')
     if max(code) >= CODE_LIMIT:
         sys.exit(f'mkrom: エンジンが 0x{CODE_LIMIT:04X} を超えた: 0x{max(code):04X}')
+    if 0x9B00 not in eng:
+        sys.exit('mkrom: 塗りの展開ブロック(0x9B00)が無い')
     image = bytes(eng.get(0x4000 + i, 0xFF) for i in range(0x8000))
 
     syms = read_noi(eng_noi)

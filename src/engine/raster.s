@@ -21,6 +21,9 @@
 	.globl	_g_buf_hi
 
 ROWS	= 46
+FILLBLK	= 0x9B00		; 塗りの展開ブロック(fill の後ろ、_FILLBLK 領域)
+FILLJP	= FILLBLK + 2
+FILLEND	= FILLJP + 3 + 128
 ; 各行の左右端(0..64)。256 境界に置き、fill が inc d / dec d だけで左右を行き来する
 _span_a	== 0xDE00
 _span_b	== 0xDF00
@@ -609,12 +612,13 @@ edge::
 ; fill: C = 最初の行、B = 行数。span_a[r] と span_b[r] の間を g_color で塗る
 ; ---------------------------------------------------------------------------
 fill::
-	; 終わりの行(r0 + 行数)を比較命令へ書き込む(自己書き換え。コードは RAM 上)
+	; 終わりの行(r0 + 行数)と色を命令へ書き込む(自己書き換え。コードは RAM 上)
+	; ★push で 2 バイトずつ書く版も試したが、塗りの時間は 1 行ごとの準備で決まっていて速くならなかった
 	ld	a, c
 	add	a, b
-	ld	(8$ + 1), a
+	ld	(fill_cmp + 1), a
 	ld	a, (_g_color)
-	ld	(7$ + 1), a
+	ld	(FILLBLK + 1), a
 	; DE = span_a + r0、HL = バッファの行頭
 	ld	d, #SPAN_A_HI
 	ld	e, c
@@ -629,58 +633,64 @@ fill::
 	ld	a, (_g_buf_hi)
 	add	a, h
 	ld	h, a
-1$:
+fill_row:
 	inc	d
 	ld	a, (de)			; span_b
 	ld	c, a
 	dec	d
 	ld	a, (de)			; span_a
-	cp	a, c
-	jp	z, 4$
-	jr	c, 2$
-	ld	b, a			; 左右を入れ替える
-	ld	a, c
-	ld	c, b
-2$:
-	; A = 左端 < C = 右端。飛び先 = 6$ - 幅 * 2
+	sub	a, c			; 大小と幅を 1 回の引き算で
+	jr	z, fill_next
+	jr	c, fill_lt
+	ld	b, a			; span_a > span_b: 幅 = A、左端 = span_b(C)
+	jr	fill_go
+fill_lt:
+	neg				; span_a < span_b: 幅 = -A、左端 = span_b - 幅
 	ld	b, a
 	ld	a, c
 	sub	a, b
-	add	a, a
 	ld	c, a
-	ld	a, #<6$
-	sub	a, c
-	ld	(5$ + 1), a
-	ld	a, #>6$
-	sbc	a, #0
-	ld	(5$ + 2), a
-	push	hl
+fill_go:
+	; 飛び先の下位 = 終わりの下位 - 幅 * 2(ブロックは 256 境界の中なので上位は固定)
+	ld	a, b
+	add	a, a
+	ld	b, a
+	ld	a, #<FILLEND
+	sub	a, b
+	ld	(FILLJP + 1), a
+	ld	b, l			; 行頭の下位を覚えておく
 	ld	a, l
-	add	a, b
+	add	a, c
 	ld	l, a			; 行頭は 64 の倍数、左端 <= 63 なので下位だけで足りる
-7$:
-	ld	a, #0			; 色(書き換える)
-5$:
-	jp	0			; 飛び先(書き換える)
+	jp	FILLBLK			; 色を A に入れてから展開ブロックの途中へ
+fill_ret::
+	ld	l, b
+fill_next:
+	ld	a, l
+	add	a, #64
+	ld	l, a
+	jr	nc, fill_inc
+	inc	h
+fill_inc:
+	inc	e
+	ld	a, e
+fill_cmp:
+	cp	a, #0			; 終わりの行(書き換える)
+	jp	nz, fill_row
+	ret
+
+; 展開した 64 回の書き込み。256 境界の中に置き、飛び先の下位バイトだけを書き換える
+	.area	_FILLBLK (ABS)
+	.org	FILLBLK
+	ld	a, #0			; FILLBLK: 色(書き換える)
+	jp	0x9B00			; FILLJP: 飛び先(下位を書き換える。上位は 0x9B 固定)
 	.rept	64
 	ld	(hl), a
 	inc	l
 	.endm
-6$:
-	pop	hl
-4$:
-	ld	a, l
-	add	a, #64
-	ld	l, a
-	jr	nc, 3$
-	inc	h
-3$:
-	inc	e
-	ld	a, e
-8$:
-	cp	a, #0			; 終わりの行(書き換える)
-	jp	nz, 1$
-	ret
+	jp	fill_ret		; FILLEND
+
+	.area	_CODE
 
 ; ---------------------------------------------------------------------------
 ; void project2(const V3 *v, i16 *out)   HL=v, DE=out。z >= 128(0.5m)が前提

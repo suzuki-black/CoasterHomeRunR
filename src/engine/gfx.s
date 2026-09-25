@@ -147,3 +147,58 @@ _bench_push64::
 	ld	sp, (bp_sp)
 	ei
 	ret
+
+; ---------------------------------------------------------------------------
+; void runs_draw(const u8 *tbl, u8 *base)   HL=表、DE=描き先の先頭行
+;   表: (行, 列, 長さ, 元のアドレス 2 バイト) × n、行 = 0xFF で終わり。行 >= g_rh は描かない
+;   トロッコの縁の不透明な部分を、連続区間ごとに LDIR で写す(透過判定を 1 バイトずつしない)
+; ---------------------------------------------------------------------------
+	.area	_DATA
+rd_base:	.ds	2
+	.area	_CODE
+_runs_draw::
+	ld	(rd_base), de
+1$:
+	ld	a, (hl)			; 行
+	cp	a, #0xFF
+	ret	z
+	ld	b, a
+	ld	a, (_g_rh)
+	cp	a, b
+	jr	z, 2$
+	jr	c, 2$			; 行 >= g_rh(揺れで下にはみ出す行)
+	push	hl
+	; 描き先 = base + 行 * 64 + 列
+	inc	hl
+	ld	c, (hl)			; 列
+	inc	hl
+	ld	a, (hl)			; 長さ
+	inc	hl
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)			; DE = 元
+	push	de
+	push	af
+	ld	l, b
+	ld	h, #0
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	ld	b, #0
+	add	hl, bc
+	ld	de, (rd_base)
+	add	hl, de
+	ex	de, hl			; DE = 描き先
+	pop	af
+	ld	c, a
+	ld	b, #0
+	pop	hl			; HL = 元
+	ldir
+	pop	hl
+2$:
+	ld	de, #5
+	add	hl, de
+	jr	1$
