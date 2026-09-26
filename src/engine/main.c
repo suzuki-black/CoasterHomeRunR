@@ -160,17 +160,25 @@ static void title(void)
 void bench_run(void);
 #endif
 
+/* ステージデータを ROM バンクから読み込む(仕様書 7.3) */
+static const Stage *stage_load(u8 bank)
+{
+    rom_load(bank, (void *)STAGE_BUF);
+    return *(const Stage * const *)STAGE_BUF;
+}
+
 void main(void)
 {
     g_buf_hi = BUF_A_HI;
 #ifdef BENCH
     bench_run();
 #endif
+    sys_install_loader();
     sys_install_isr();
     sound_init();
     vdp_init();
     for (;;) {
         title();
-        game_run(&stage_cave);
+        game_run(stage_load(STAGE1_BANK));
     }
 }

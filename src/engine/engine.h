@@ -47,6 +47,8 @@ u8   input_raw(void);
 void psg_write(u8 reg, u8 val);
 void timer_reset(void);
 u16  timer_read(void);
+void sys_install_loader(void);
+void rom_load(u8 bank, void *dst);   /* ROM の bank, bank+1 から 3KB を dst へ(ページ2・3 のみ) */
 
 /* ---- vdp.s ---- */
 void vdp_wreg(u8 reg, u8 val);

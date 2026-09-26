@@ -5,6 +5,7 @@
 #  make run        openMSX(開発用機種 TH_turboR_dev)で起動して目視
 #  make test       openMSX で起動〜ゲーム進行を判定(tools/test_game.tcl)
 #  make flow       自動で遊んで流れを判定(tools/test_flow.tcl、GOD=1 でライフを減らさない)
+#  make slotcheck  ROM 上で動くコードが無いか・DRAM モードかの確認(tools/slotcheck.tcl)
 #  make perf       速度の計測(tools/perf.tcl)
 #  make pcprof     PC サンプリングの統計プロファイル(tools/pcprof.tcl)
 #  make machine    開発用機種定義を ~/.openMSX/share/machines にコピー(初回のみ)
@@ -35,7 +36,7 @@ LDFLAGS = -mz80 --no-std-crt0 --code-loc 0x4008 --data-loc 0xCC00 -Wl-j -Wl-m -W
 
 ASM_SRCS = $(ENG)/crt0.s $(ENG)/sys.s $(ENG)/vdp.s $(ENG)/gfx.s $(ENG)/math.s $(ENG)/raster.s $(ENG)/geom.s
 C_SRCS   = $(ENG)/main.c $(ENG)/game.c $(ENG)/render.c $(ENG)/rail.c $(ENG)/env.c \
-           $(ENG)/hud.c $(ENG)/sound.c $(ENG)/stage_cave.c $(ENG)/trolley.c
+           $(ENG)/hud.c $(ENG)/sound.c $(ENG)/trolley.c
 
 # crt0 は必ず先頭にリンクする
 RELS = $(BUILD)/crt0.rel \
@@ -52,7 +53,7 @@ HDRS = $(wildcard $(ENG)/*.h)
 
 ROM = $(BUILD)/TrolleyHomeRun.rom
 
-.PHONY: all run test flow perf pcprof machine clean
+.PHONY: all run test flow slotcheck perf pcprof machine clean
 
 all: $(ROM)
 
@@ -75,14 +76,26 @@ $(BUILD)/%.rel: $(ENG)/%.s $(ENG)/r800.inc Makefile | $(BUILD)
 $(BUILD)/engine.ihx: $(RELS)
 	$(CC) $(LDFLAGS) -o $@ $(RELS)
 
+# ステージ: 読み込み先(0x9C00)に合わせて単独でリンクし、ROM のバンクに置く(tools/mkrom.py --stage)
+STG     = src/stage
+$(BUILD)/stagehead.rel: $(STG)/stagehead.s Makefile | $(BUILD)
+	$(AS) -g -o $@ $<
+
+$(BUILD)/stage1.rel: $(STG)/stage1_cave.c $(HDRS) Makefile | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD)/stage1.ihx: $(BUILD)/stagehead.rel $(BUILD)/stage1.rel
+	$(CC) -mz80 --no-std-crt0 --code-loc 0x9C02 --data-loc 0xA800 -o $@ $^
+
 $(BUILD)/boot.rel: $(BOOT)/boot.s Makefile | $(BUILD)
 	$(AS) -g -o $@ $<
 
 $(BUILD)/boot.ihx: $(BUILD)/boot.rel
 	$(CC) -mz80 --no-std-crt0 --code-loc 0x4000 --data-loc 0xC000 -o $@ $<
 
-$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(TOOLS)/mkrom.py
-	$(PYTHON) $(TOOLS)/mkrom.py $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/engine.noi $@
+$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/stage1.ihx $(TOOLS)/mkrom.py
+	$(PYTHON) $(TOOLS)/mkrom.py $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/engine.noi $@ \
+	  --stage 6 $(BUILD)/stage1.ihx
 
 machine:
 	cp $(TOOLS)/openmsx/TH_turboR_dev.xml $(HOME)/.openMSX/share/machines/
@@ -107,6 +120,14 @@ flow: $(ROM)
 	TH_NOI=$(abspath $(BUILD)/engine.noi) TH_OUT=$(abspath $(RUNDIR)) TH_GOD=$(GOD) \
 	  timeout $(TIMEOUT) $(OPENMSX_ROM) -script $(abspath $(RUNDIR))/test_flow.tcl >/dev/null 2>&1 || true
 	@cat $(RUNDIR)/flow.txt
+
+# 実行中のコードがどのスロットにあるか(ROM 上で動く処理が無いか)と DRAM モードの確認(tools/slotcheck.tcl)
+slotcheck: $(ROM)
+	@mkdir -p $(RUNDIR)
+	cp $(TOOLS)/slotcheck.tcl $(RUNDIR)/
+	TH_NOI=$(abspath $(BUILD)/engine.noi) TH_OUT=$(abspath $(RUNDIR)) \
+	  timeout $(TIMEOUT) $(OPENMSX_ROM) -script $(abspath $(RUNDIR))/slotcheck.tcl >/dev/null 2>&1 || true
+	@cat $(RUNDIR)/slotcheck.txt
 
 # 速度の計測(tools/perf.tcl)。PERF_FN="_env_draw _raster" のように関数を渡すと区間ごとの時間も出す
 perf: $(ROM)

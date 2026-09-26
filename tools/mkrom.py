@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """ASCII8 メガロム(128KB = 8KB × 16 バンク)を組み立てる。配置は src/boot/boot.s の冒頭を参照。
 
-  mkrom.py boot.ihx engine.ihx engine.noi out.rom
+  mkrom.py boot.ihx engine.ihx engine.noi out.rom [--stage バンク stage.ihx ...]
 
 - bank0     : ローダー(0x4000-0x5FFF)
 - bank1     : 予備
 - bank2-5   : エンジン(RAM 0x4000-0xBFFF へ写される)
-- bank6-15  : 予備(ステージデータ等。常駐ローダーで読む)
+- bank6-15  : ステージデータ(--stage。1 ステージ 2 バンク。0x9C00-0xA7FF の 3KB を常駐ローダーが RAM へ写す)
 
 変数(DATA/BSS)が 0xCC00-0xDFFF に収まっているかも検査する。
 """
@@ -48,7 +48,10 @@ def read_noi(path):
     return syms
 
 
-def main(boot_ihx, eng_ihx, eng_noi, out_path):
+STAGE_BASE, STAGE_SIZE = 0x9C00, 0x0C00
+
+
+def main(boot_ihx, eng_ihx, eng_noi, out_path, *stage_args):
     boot = read_ihx(boot_ihx)
     if min(boot) < 0x4000 or max(boot) >= 0x6000:
         sys.exit('mkrom: ローダーが bank0(0x4000-0x5FFF)に収まっていない')
@@ -73,13 +76,33 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path):
     if dstart < DATA_BASE or heap > DATA_LIMIT:
         sys.exit(f'mkrom: 変数域 0x{dstart:04X}-0x{heap:04X} が 0x{DATA_BASE:04X}-0x{DATA_LIMIT:04X} を超えた')
 
-    rom = bank0 + b'\xFF' * BANK + image
+    rom = bytearray(bank0 + b'\xFF' * BANK + image)
     rom += b'\xFF' * (ROM_BANKS * BANK - len(rom))
+
+    # ステージ: 読み込み先 0x9C00-0xA7FF に収まっていること、先頭 2 バイトが Stage へのポインタ
+    stages = []
+    args = list(stage_args)
+    while args:
+        if args[0] != '--stage' or len(args) < 3:
+            sys.exit('mkrom: 引数は --stage バンク stage.ihx')
+        bank, path = int(args[1]), args[2]
+        args = args[3:]
+        st = read_ihx(path)
+        lo, hi = min(st), max(st)
+        if lo != STAGE_BASE or hi >= STAGE_BASE + STAGE_SIZE:
+            sys.exit(f'mkrom: {path} が 0x{STAGE_BASE:04X}-0x{STAGE_BASE + STAGE_SIZE - 1:04X} に収まっていない '
+                     f'(0x{lo:04X}-0x{hi:04X}。変数は置けない)')
+        if bank < 6 or bank + 1 >= ROM_BANKS:
+            sys.exit(f'mkrom: ステージのバンク {bank} が範囲外')
+        data = bytes(st.get(STAGE_BASE + i, 0xFF) for i in range(STAGE_SIZE))
+        rom[bank * BANK:bank * BANK + STAGE_SIZE] = data
+        stages.append(f'bank{bank}={hi - STAGE_BASE + 1}B')
     with open(out_path, 'wb') as f:
         f.write(rom)
     print(f'mkrom: {out_path} {len(rom)} B (ASCII8) '
           f'loader {max(boot) - 0x4000 + 1} B, engine code {max(code) - 0x4000 + 1} B / {CODE_LIMIT - 0x4000}, '
-          f'vars 0x{dstart:04X}-0x{heap:04X} ({heap - dstart} B / {DATA_LIMIT - DATA_BASE})')
+          f'vars 0x{dstart:04X}-0x{heap:04X} ({heap - dstart} B / {DATA_LIMIT - DATA_BASE}), '
+          f'stages {" ".join(stages) or "-"} (各 {STAGE_SIZE} B まで)')
 
 
 if __name__ == '__main__':

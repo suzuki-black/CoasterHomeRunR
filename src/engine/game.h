@@ -46,7 +46,9 @@ typedef struct {
     u16 skip_tick;            /* 演出中に A を押したらこの時刻まで飛ばす(0 = 飛ばせない) */
 } Stage;
 
-extern const Stage stage_cave;
+/* ステージデータの読み込み先(ROM バンクから写す。先頭 2 バイトが Stage へのポインタ) */
+#define STAGE_BUF    0x9C00
+#define STAGE1_BANK  6
 
 /* 仮エンディング(main.c) */
 void ending_run(void);

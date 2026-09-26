@@ -869,15 +869,17 @@ p_scale:
 ;   辺ごとに「行ごとの x」を 1 フレーム 1 回だけ計算してスロットに置き、面はそれを span_a / span_b へ
 ;   コピーして塗るだけにする。
 ;   スロット id: リングの辺 = リング番号 * 6 + k(頂点 k → k+1)、放射方向の辺 = 72 + 手前のリング番号 * 6 + k
-;   スロット = ESLOT + id * 64:
+;   スロットはフレームごとに先着順で割り当てる(eslot_map[id] = スロット番号 + 1)。スロット = ESLOT + 番号 * 64:
 ;     [0..45] 行 r の x、[46] 最初の行、[47] 最後の行 + 1、[48] 1 = 作ったときの向き(p→q)が下り
 ;   同じ 2 点からは向きによらず同じ値が出る(上端→下端にそろえて計算する)ので、面の間にすき間は出ない。
 ; ---------------------------------------------------------------------------
-ESLOT	= 0x9C00		; 144 スロット × 64 = 0x9C00-0xBFFF
-NSLOT	= 144
+ESLOT	= 0xA800		; 96 スロット × 64 = 0xA800-0xBFFF(0x9C00-0xA7FF はステージデータの読み込み先)
+NSLOT	= 95			; 割り当てる数。最後の 1 本(95)は使い切ったときの一時用
+NIDS	= 144			; 辺の番号の数
 
 	.area	_DATA
-_eslot_ok::	.ds	NSLOT	; 1 = このフレームで計算済み
+_eslot_map::	.ds	NIDS	; 0 = このフレームでまだ、それ以外 = スロット番号 + 1
+es_next:	.ds	1	; 次に割り当てるスロット番号
 _g_ring_s::	.ds	2	; リングの投影済み座標の表(env.c の ring_s。1 本 24 バイト)
 _g_band_col::	.ds	2	; band_fast: 6 色の表へのポインタ
 sl_tbl:		.ds	36	; band_fast: 18 本の辺のスロット(リング a の辺、リング b の辺、放射)
@@ -893,30 +895,18 @@ sc_r1:		.ds	1
 
 ; void eslot_clear(void) — フレームの始めに呼ぶ
 _eslot_clear::
-	ld	hl, #_eslot_ok
-	ld	de, #_eslot_ok + 1
-	ld	bc, #NSLOT - 1
+	ld	hl, #_eslot_map
+	ld	de, #_eslot_map + 1
+	ld	bc, #NIDS - 1
 	ld	(hl), #0
 	ldir
+	xor	a, a
+	ld	(es_next), a
 	ret
 
-; slot_ensure: A = id、HL = p、DE = q(画面座標へのポインタ)→ HL = スロットの先頭
-;   このフレームでまだなら、辺 p→q の行ごとの x を計算して置く。IX/IY は壊さない
-slot_ensure::
-	ld	c, a
-	ld	b, #0
-	push	hl
-	ld	hl, #_eslot_ok
-	add	hl, bc
-	ld	a, (hl)
-	or	a, a
-	jp	nz, 8$
-	ld	(hl), #1
-	pop	hl
-	; --- 作る。スロットの先頭を e_dst に
-	push	de
-	push	hl
-	ld	l, c
+; HL = ESLOT + A * 64
+slot_addr:
+	ld	l, a
 	ld	h, #0
 	add	hl, hl
 	add	hl, hl
@@ -926,6 +916,35 @@ slot_ensure::
 	add	hl, hl
 	ld	de, #ESLOT
 	add	hl, de
+	ret
+
+; slot_ensure: A = id、HL = p、DE = q(画面座標へのポインタ)→ HL = スロットの先頭
+;   このフレームでまだなら、スロットを割り当てて辺 p→q の行ごとの x を計算して置く。IX/IY は壊さない
+slot_ensure::
+	ld	c, a
+	ld	b, #0
+	push	hl
+	ld	hl, #_eslot_map
+	add	hl, bc
+	ld	a, (hl)
+	or	a, a
+	jp	nz, 8$
+	ld	a, (es_next)
+	cp	a, #NSLOT
+	jr	c, 1$
+	ld	a, #NSLOT		; 使い切った: 一時用のスロットで計算する(覚えない)
+	jr	6$
+1$:
+	inc	a
+	ld	(es_next), a
+	ld	(hl), a
+	dec	a
+6$:
+	pop	hl
+	; --- 作る。スロットの先頭を e_dst に
+	push	de
+	push	hl
+	call	slot_addr
 	ld	(e_dst), hl
 	ld	de, #46
 	add	hl, de
@@ -1005,17 +1024,8 @@ slot_ensure::
 	ret
 8$:
 	pop	hl
-	ld	l, c
-	ld	h, #0
-	add	hl, hl
-	add	hl, hl
-	add	hl, hl
-	add	hl, hl
-	add	hl, hl
-	add	hl, hl
-	ld	de, #ESLOT
-	add	hl, de
-	ret
+	dec	a
+	jp	slot_addr
 
 ; seg_copy: HL = スロット、A = 1 なら作ったときと逆向きに使う
 ;   面の中での向きが下りなら span_a、上りなら span_b へ、覆う行の x をコピーし、sc_r0 / sc_r1 を広げる

@@ -196,3 +196,54 @@ _timer_read::
 	in	a, (0xE7)
 	ld	d, a
 	ret
+
+; ---------------------------------------------------------------------------
+; ROM バンクからの読み込み(仕様書 7.3「ステージ切替時は、常駐ローダーが一時的にページ1を ROM に戻し、
+; 該当バンクのデータを RAM へコピーする」)
+;
+;   ASCII8 のバンクレジスタ(6000h-7FFFh)はページ1にしか無く、読み出す窓もページ1にある。
+;   ページ1(エンジンのコード)を一時的にカートリッジへ切り替えるので、コピー処理はページ3の
+;   常駐領域(RL_ADDR)に置いて実行する。切り替えている間は割り込みを止める
+;   (H.TIMI の飛び先がページ1にあるため)。スロット切替は BIOS の ENASLT(ページ1/2 用)。
+;   読み出し先はページ2・3(ページ1 は切り替え中なので不可)。
+; ---------------------------------------------------------------------------
+ENASLT	= 0x0024
+RL_ADDR	= 0xE000		; 常駐ローダー(0xE0F0 からはスロット ID)
+V_CART	= 0xE0F0
+V_RAM	= 0xE0F1
+STAGE_SIZE = 0x0C00		; 1 回に写す大きさ(ステージデータの読み込み先 0x9C00-0xA7FF)
+
+; void sys_install_loader(void) — 常駐ローダーをページ3へ写す(起動時に 1 回)
+_sys_install_loader::
+	ld	hl, #rl_blob
+	ld	de, #RL_ADDR
+	ld	bc, #rl_end - rl_blob
+	ldir
+	ret
+
+; void rom_load(u8 bank, void *dst)   A = 最初のバンク(8KB 単位。bank と bank+1 を 0x4000-0x7FFF に出す)、DE = 写し先
+_rom_load::
+	jp	RL_ADDR
+
+; 常駐ローダー本体(RL_ADDR で動く。位置に依存しない: 相対・内部ジャンプなし、固定番地だけ使う)
+rl_blob:
+	di
+	push	de
+	push	af
+	ld	a, (V_CART)
+	ld	h, #0x40
+	call	ENASLT			; ページ1 = カートリッジ
+	pop	af
+	ld	(0x6000), a		; 0x4000-0x5FFF = bank
+	inc	a
+	ld	(0x6800), a		; 0x6000-0x7FFF = bank + 1
+	pop	de
+	ld	hl, #0x4000
+	ld	bc, #STAGE_SIZE
+	ldir
+	ld	a, (V_RAM)
+	ld	h, #0x40
+	call	ENASLT			; ページ1 = RAM(エンジン)に戻す
+	ei
+	ret
+rl_end:
