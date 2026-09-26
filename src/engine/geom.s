@@ -10,6 +10,7 @@
 
 
 	.globl	_cam_x, _cam_y, _cam_z, _cam_sin, _cam_cos, _cam_yaw
+	.globl	_cam_pitch, _cam_psin, _cam_pcos
 	.globl	_fmul, _project2, _sin_tab
 	.globl	_ring_v, _ring_s, _ring_front, _ring_ok
 
@@ -24,6 +25,9 @@ xf_dz:	.ds	2
 rm_idx:	.ds	1
 rm_k:	.ds	1
 rm_p:	.ds	2
+rm_x:	.ds	2
+rm_dy:	.ds	2
+rm_dz:	.ds	2
 rm_fm:	.ds	1
 rm_v:	.ds	2
 rm_o:	.ds	2
@@ -83,6 +87,33 @@ xf_core:
 	pop	hl
 	add	hl, de
 	ld	(gz), hl
+	; ピッチ(上を向く = 世界を下へ回す): y' = y*cos - z*sin、z' = y*sin + z*cos
+	ld	a, (_cam_pitch)
+	or	a, a
+	ret	z
+	ld	hl, (gy)
+	ld	de, (_cam_pcos)
+	call	_fmul
+	push	de
+	ld	hl, (gz)
+	ld	de, (_cam_psin)
+	call	_fmul
+	pop	hl
+	or	a, a
+	sbc	hl, de
+	push	hl			; y'
+	ld	hl, (gy)
+	ld	de, (_cam_psin)
+	call	_fmul
+	push	de
+	ld	hl, (gz)
+	ld	de, (_cam_pcos)
+	call	_fmul
+	pop	hl
+	add	hl, de
+	ld	(gz), hl
+	pop	hl
+	ld	(gy), hl
 	ret
 
 ; ---------------------------------------------------------------------------
@@ -216,7 +247,7 @@ _ring_make::
 	ld	b, (hl)
 	inc	hl
 	ld	(rm_p), hl
-	push	bc			; v
+	ld	(rm_dy), bc		; 上下のずれ = v
 	push	de			; u
 	; x = gx + u*cos
 	ex	de, hl
@@ -224,27 +255,56 @@ _ring_make::
 	call	_fmul
 	ld	hl, (gx)
 	add	hl, de
-	ld	b, h
-	ld	c, l			; BC = x
-	; z = gz - u*sin
+	ld	(rm_x), hl
+	; 奥行きのずれ = -u*sin
 	pop	hl			; u
-	push	bc
 	ld	de, (g_sn)
 	call	_fmul
-	ld	hl, (gz)
+	xor	a, a
+	sub	a, e
+	ld	e, a
+	sbc	a, a
+	sub	a, d
+	ld	d, a
+	ld	(rm_dz), de
+	; ピッチがあれば(上下, 奥行き)のずれも回す: dy' = dy*cos - dz*sin、dz' = dy*sin + dz*cos
+	ld	a, (_cam_pitch)
 	or	a, a
-	sbc	hl, de			; HL = z
-	pop	bc			; x
-	pop	de			; v
-	push	hl			; z
-	; 書く: x, y = gy + v, z
+	jr	z, 6$
+	ld	hl, (rm_dy)
+	ld	de, (_cam_pcos)
+	call	_fmul
+	push	de
+	ld	hl, (rm_dz)
+	ld	de, (_cam_psin)
+	call	_fmul
+	pop	hl
+	or	a, a
+	sbc	hl, de
+	push	hl			; dy'
+	ld	hl, (rm_dy)
+	ld	de, (_cam_psin)
+	call	_fmul
+	push	de
+	ld	hl, (rm_dz)
+	ld	de, (_cam_pcos)
+	call	_fmul
+	pop	hl
+	add	hl, de
+	ld	(rm_dz), hl
+	pop	hl
+	ld	(rm_dy), hl
+6$:
+	; 書く: x、y = gy + dy、z = gz + dz
 	ld	hl, (rm_v)
-	ld	(hl), c
+	ld	de, (rm_x)
+	ld	(hl), e
 	inc	hl
-	ld	(hl), b
+	ld	(hl), d
 	inc	hl
 	push	hl
 	ld	hl, (gy)
+	ld	de, (rm_dy)
 	add	hl, de
 	ex	de, hl			; DE = y
 	pop	hl
@@ -252,7 +312,12 @@ _ring_make::
 	inc	hl
 	ld	(hl), d
 	inc	hl
-	pop	de			; z
+	push	hl
+	ld	hl, (gz)
+	ld	de, (rm_dz)
+	add	hl, de
+	ex	de, hl			; DE = z
+	pop	hl
 	ld	(hl), e
 	inc	hl
 	ld	(hl), d

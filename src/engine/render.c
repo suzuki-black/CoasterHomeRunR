@@ -7,16 +7,21 @@
 
 i16 cam_x, cam_y, cam_z;
 u8  cam_yaw;
+i8  cam_pitch;
+i16 cam_psin, cam_pcos;
 i16 cam_sin, cam_cos;
 
 static V3  clip_v[10];
 
-void render_set_camera(i16 x, i16 y, i16 z, u16 yaw)
+void render_set_camera(i16 x, i16 y, i16 z, u16 yaw, i8 pitch)
 {
     cam_x = x; cam_y = y; cam_z = z;
     cam_yaw = (u8)(yaw >> 8);
     cam_sin = SIN(cam_yaw);
     cam_cos = COS(cam_yaw);
+    cam_pitch = pitch;
+    cam_psin = SIN((u8)pitch);
+    cam_pcos = COS((u8)pitch);
 }
 
 /* ワールド → カメラ。ワールド座標は 16bit で折り返すが、差分(±128m 以内)は正しく出る */
@@ -24,9 +29,17 @@ void xform(i16 wx, i16 wy, i16 wz, V3 *o)
 {
     i16 dx = wx - cam_x;
     i16 dz = wz - cam_z;
+    i16 y, z;
     o->x = fmul(dx, cam_cos) - fmul(dz, cam_sin);
-    o->z = fmul(dx, cam_sin) + fmul(dz, cam_cos);
-    o->y = wy - cam_y;
+    z = fmul(dx, cam_sin) + fmul(dz, cam_cos);
+    y = wy - cam_y;
+    if (cam_pitch) {                       /* 上を向く = 世界を下へ回す */
+        o->y = fmul(y, cam_pcos) - fmul(z, cam_psin);
+        o->z = fmul(y, cam_psin) + fmul(z, cam_pcos);
+    } else {
+        o->y = y;
+        o->z = z;
+    }
 }
 
 u8 project(const V3 *v, i16 *sx, i16 *sy)

@@ -1,9 +1,10 @@
-/* env.c — 環境ポリゴン(仕様書 5.1 / 7.4)。洞窟(鉱山の坑道)
+/* env.c — 環境ポリゴン(仕様書 5.1 / 7.4)。洞窟 = 炭鉱の坑道
  *
  * レール上 RSTEP[m] ごとに断面(リング)を置き、隣り合うリングの間を 6 枚の四角形で塗る。
- * 断面はリングごとに不規則(ステージ開始時に乱数で作る。幅と天井の高さはゆっくり変わる)。
- * 面の色も乱数で岩肌の色から選び、トロッコのランプに照らされたように手前ほど明るく、奥ほど暗くする。
- * 床にはレールと枕木、ところどころに坑道の支保工(柱と梁)・鍾乳石・床の岩を置く。
+ * 断面は手掘りの坑道: ほぼ垂直な壁と平らな天井の「角の丸い四角」(菱形に見えないよう、壁の中ほどを
+ * 突き出さない)。ステージ開始時に乱数で少しだけ揺らし、幅と天井の高さもゆっくり変える。
+ * 天井は板張り、壁は石炭(黒〜濃い灰)、床は土。トロッコのランプに照らされたように手前ほど明るく、奥ほど暗い。
+ * 床にはレールと枕木、リングごとに坑木の枠組(柱 2 本と梁)、ところどころにカンテラと床の落石を置く。
  * リング面の飾りとレールは、リング中心の投影と 1/z(ring_c)から 2D で求める(投影を増やさない)。
  *
  * ペインター法: カメラから遠い区間から順に描く。区間ごとに「面 → 枕木 → レール」、
@@ -26,7 +27,7 @@
 #define TONE   ((u8 *)0x2400)     /* [リング][6 面] の基本の色 */
 #define DECO   ((u8 *)0x2680)     /* [リング] 飾りの印 */
 #define MAX_RINGS 100
-enum { D_STALAC = 1, D_ROCK_L = 2, D_ROCK_R = 4, D_TIMBER = 8 };
+enum { D_LAMP_L = 1, D_ROCK_L = 2, D_ROCK_R = 4, D_TIMBER = 8, D_LAMP_R = 16 };
 
 /* 色(パレット 9-15、stage のパレットで決まる): 9 = 木、10〜12 = 岩(暗→明)、13〜14 = 土(暗→明)、15 = レール */
 #define C_WOOD   9
@@ -71,9 +72,10 @@ static i16 jit(i16 amp)
     return (i16)(((i16)rnd() - 128) * amp) >> 7;
 }
 
-/* 基本の断面(u, v): 天井の左右、右の壁、床の右左、左の壁 */
-static const i16 base_u[6] = { -230, 230, 490, 310, -310, -490 };
-static const i16 base_v[6] = {  380, 360,  30, -333, -333,  50 };
+/* 基本の断面(u, v): 天井の左右、右の壁(中ほど)、床の右左、左の壁(中ほど)。
+ * 壁の中ほどは天井の角とほぼ同じ横位置にして、壁がほぼ垂直な四角い坑道にする */
+static const i16 base_u[6] = { -320, 320, 345, 300, -300, -345 };
+static const i16 base_v[6] = {  320, 320, -40, -333, -333,  -40 };
 
 void env_build(u16 seed)
 {
@@ -86,33 +88,33 @@ void env_build(u16 seed)
         i16 *p = &PROF[r * 12];
         u8 *t = &TONE[r * 6];
         u8 d = 0;
-        /* 幅と天井の高さはゆっくり変える(狭い所・広い所) */
-        w += jit(28); if (w < 205) w = 205; if (w > 330) w = 330;
-        h += jit(24); if (h < 220) h = 220; if (h > 320) h = 320;
+        /* 幅と天井の高さはゆっくり変える(少し狭い所・広い所) */
+        w += jit(14); if (w < 235) w = 235; if (w > 290) w = 290;
+        h += jit(12); if (h < 240) h = 240; if (h > 285) h = 285;
         for (k = 0; k < 6; k++) {
             i16 u = (i16)(((i32)base_u[k] * w) >> 8);
             i16 v = base_v[k];
             if (k == 3 || k == 4) {            /* 床は平らに(レールを敷く) */
+                u += jit(12);
+            } else if (k <= 1) {               /* 天井: 手掘りの凹凸 */
                 u += jit(24);
-            } else if (k <= 1) {               /* 天井 */
-                u += jit(80);
-                v = (i16)(((i32)v * h) >> 8) + jit(70);
-            } else {                            /* 壁のふくらみ */
-                u += jit(90);
-                v += jit(90);
+                v = (i16)(((i32)v * h) >> 8) + jit(22);
+            } else {                            /* 壁: 手掘りの凹凸(突き出しすぎない) */
+                u += jit(28);
+                v += jit(40);
             }
             p[k * 2] = u;
             p[k * 2 + 1] = v;
-            /* 面の基本の色: 天井は暗い岩、上の壁は中間、ランプに照らされる下の壁は明るめ、床は土 */
+            /* 面の基本の色: 天井は板張り(暗い茶)、壁は石炭(黒〜濃い灰、ときどき明るい岩)、床は土 */
             if (k == 3)            t[k] = (rnd() & 1) ? C_DIRT1 : C_DIRT0;
-            else if (k == 0)       t[k] = (rnd() < 150) ? C_ROCK0 : C_ROCK1;
-            else if (k == 1 || k == 5) t[k] = (rnd() < 128) ? C_ROCK1 : C_ROCK2;
-            else                   t[k] = (rnd() < 170) ? C_ROCK2 : C_ROCK1;
+            else if (k == 0)       t[k] = C_DIRT0;
+            else                   t[k] = (rnd() < 100) ? C_ROCK0 : ((rnd() < 170) ? C_ROCK1 : C_ROCK2);
         }
-        if (rnd() < 90) d |= D_STALAC | ((rnd() & 3) << 4);
-        if (rnd() < 60) d |= D_ROCK_L;
-        if (rnd() < 60) d |= D_ROCK_R;
-        if (r % 5 == 2) d |= D_TIMBER;
+        d = D_TIMBER;                           /* 坑木の枠組はリングごと */
+        if (rnd() < 50) d |= D_LAMP_L;
+        else if (rnd() < 60) d |= D_LAMP_R;
+        if (rnd() < 40) d |= D_ROCK_L;
+        if (rnd() < 40) d |= D_ROCK_R;
         DECO[r] = d;
     }
 }
@@ -197,35 +199,29 @@ static void rails_draw(u8 a, u8 b)
     }
 }
 
-/* リング idx の面の飾り: 坑道の支保工(柱 2 本と梁)、鍾乳石、床の岩 */
+/* リング idx の面の飾り: 坑木の枠組(柱 2 本と梁)、カンテラ、床の落石 */
 static void deco_draw(u8 idx)
 {
     u8 d;
     if (!ring_ok[idx] || !ring_c[idx][2]) return;
     d = DECO[ring_no[idx]];
-    if (!d) return;
     if (d & D_TIMBER) {
-        rquad(idx, -300, -250, FLOOR_V, 300, C_WOOD);
-        rquad(idx, 250, 300, FLOOR_V, 300, C_WOOD);
-        rquad(idx, -330, 330, 270, 320, C_WOOD);
+        rquad(idx, -330, -280, FLOOR_V, 300, C_WOOD);   /* 左の柱 */
+        rquad(idx, 280, 330, FLOOR_V, 300, C_WOOD);     /* 右の柱 */
+        rquad(idx, -345, 345, 282, 322, C_WOOD);        /* 梁 */
     }
-    if (d & D_STALAC) {
-        i16 o = (i16)((d >> 4) & 3) * 70 - 105;     /* 横位置をばらす */
-        rpt(0, idx, o - 60, 340);
-        rpt(1, idx, o + 50, 340);
-        rpt(2, idx, o - 5, 150);
-        raster(3, C_ROCK2);
-    }
+    if (d & D_LAMP_L) rquad(idx, -275, -240, 120, 170, C_YELLOW);   /* カンテラ */
+    if (d & D_LAMP_R) rquad(idx, 240, 275, 120, 170, C_YELLOW);
     if (d & D_ROCK_L) {
-        rpt(0, idx, -420, FLOOR_V);
-        rpt(1, idx, -250, FLOOR_V);
-        rpt(2, idx, -330, FLOOR_V + 110);
+        rpt(0, idx, -275, FLOOR_V);
+        rpt(1, idx, -170, FLOOR_V);
+        rpt(2, idx, -235, FLOOR_V + 70);
         raster(3, C_ROCK2);
     }
     if (d & D_ROCK_R) {
-        rpt(0, idx, 240, FLOOR_V);
-        rpt(1, idx, 400, FLOOR_V);
-        rpt(2, idx, 310, FLOOR_V + 90);
+        rpt(0, idx, 170, FLOOR_V);
+        rpt(1, idx, 270, FLOOR_V);
+        rpt(2, idx, 220, FLOOR_V + 60);
         raster(3, C_ROCK2);
     }
 }
@@ -244,7 +240,7 @@ static void set_band_col(u8 na, u8 dist)
         c = t[k];
         if (dist >= 2) {
             if (c == C_ROCK2) c = C_ROCK1;
-            else if (c == C_ROCK1) c = C_ROCK0;
+            else if (c == C_ROCK1 || c == C_DIRT0) c = C_ROCK0;
             else c = C_DIRT0;
         }
         band_col[k] = c;

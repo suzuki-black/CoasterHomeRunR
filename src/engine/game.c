@@ -122,6 +122,7 @@ static u8  ctrl;                 /* 1 = 操作できる(オープニングの演
 static u8  spd_over;             /* 0 以外: トロッコの速度(m/秒 × 4)をスクリプトで指定 */
 static u8  cap_id, cap_time;     /* 字幕の番号と残りフレーム */
 static u8  warn_prev, warn_time; /* 警告の出始めと繰り返しで警告音を鳴らす */
+static i8  pitch_cur;            /* カメラのピッチ(坂に合わせて少しずつ追う) */
 static const Stage *stage;
 u16 g_score;
 u16 g_perf_logic[4];
@@ -576,7 +577,19 @@ static void render(void)
     timer_reset();
     t0 = timer_read();
     rail_at(cam_s, &p, &yaw);
-    render_set_camera(p.x, p.y, p.z, yaw + look);
+    /* 坂: レールの傾きからピッチの目標(≒ atan、256 分割)を出し、1 フレーム 1 ずつ追う。
+     * 後ろを向いているときは向きが逆、振り向き中はその間を cos で補間する */
+    {
+        u16 i = cam_s >> 6;
+        i16 dy;
+        i8 tgt;
+        if (i + 1 >= rail_len) i = rail_len - 2;
+        dy = rail[i + 1].y - rail[i].y;          /* 1m あたりの高さ変化(8.8) */
+        tgt = (i8)((dy * 41) >> 8);
+        if (pitch_cur < tgt) pitch_cur++;
+        else if (pitch_cur > tgt) pitch_cur--;
+    }
+    render_set_camera(p.x, p.y, p.z, yaw + look, (i8)fmul(pitch_cur, COS((u8)(look >> 8))));
     env_draw(cam_s, (u8)(look >> 8));
     g_perf_env = timer_read() - t0;
     draw_enemies();
@@ -606,7 +619,7 @@ u8 game_run(const Stage *st)
     stage = st;
     cam_s = M(st->start_m); cam_sub = 0; cam_v = 0; hold = 1;
     facing = st->start_back; look = facing ? 0x8000 : 0; turning = 0;
-    ctrl = 1; spd_over = 0; cap_id = 0; cap_time = 0; warn_prev = 0; warn_time = 0;
+    ctrl = 1; spd_over = 0; cap_id = 0; cap_time = 0; warn_prev = 0; warn_time = 0; pitch_cur = 0;
     aim_x = 128; aim_y = 92; aim_hold = 0;
     in_prev = 0xFF;                      /* タイトルで押したボタンを射撃と見なさない */
     fire_cd = 0; hitmark = 0;
