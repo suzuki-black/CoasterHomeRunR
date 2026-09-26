@@ -52,10 +52,15 @@ if {[info exists ::env(PERF_FN)]} {
 
 after time 5.0 {keymatrixdown 8 1}
 after time 5.3 {keymatrixup 8 1}
-after time 12.0 { set ::f0 $::frames; set ::t0 [machine_info time]; set ::prof 1 }
+# 計測中にやられて場面が変わらないよう、ライフを減らさない
+proc keep_life {} { debug write memory $::syms(_life) 8; after time 0.2 [list keep_life] }
+after time 6.0 [list keep_life]
+after time 12.0 { set ::f0 $::frames; set ::t0 [machine_info time]; set ::prof 1; set ::sc0 [debug read memory $::syms(_g_scene)]; set ::life0 [debug read memory $::syms(_life)] }
 after time 20.0 {
     set n [expr {$::frames - $::f0}]
     set dt [expr {[machine_info time] - $::t0}]
+    puts $::f [format "場面: 始め %d(ライフ %d)→ 終わり %d(ライフ %d)。1 = ゲーム中。途中で変わっていたら平均は参考外" \
+        $::sc0 $::life0 [debug read memory $::syms(_g_scene)] [debug read memory $::syms(_life)]]
     puts $::f [format "平均: %.1f fps(%.2f ms/フレーム、%d フレーム / %.1f 秒)" [expr {$n / $dt}] [expr {$dt * 1000.0 / $n}] $n $dt]
     screenshot -raw -prefix {} [file join $::out_dir perf.png]
     close $::f

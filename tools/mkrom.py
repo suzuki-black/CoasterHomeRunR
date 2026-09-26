@@ -6,7 +6,7 @@
 - bank0     : ローダー(0x4000-0x5FFF)
 - bank1     : 予備
 - bank2-5   : エンジン(RAM 0x4000-0xBFFF へ写される)
-- bank6-15  : ステージデータ(--stage。1 ステージ 2 バンク。0x9C00-0xA7FF の 3KB を常駐ローダーが RAM へ写す)
+- bank6-15  : ステージデータ(--stage。1 ステージ 2 バンク。0xB400-0xBFFF の 3KB を常駐ローダーが RAM へ写す)
 
 変数(DATA/BSS)が 0xCC00-0xDFFF に収まっているかも検査する。
 """
@@ -16,7 +16,7 @@ import sys
 BANK = 0x2000
 ROM_BANKS = 16
 DATA_BASE, DATA_LIMIT = 0xCC00, 0xDE00   # 0xDE00-0xDFFF は行の左右端(raster.s span_a/span_b)
-CODE_LIMIT = 0x9B00   # 0x9B00-0x9BFF は塗りの展開ブロック(raster.s FILLBLK)、0x9C00-0xBFFF は辺キャッシュ
+CODE_LIMIT = 0xB400   # 0xB400-0xBFFF はステージデータの読み込み先(塗りの展開ブロックと辺キャッシュはページ0)
 
 
 def read_ihx(path):
@@ -48,7 +48,7 @@ def read_noi(path):
     return syms
 
 
-STAGE_BASE, STAGE_SIZE = 0x9C00, 0x0C00
+STAGE_BASE, STAGE_SIZE = 0xB400, 0x0C00
 
 
 def main(boot_ihx, eng_ihx, eng_noi, out_path, *stage_args):
@@ -58,7 +58,7 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path, *stage_args):
     bank0 = bytes(boot.get(0x4000 + i, 0xFF) for i in range(BANK))
 
     eng = read_ihx(eng_ihx)
-    code = [a for a in eng if a < 0xC000 and not 0x9B00 <= a < 0x9C00]
+    code = [a for a in eng if a < 0xC000]
     data = [a for a in eng if a >= 0xC000]
     if data:
         sys.exit(f'mkrom: エンジンのイメージに 0x{min(data):04X} 以降(RAM 変数域)のデータがある')
@@ -66,8 +66,6 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path, *stage_args):
         sys.exit('mkrom: エンジンが 0x4000 より前にある')
     if max(code) >= CODE_LIMIT:
         sys.exit(f'mkrom: エンジンが 0x{CODE_LIMIT:04X} を超えた: 0x{max(code):04X}')
-    if 0x9B00 not in eng:
-        sys.exit('mkrom: 塗りの展開ブロック(0x9B00)が無い')
     image = bytes(eng.get(0x4000 + i, 0xFF) for i in range(0x8000))
 
     syms = read_noi(eng_noi)
@@ -79,7 +77,7 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path, *stage_args):
     rom = bytearray(bank0 + b'\xFF' * BANK + image)
     rom += b'\xFF' * (ROM_BANKS * BANK - len(rom))
 
-    # ステージ: 読み込み先 0x9C00-0xA7FF に収まっていること、先頭 2 バイトが Stage へのポインタ
+    # ステージ: 読み込み先 0xB400-0xBFFF に収まっていること、先頭 2 バイトが Stage へのポインタ
     stages = []
     args = list(stage_args)
     while args:

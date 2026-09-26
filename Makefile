@@ -76,7 +76,7 @@ $(BUILD)/%.rel: $(ENG)/%.s $(ENG)/r800.inc Makefile | $(BUILD)
 $(BUILD)/engine.ihx: $(RELS)
 	$(CC) $(LDFLAGS) -o $@ $(RELS)
 
-# ステージ: 読み込み先(0x9C00)に合わせて単独でリンクし、ROM のバンクに置く(tools/mkrom.py --stage)
+# ステージ: 読み込み先(0xB400)に合わせて単独でリンクし、ROM のバンクに置く(tools/mkrom.py --stage)
 STG     = src/stage
 $(BUILD)/stagehead.rel: $(STG)/stagehead.s Makefile | $(BUILD)
 	$(AS) -g -o $@ $<
@@ -85,7 +85,7 @@ $(BUILD)/stage1.rel: $(STG)/stage1_cave.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BUILD)/stage1.ihx: $(BUILD)/stagehead.rel $(BUILD)/stage1.rel
-	$(CC) -mz80 --no-std-crt0 --code-loc 0x9C02 --data-loc 0xA800 -o $@ $^
+	$(CC) -mz80 --no-std-crt0 --code-loc 0xB402 --data-loc 0xC000 -o $@ $^
 
 $(BUILD)/boot.rel: $(BOOT)/boot.s Makefile | $(BUILD)
 	$(AS) -g -o $@ $<

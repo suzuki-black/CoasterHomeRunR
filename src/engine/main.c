@@ -175,6 +175,7 @@ void main(void)
 #endif
     sys_install_loader();
     sys_install_isr();
+    sys_page0_ram();
     sound_init();
     vdp_init();
     for (;;) {

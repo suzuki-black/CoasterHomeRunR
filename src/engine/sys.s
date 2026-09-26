@@ -1,8 +1,8 @@
 ; sys.s — 割り込み(H.TIMI)・入力・PSG・タイマ
 ;
 ; ■ 割り込み(仕様書 7.6)
-;   BIOS の割り込み処理(ページ0)が垂直帰線ごとに H.TIMI(FD9Fh)を呼ぶ。そこから htimi へ飛ぶ。
-;   BIOS がレジスタを全部退避してから呼ぶので、ここでは自由に壊してよい。
+;   起動直後は BIOS の割り込み処理(ページ0)が垂直帰線ごとに H.TIMI(FD9Fh)を呼び、そこから htimi へ飛ぶ。
+;   sys_page0_ram の後はページ0が自前の RAM になり、0x0038 の isr0 が S#0 を読んで htimi を呼ぶ。
 ;   htimi がすること:
 ;     ・g_tick(60Hz のフレームカウンタ)を +1
 ;     ・表示ページ切替の予約(g_flip_req)があり、前の切替から 2 ティック経っていれば
@@ -24,6 +24,47 @@
 	.globl	_g_spr_attr
 
 H_TIMI	= 0xFD9F
+; ページ3 の固定番地(常駐ローダーからも使う)
+V_CART	= 0xE0F0		; カートリッジのスロット ID(ローダーが書く)
+V_RAM	= 0xE0F1		; RAM のスロット ID(F000SSPP)
+P0_BIOS	= 0xE0F2		; 起動時のページ0の基本スロット(BIOS)
+P0_SEG	= 4			; ページ0に使うマッパーのセグメント(0-3 は起動時のページ0-3)
+
+; ページ0を自前の RAM(V_RAM のスロット、セグメント P0_SEG)にする。
+;   RAM は拡張スロットでもページ3と同じ基本スロットなので、拡張スロットのレジスタ(FFFF)はそのまま書ける
+	.macro	P0_TO_RAM ?skip
+	in	a, (0xA8)
+	and	a, #0xFC
+	ld	b, a
+	ld	a, (V_RAM)
+	and	a, #0x03
+	or	a, b
+	out	(0xA8), a
+	ld	a, (V_RAM)
+	bit	7, a
+	jr	z, skip
+	rrca
+	rrca
+	and	a, #0x03
+	ld	b, a
+	ld	a, (0xFFFF)
+	cpl
+	and	a, #0xFC
+	or	a, b
+	ld	(0xFFFF), a
+skip:
+	.endm
+
+; ページ0を BIOS に戻す。基本スロットのレジスタだけ戻せばよい
+;   (BIOS 側の拡張スロットのレジスタは触っていない。実機の BIOS はスロット 0-0)
+	.macro	P0_TO_BIOS
+	in	a, (0xA8)
+	and	a, #0xFC
+	ld	b, a
+	ld	a, (P0_BIOS)
+	or	a, b
+	out	(0xA8), a
+	.endm
 SPR_BYTES = 17			; スプライト 4 枚分 + 終端(Y=208)
 
 	.area	_DATA
@@ -82,6 +123,60 @@ htimi:
 	ld	(_g_flip_req), a
 1$:
 	jp	_sound_tick
+
+; ---------------------------------------------------------------------------
+; void sys_page0_ram(void) — ページ0(0x0000-0x3FFF)を自前の RAM にする(起動時に 1 回)
+;   ゲーム中は BIOS を呼ばない(入力・PSG・VDP はポート直接)ので、ページ0も使える 16KB にする。
+;   0x0038 に自前の割り込み処理(isr0)、0x0100 に塗りの展開ブロック(raster.s)を置く。
+;   BIOS が要るのはステージの読み込み(ENASLT)だけで、そのときは常駐ローダーがページ0を BIOS に戻す。
+; ---------------------------------------------------------------------------
+	.globl	_fillblk_tpl, _fillblk_end
+_sys_page0_ram::
+	di
+	in	a, (0xA8)
+	and	a, #0x03
+	ld	(P0_BIOS), a
+	ld	a, #P0_SEG
+	out	(0xFC), a		; ページ0のセグメント(RAM スロットに切り替えたときに効く)
+	P0_TO_RAM
+	ld	a, #0xC3		; 0x0038: JP isr0
+	ld	(0x0038), a
+	ld	hl, #isr0
+	ld	(0x0039), hl
+	ld	hl, #_fillblk_end
+	ld	de, #_fillblk_tpl
+	or	a, a
+	sbc	hl, de
+	ld	b, h
+	ld	c, l
+	ex	de, hl
+	ld	de, #0x0100
+	ldir
+	ei
+	ret
+
+; 自前の割り込み処理(ページ0の 0x0038 から)。S#0 を読んで垂直帰線なら htimi
+;   裏レジスタは使わない(描画側が exx を使うため)
+isr0:
+	push	af
+	in	a, (0x99)
+	rlca
+	jr	nc, 9$
+	push	bc
+	push	de
+	push	hl
+	push	ix
+	push	iy
+	call	htimi
+	pop	iy
+	pop	ix
+	pop	hl
+	pop	de
+	pop	bc
+9$:
+	pop	af
+	ei
+	ret
 
 ; ---------------------------------------------------------------------------
 ; void wait_tick(void) — g_tick が変わるまで待つ
@@ -204,14 +299,13 @@ _timer_read::
 ;   ASCII8 のバンクレジスタ(6000h-7FFFh)はページ1にしか無く、読み出す窓もページ1にある。
 ;   ページ1(エンジンのコード)を一時的にカートリッジへ切り替えるので、コピー処理はページ3の
 ;   常駐領域(RL_ADDR)に置いて実行する。切り替えている間は割り込みを止める
-;   (H.TIMI の飛び先がページ1にあるため)。スロット切替は BIOS の ENASLT(ページ1/2 用)。
-;   読み出し先はページ2・3(ページ1 は切り替え中なので不可)。
+;   (割り込みの飛び先がページ0・1にあるため)。スロット切替は BIOS の ENASLT(ページ1/2 用)なので、
+;   その間はページ0も BIOS に戻す。読み出し先はページ2・3(ページ0・1 は切り替え中なので不可)。
+;   常駐ローダーは位置に依存しない書き方にする(内部の call や絶対ジャンプを使わない)。
 ; ---------------------------------------------------------------------------
 ENASLT	= 0x0024
-RL_ADDR	= 0xE000		; 常駐ローダー(0xE0F0 からはスロット ID)
-V_CART	= 0xE0F0
-V_RAM	= 0xE0F1
-STAGE_SIZE = 0x0C00		; 1 回に写す大きさ(ステージデータの読み込み先 0x9C00-0xA7FF)
+RL_ADDR	= 0xE000		; 常駐ローダー(0xE0F0 からはスロット ID など)
+STAGE_SIZE = 0x0C00		; 1 回に写す大きさ(ステージデータの読み込み先 0xB400-0xBFFF)
 
 ; void sys_install_loader(void) — 常駐ローダーをページ3へ写す(起動時に 1 回)
 _sys_install_loader::
@@ -230,6 +324,7 @@ rl_blob:
 	di
 	push	de
 	push	af
+	P0_TO_BIOS			; ENASLT のためにページ0を BIOS に戻す
 	ld	a, (V_CART)
 	ld	h, #0x40
 	call	ENASLT			; ページ1 = カートリッジ
@@ -244,6 +339,7 @@ rl_blob:
 	ld	a, (V_RAM)
 	ld	h, #0x40
 	call	ENASLT			; ページ1 = RAM(エンジン)に戻す
+	P0_TO_RAM			; ページ0 = 自前の RAM に戻す
 	ei
 	ret
 rl_end:

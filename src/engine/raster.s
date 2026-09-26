@@ -21,7 +21,7 @@
 	.globl	_g_buf_hi
 
 ROWS	= 46
-FILLBLK	= 0x9B00		; 塗りの展開ブロック(fill の後ろ、_FILLBLK 領域)
+FILLBLK	= 0x0100		; 塗りの展開ブロック(ページ0の RAM。sys_page0_ram が _fillblk_tpl を写す)
 FILLJP	= FILLBLK + 2
 FILLEND	= FILLJP + 3 + 128
 ; 各行の左右端(0..64)。256 境界に置き、fill が inc d / dec d だけで左右を行き来する
@@ -731,18 +731,17 @@ fill_cmp:
 	jp	nz, fill_row
 	ret
 
-; 展開した 64 回の書き込み。256 境界の中に置き、飛び先の下位バイトだけを書き換える
-	.area	_FILLBLK (ABS)
-	.org	FILLBLK
+; 展開した 64 回の書き込みの元(sys_page0_ram がページ0の FILLBLK = 0x0100 へ写す)。
+;   256 境界の中で動くので、飛び先は下位バイトだけを書き換える
+_fillblk_tpl::
 	ld	a, #0			; FILLBLK: 色(書き換える)
-	jp	0x9B00			; FILLJP: 飛び先(下位を書き換える。上位は 0x9B 固定)
+	jp	0x0100			; FILLJP: 飛び先(下位を書き換える。上位は 0x01 固定)
 	.rept	64
 	ld	(hl), a
 	inc	l
 	.endm
 	jp	fill_ret		; FILLEND
-
-	.area	_CODE
+_fillblk_end::
 
 ; ---------------------------------------------------------------------------
 ; void project2(const V3 *v, i16 *out)   HL=v, DE=out。z >= 128(0.5m)が前提
@@ -873,7 +872,7 @@ p_scale:
 ;     [0..45] 行 r の x、[46] 最初の行、[47] 最後の行 + 1、[48] 1 = 作ったときの向き(p→q)が下り
 ;   同じ 2 点からは向きによらず同じ値が出る(上端→下端にそろえて計算する)ので、面の間にすき間は出ない。
 ; ---------------------------------------------------------------------------
-ESLOT	= 0xA800		; 96 スロット × 64 = 0xA800-0xBFFF(0x9C00-0xA7FF はステージデータの読み込み先)
+ESLOT	= 0x0200		; 96 スロット × 64 = 0x0200-0x19FF(ページ0の RAM)
 NSLOT	= 95			; 割り当てる数。最後の 1 本(95)は使い切ったときの一時用
 NIDS	= 144			; 辺の番号の数
 

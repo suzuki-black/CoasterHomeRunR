@@ -47,7 +47,7 @@ typedef struct {
 } Stage;
 
 /* ステージデータの読み込み先(ROM バンクから写す。先頭 2 バイトが Stage へのポインタ) */
-#define STAGE_BUF    0x9C00
+#define STAGE_BUF    0xB400
 #define STAGE1_BANK  6
 
 /* 仮エンディング(main.c) */
