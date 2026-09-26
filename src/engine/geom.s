@@ -8,54 +8,6 @@
 	.module	geom
 	.include "r800.inc"
 
-; RM_VERT uc, us, neg, v, bit — リングの頂点 1 つ(ring_make の中で使う)
-;   x = gx ± (uc)、z = gz ∓ (us)(neg = 1 なら左側: x は引き、z は足す)、y = gy + v を IX へ書き、
-;   z >= NEAR_Z なら投影して rm_o へ書き、rm_fm に bit を立てる。IX と rm_o を次の頂点へ進める
-	.macro	RM_VERT puc, pus, pneg, pv, pbit, ?skip
-	ld	hl, (gx)
-	ld	de, (puc)
-	.if	pneg
-	or	a, a
-	sbc	hl, de
-	.else
-	add	hl, de
-	.endif
-	ld	0 (ix), l
-	ld	1 (ix), h
-	ld	hl, (gy)
-	ld	de, #pv
-	add	hl, de
-	ld	2 (ix), l
-	ld	3 (ix), h
-	ld	hl, (gz)
-	ld	de, (pus)
-	.if	pneg
-	add	hl, de
-	.else
-	or	a, a
-	sbc	hl, de
-	.endif
-	ld	4 (ix), l
-	ld	5 (ix), h
-	ld	de, #-NEAR_Z
-	add	hl, de
-	bit	7, h
-	jr	nz, skip
-	push	ix
-	pop	hl
-	ld	de, (rm_o)
-	call	_project2
-	ld	a, (rm_fm)
-	or	a, #pbit
-	ld	(rm_fm), a
-skip:
-	ld	de, #6
-	add	ix, de
-	ld	hl, (rm_o)
-	ld	de, #4
-	add	hl, de
-	ld	(rm_o), hl
-	.endm
 
 	.globl	_cam_x, _cam_y, _cam_z, _cam_sin, _cam_cos, _cam_yaw
 	.globl	_fmul, _project2, _sin_tab
@@ -69,9 +21,9 @@ gy:	.ds	2
 gz:	.ds	2
 xf_dx:	.ds	2
 xf_dz:	.ds	2
-g_uc:	.ds	6		; 断面の横位置 |u| = 1.0 / 1.9 / 1.2m について u*cos, u*sin
-g_us:	.ds	6
 rm_idx:	.ds	1
+rm_k:	.ds	1
+rm_p:	.ds	2
 rm_fm:	.ds	1
 rm_v:	.ds	2
 rm_o:	.ds	2
@@ -147,10 +99,20 @@ _xform3::
 
 ; ---------------------------------------------------------------------------
 ; void ring_make(u8 idx, const RailPt *p)   A = リング番号、DE = レール点 (x, y, z, yaw)
-;   六角形の断面の 6 頂点をカメラ空間で ring_v[idx] に、手前の頂点は投影して ring_s[idx] に置き、
+;   洞窟の断面(g_rm_prof: 6 頂点の (u, v)。u = 右、v = 上、8.8 m、レール=目の位置からの相対)を
+;   カメラ空間で ring_v[idx] に、手前の頂点は投影して ring_s[idx] に置き、
 ;   ring_front[idx](bit k = 頂点 k が手前)と ring_ok[idx] = 1 を設定する。
-;   断面の右向き = (cos Δ, -sin Δ)(Δ = レールのヨー - カメラのヨー)。左右対称なので乗算は 3 種類だけ。
+;   断面の中心(レール点)も投影して ring_c[idx] = (x, y, 2^23/z) に置く(z が手前でなければ q = 0)。
+;   リング面の飾り(レール・枕木・坑道枠・鍾乳石)は、この中心と q から 2D で求める(env.c)。
+;   断面の右向き = (cos Δ, -sin Δ)(Δ = レールのヨー - カメラのヨー)。
 ; ---------------------------------------------------------------------------
+	.globl	_ring_c
+	.area	_DATA
+_g_rm_prof::	.ds	2
+g_cs:		.ds	2
+g_sn:		.ds	2
+	.area	_CODE
+
 _ring_make::
 	ld	(rm_idx), a
 	push	de
@@ -169,75 +131,164 @@ _ring_make::
 	add	hl, de
 	ld	e, (hl)
 	inc	hl
-	ld	d, (hl)			; DE = sin Δ
+	ld	d, (hl)
+	ld	(g_sn), de
 	ld	bc, #127
 	add	hl, bc
 	ld	c, (hl)
 	inc	hl
-	ld	b, (hl)			; BC = cos Δ(sin_tab[Δ + 64])
-	; |u| = 1.0m: そのまま
-	ld	(g_uc), bc
-	ld	(g_us), de
-	; |u| = 1.9m(486)と 1.2m(307)
-	push	de
-	push	bc
-	ld	hl, #486
-	ld	d, b
-	ld	e, c
-	call	_fmul
-	ld	(g_uc + 2), de
-	pop	de			; cos
-	push	de
-	ld	hl, #307
-	call	_fmul
-	ld	(g_uc + 4), de
-	pop	bc
-	pop	de			; sin
-	push	de
-	ld	hl, #486
-	call	_fmul
-	ld	(g_us + 2), de
-	pop	de
-	ld	hl, #307
-	call	_fmul
-	ld	(g_us + 4), de
-	; 出力先: ring_v + idx*36、ring_s + idx*24
+	ld	b, (hl)
+	ld	(g_cs), bc
+	; ring_c + idx*6
 	ld	a, (rm_idx)
 	ld	l, a
 	ld	h, #0
 	add	hl, hl
-	add	hl, hl			; *4
 	ld	d, h
 	ld	e, l
-	add	hl, hl			; *8
-	add	hl, de			; *12
-	push	hl
-	add	hl, hl			; *24
-	ld	de, #_ring_s
+	add	hl, hl
+	add	hl, de			; *6
+	ld	de, #_ring_c
 	add	hl, de
+	; 中心の投影(z が手前なら)
+	push	hl
+	ld	hl, (gz)
+	ld	de, #-NEAR_Z
+	add	hl, de
+	pop	de			; DE = ring_c[idx]
+	bit	7, h
+	jr	z, 1$
+	ld	hl, #4			; 手前でない: q = 0
+	add	hl, de
+	xor	a, a
+	ld	(hl), a
+	inc	hl
+	ld	(hl), a
+	jr	2$
+1$:
+	push	de
+	ld	hl, #gx			; gx, gy, gz は連続
+	call	_project2
+	pop	hl
+	ld	de, #4
+	add	hl, de
+	ld	de, (_p_q)
+	ld	(hl), e
+	inc	hl
+	ld	(hl), d
+2$:
+	; ring_s + idx*24、ring_v + idx*36
+	ld	a, (rm_idx)
+	ld	l, a
+	ld	h, #0
+	add	hl, hl
+	add	hl, hl
+	ld	d, h
+	ld	e, l
+	add	hl, hl
+	add	hl, de			; *12
+	ld	d, h
+	ld	e, l
+	add	hl, hl			; *24
+	push	hl
+	ld	bc, #_ring_s
+	add	hl, bc
 	ld	(rm_o), hl
 	pop	hl
-	ld	d, h
-	ld	e, l
-	add	hl, hl			; *24
 	add	hl, de			; *36
 	ld	de, #_ring_v
 	add	hl, de
 	ld	(rm_v), hl
 	xor	a, a
 	ld	(rm_fm), a
-	; 6 頂点を展開して計算する(表引きとループをしない)。頂点 k の右向きのずれ = ±u*cos、奥行きのずれ = ∓u*sin
-	;   0: 天井の左(-1.0m, +1.40)  1: 天井の右(+1.0m, +1.40)  2: 右の壁(+1.9m, +0.20)
-	;   3: 床の右(+1.2m, -1.30)    4: 床の左(-1.2m, -1.30)    5: 左の壁(-1.9m, +0.20)
-	push	ix
-	ld	ix, (rm_v)
-	RM_VERT	g_uc, g_us, 1, 358, 0x01
-	RM_VERT	g_uc, g_us, 0, 358, 0x02
-	RM_VERT	g_uc+2, g_us+2, 0, 51, 0x04
-	RM_VERT	g_uc+4, g_us+4, 0, -333, 0x08
-	RM_VERT	g_uc+4, g_us+4, 1, -333, 0x10
-	RM_VERT	g_uc+2, g_us+2, 1, 51, 0x20
-	pop	ix
+	ld	(rm_k), a
+	ld	hl, (_g_rm_prof)
+	ld	(rm_p), hl
+3$:
+	; u, v を読む
+	ld	hl, (rm_p)
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	inc	hl
+	ld	c, (hl)
+	inc	hl
+	ld	b, (hl)
+	inc	hl
+	ld	(rm_p), hl
+	push	bc			; v
+	push	de			; u
+	; x = gx + u*cos
+	ex	de, hl
+	ld	de, (g_cs)
+	call	_fmul
+	ld	hl, (gx)
+	add	hl, de
+	ld	b, h
+	ld	c, l			; BC = x
+	; z = gz - u*sin
+	pop	hl			; u
+	push	bc
+	ld	de, (g_sn)
+	call	_fmul
+	ld	hl, (gz)
+	or	a, a
+	sbc	hl, de			; HL = z
+	pop	bc			; x
+	pop	de			; v
+	push	hl			; z
+	; 書く: x, y = gy + v, z
+	ld	hl, (rm_v)
+	ld	(hl), c
+	inc	hl
+	ld	(hl), b
+	inc	hl
+	push	hl
+	ld	hl, (gy)
+	add	hl, de
+	ex	de, hl			; DE = y
+	pop	hl
+	ld	(hl), e
+	inc	hl
+	ld	(hl), d
+	inc	hl
+	pop	de			; z
+	ld	(hl), e
+	inc	hl
+	ld	(hl), d
+	; z >= NEAR_Z なら投影
+	ex	de, hl
+	ld	de, #-NEAR_Z
+	add	hl, de
+	bit	7, h
+	jr	nz, 4$
+	ld	hl, (rm_v)
+	ld	de, (rm_o)
+	call	_project2
+	ld	a, (rm_k)
+	ld	b, a
+	inc	b
+	ld	a, #0x80
+5$:
+	rlca
+	djnz	5$			; A = 1 << k
+	ld	hl, #rm_fm
+	or	a, (hl)
+	ld	(hl), a
+4$:
+	ld	hl, (rm_v)
+	ld	de, #6
+	add	hl, de
+	ld	(rm_v), hl
+	ld	hl, (rm_o)
+	ld	de, #4
+	add	hl, de
+	ld	(rm_o), hl
+	ld	a, (rm_k)
+	inc	a
+	ld	(rm_k), a
+	cp	a, #6
+	jp	nz, 3$
 	; ring_front[idx] = fm、ring_ok[idx] = 1
 	ld	a, (rm_idx)
 	ld	e, a
@@ -250,7 +301,6 @@ _ring_make::
 	add	hl, de
 	ld	(hl), #1
 	ret
-
 
 ; ---------------------------------------------------------------------------
 ; void draw_model(const V3 *c)   HL = モデルの足元(カメラ空間、z >= NEAR_Z + 32)
@@ -469,136 +519,3 @@ _draw_model::
 	pop	ix
 	ret
 
-; ---------------------------------------------------------------------------
-; void frame_quads(u8 idx)   A = リング番号。g_fq_cx, g_fq_cy = リング中心の投影(12.4)
-;   木の枠: 床を除く 5 面に沿った帯。内側の縁 = 頂点を中心へ 1/8 寄せた点(画面上で d - d/8)。
-; ---------------------------------------------------------------------------
-	.globl	_raster, _scr, _ring_s
-
-	.area	_DATA
-_g_fq_cx::	.ds	2
-_g_fq_cy::	.ds	2
-fq_in:		.ds	24	; 内側の 6 点 (x, y)
-fq_o:		.ds	2
-fq_k:		.ds	1
-
-	.area	_CODE
-
-; HL = c + d - d/8(d = HL - c、DE = c)
-fq_pull:
-	or	a, a
-	sbc	hl, de			; d
-	ld	b, h
-	ld	c, l
-	sra	b
-	rr	c
-	sra	b
-	rr	c
-	sra	b
-	rr	c			; d / 8
-	or	a, a
-	sbc	hl, bc
-	add	hl, de
-	ret
-
-_frame_quads::
-	; 外側 = ring_s + idx * 24
-	ld	l, a
-	ld	h, #0
-	add	hl, hl
-	add	hl, hl
-	add	hl, hl
-	ld	d, h
-	ld	e, l
-	add	hl, hl
-	add	hl, de
-	ld	de, #_ring_s
-	add	hl, de
-	ld	(fq_o), hl
-	; 内側の 6 点
-	push	ix
-	push	iy
-	push	hl
-	pop	ix
-	ld	iy, #fq_in
-	ld	b, #6
-1$:
-	push	bc
-	ld	l, 0 (ix)
-	ld	h, 1 (ix)
-	ld	de, (_g_fq_cx)
-	call	fq_pull
-	ld	0 (iy), l
-	ld	1 (iy), h
-	ld	l, 2 (ix)
-	ld	h, 3 (ix)
-	ld	de, (_g_fq_cy)
-	call	fq_pull
-	ld	2 (iy), l
-	ld	3 (iy), h
-	ld	de, #4
-	add	ix, de
-	add	iy, de
-	pop	bc
-	djnz	1$
-	pop	iy
-	pop	ix
-	; 5 面(k = 3 の床は付けない)
-	xor	a, a
-	ld	(fq_k), a
-2$:
-	ld	a, (fq_k)
-	cp	a, #3
-	jr	z, 4$
-	; scr = o[k], o[k1], in[k1], in[k]
-	add	a, a
-	add	a, a
-	ld	c, a
-	ld	b, #0			; BC = 4k
-	ld	a, (fq_k)
-	inc	a
-	cp	a, #6
-	jr	nz, 3$
-	xor	a, a
-3$:
-	add	a, a
-	add	a, a
-	ld	e, a
-	ld	d, #0			; DE = 4 k1
-	push	de
-	ld	hl, (fq_o)
-	add	hl, bc
-	ld	de, #_scr
-	push	bc
-	ld	bc, #4
-	ldir				; o[k]
-	pop	bc
-	pop	hl			; 4 k1
-	push	hl
-	push	bc
-	ld	bc, (fq_o)
-	add	hl, bc
-	ld	bc, #4
-	ldir				; o[k1]
-	pop	bc
-	pop	hl
-	push	bc
-	ld	bc, #fq_in
-	add	hl, bc
-	ld	bc, #4
-	ldir				; in[k1]
-	pop	hl
-	ld	bc, #fq_in
-	add	hl, bc
-	ld	bc, #4
-	ldir				; in[k]
-	ld	a, #4
-	ld	l, #9			; 木の色
-	call	_raster
-4$:
-	ld	a, (fq_k)
-	inc	a
-	ld	(fq_k), a
-	cp	a, #6
-	jr	nz, 2$
-	ret

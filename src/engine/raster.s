@@ -1276,3 +1276,10 @@ _hex_fast::
 	cp	a, #6
 	jr	nz, 1$
 	jp	sc_fill
+
+; i16 qmul(i16 v, u16 q)   HL = v(8.8 m)、DE = q(2^23 / z)→ DE = v * q >> 14(画面上の長さ 12.4、±15000 に飽和)
+;   リング面の飾り(env.c)を、リング中心の投影から 2D で求めるのに使う
+_qmul::
+	ld	b, d
+	ld	c, e
+	jp	p_scale

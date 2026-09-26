@@ -599,6 +599,7 @@ u8 game_run(const Stage *st)
 {
     u8 i, over = 0;
     rail_build(st->track);
+    env_build(0x5EED);
     set_stage_palette(st->palette);
     for (i = 0; i < MAX_EN; i++) en[i].type = ET_NONE;
     n_hits = 0;
