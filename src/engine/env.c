@@ -31,15 +31,14 @@ extern const i16 *g_ring_s;
 void eslot_clear(void);
 void band_fast(u8 a, u8 b);
 void hex_fast(u8 r);
-/* 木の枠: 床を除く 5 面に沿った帯。内側の縁 = 頂点をリング中心へ 1/8 寄せた点(画面上で) */
-#define FRAME_IN 224    /* 8.8: 7/8 */
-
+/* 木の枠: 床を除く 5 面に沿った帯(geom.s の frame_quads) */
 /* リングの頂点(geom.s の ring_make が書く) */
 V3  ring_v[NR + 1][6];
 i16 ring_s[NR + 1][12];          /* 投影済みの画面座標 (x, y) × 6 */
 u8  ring_front[NR + 1];          /* bit k = 頂点 k が z >= NEAR_Z */
 u8  ring_ok[NR + 1];
 void ring_make(u8 idx, const RailPt *p);
+void xform3(const i16 *w, V3 *o);
 static u16 ring_m0;
 
 /* リング r(-NB..NF)の rail 上の番号(m) */
@@ -115,36 +114,23 @@ static u8 vring_make(u16 sv)
 }
 
 /* リング r の木の枠。6 頂点とも手前のときだけ描く */
+extern i16 g_fq_cx, g_fq_cy;
+void frame_quads(u8 idx);
+
 static void frame_draw(i8 r)
 {
-    u8 idx = (u8)(r + NB), k, k1;
+    u8 idx = (u8)(r + NB);
     i16 m = ring_meter(r);
-    i16 inner[12], cx, cy;
-    const i16 *o;
+    i16 cs[2];
     V3 c;
-    RailPt *p;
     if (r < -NB || r > NF) return;
     if (!ring_ok[idx] || ((m / RSTEP) & 1) || ring_front[idx] != 0x3F) return;
-    p = &rail[m];
-    xform(p->x, p->y, p->z, &c);
+    xform3(&rail[m].x, &c);
     if (c.z < NEAR_Z) return;
-    project2(&c, inner);
-    cx = inner[0];
-    cy = inner[1];
-    o = ring_s[idx];
-    for (k = 0; k < 12; k += 2) {
-        inner[k]     = cx + fmul(o[k] - cx, FRAME_IN);
-        inner[k + 1] = cy + fmul(o[k + 1] - cy, FRAME_IN);
-    }
-    for (k = 0; k < 6; k++) {
-        if (k == 3) continue;          /* 床には枠を付けない */
-        k1 = (k == 5) ? 0 : k + 1;
-        scr[0] = o[k * 2];      scr[1] = o[k * 2 + 1];
-        scr[2] = o[k1 * 2];     scr[3] = o[k1 * 2 + 1];
-        scr[4] = inner[k1 * 2]; scr[5] = inner[k1 * 2 + 1];
-        scr[6] = inner[k * 2];  scr[7] = inner[k * 2 + 1];
-        raster(4, 9);
-    }
+    project2(&c, cs);
+    g_fq_cx = cs[0];
+    g_fq_cy = cs[1];
+    frame_quads(idx);              /* 床を除く 5 面に沿った木の枠(geom.s) */
 }
 
 /* リング r の開口部を黒で塞げるか(6 頂点とも手前) */

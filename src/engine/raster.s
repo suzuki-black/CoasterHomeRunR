@@ -29,7 +29,42 @@ _span_a	== 0xDE00
 _span_b	== 0xDF00
 SPAN_A_HI = 0xDE
 
+; ROWCLAMP: HL = y(12.4)→ A = (y + 7) >> 4 を 0..ROWS に丸めた値(関数呼び出しと 16bit シフトをしない)
+	.macro	ROWCLAMP ?rc_n, ?rc_b, ?rc_d
+	bit	7, h
+	jr	nz, rc_n
+	ld	a, h
+	cp	a, #3
+	jr	nc, rc_b			; y >= 768 → 48 行以上
+	ld	a, l
+	add	a, #7
+	ld	l, a
+	ld	a, h
+	adc	a, #0
+	add	a, a
+	add	a, a
+	add	a, a
+	add	a, a			; 上位 * 16
+	ld	h, a
+	ld	a, l
+	rrca
+	rrca
+	rrca
+	rrca
+	and	a, #0x0F
+	or	a, h
+	cp	a, #ROWS + 1
+	jr	c, rc_d
+rc_b:
+	ld	a, #ROWS
+	jr	rc_d
+rc_n:
+	xor	a, a
+rc_d:
+	.endm
+
 	.area	_DATA
+e_fast:		.ds	1
 _scr::		.ds	4 * 10
 r_n:		.ds	1
 r_ymin:		.ds	2
@@ -56,7 +91,7 @@ e_xh:		.ds	2
 p_out:		.ds	2
 p_x:		.ds	2
 p_y:		.ds	2
-p_q:		.ds	2
+_p_q::		.ds	2	; 直前の投影の 2^23 / z(geom.s の draw_model が使う)
 
 	.area	_CODE
 
@@ -253,35 +288,15 @@ r_done:
 edge::
 	; ---- 覆う行 [rs, re)
 	ld	hl, (e_y0)
-	ld	de, #7
-	add	hl, de
-	sra	h
-	rr	l
-	sra	h
-	rr	l
-	sra	h
-	rr	l
-	sra	h
-	rr	l
-	call	clamp_row
+	ROWCLAMP
 	ld	(e_rs), a
 	ld	c, a
 	ld	hl, (e_y1)
-	ld	de, #7
-	add	hl, de
-	sra	h
-	rr	l
-	sra	h
-	rr	l
-	sra	h
-	rr	l
-	sra	h
-	rr	l
-	call	clamp_row
+	ROWCLAMP
 	sub	a, c
 	ret	z
 	ret	c
-	ld	(e_cnt), a		; 辺キャッシュ(slot_make)が行の範囲を記録する
+	ld	(e_cnt), a		; 辺キャッシュ(slot_ensure)が行の範囲を記録する
 	; ---- t = rs*16 + 8 - y0(>= 0)
 	ld	l, c
 	ld	h, #0
@@ -308,18 +323,37 @@ edge::
 	ld	a, h
 	ld	(e_neg), a		; bit7 = 左へ
 	bit	7, h
-	jr	z, 1$
+	jr	z, 51$
 	xor	a, a
 	sub	a, l
 	ld	l, a
 	sbc	a, a
 	sub	a, h
 	ld	h, a
-1$:
+51$:
 	ld	(e_adx), hl
+	; ---- 速い経路に乗るか: 始点・終点の x が ±1792(12.4、±112 ブロック)以内、t < 4096
+	;   上位バイトが 0..6 か 0xF9..0xFF なら ±1792 以内
+	ld	a, (e_x0 + 1)
+	add	a, #7
+	cp	a, #14
+	jr	nc, 52$
+	ld	a, (e_x1 + 1)
+	add	a, #7
+	cp	a, #14
+	jr	nc, 52$
+	ld	a, (e_t + 1)
+	cp	a, #0x10
+	jr	nc, 52$
+	ld	a, #1
+	jr	53$
+52$:
+	xor	a, a
+53$:
+	ld	(e_fast), a
 	pop	hl			; dy
-	; ---- slope(16.16) = |dx| * 65536 / dy を逆数表で
-	;   dy を 9bit の仮数 m(256..511)にそろえ、slope = (|dx| * recip9[m]) >> k(k = 8 + ずらした回数)
+	; ---- |dx| / dy を逆数表で: dy を 9bit の仮数 m(256..511)にそろえ、P = |dx| * recip9[m]
+	;   16.16 の傾き = P >> k、8.8 の傾き = P >> (k + 8)(k = 8 + ずらした回数)
 	ld	c, #8
 10$:
 	ld	a, h
@@ -346,62 +380,46 @@ edge::
 	ld	l, a
 	push	bc
 	ld	bc, (e_adx)
-	MULUW_HL_BC			; DE:HL
-	pop	bc
+	MULUW_HL_BC			; DE:HL = P
+	pop	bc			; C = k
+	ld	a, (e_fast)
+	or	a, a
+	jp	z, 30$
+	; ---- 速い経路: step88 = P >> (k + 8)
+	push	de			; P を取っておく(急すぎたら一般の経路へ)
+	push	hl
 	ld	a, c
-	cp	a, #8
-	jr	c, 15$
-	ld	l, h			; まず 8bit はバイトの入れ替えで
-	ld	h, e
-	ld	e, d
-	ld	d, #0
 	sub	a, #8
-15$:
-	or	a, a
-	jr	z, 14$
+	jr	c, 20$
+	ex	de, hl			; HL = P >> 16
+	jr	z, 22$
 	ld	b, a
-13$:
-	srl	d
-	rr	e
-	rr	h
+21$:
+	srl	h
 	rr	l
-	djnz	13$
-14$:
-	ld	(e_sl), hl
-	ld	(e_sh), de
-	; ---- 速い経路: 傾き < 128 ブロック/行、t < 4096、始点・終点とも ±100 ブロック以内なら 8.8 で回す
-	;   step88 = slope >> 8(バイトで取れる)、off88 = step88 * (t << 4) >> 8(MULUW の中央 2 バイト)
-	;   32bit のずれ計算(シフトの連続)を通らないので速い。画面から大きくはみ出す辺だけ一般の経路へ
-	ld	a, (e_sh + 1)
-	or	a, a
-	jp	nz, 40$
-	ld	a, (e_sh)
-	cp	a, #128
-	jp	nc, 40$
-	ld	a, (e_t + 1)
-	cp	a, #0x10
-	jp	nc, 40$			; t >= 4096
-	ld	hl, (e_x0)		; 始点(12.4)が ±1600 以内か
-	ld	de, #1600
-	add	hl, de
-	ld	de, #3201
-	or	a, a
-	sbc	hl, de
-	jp	nc, 40$
-	ld	hl, (e_x1)		; 終点も
-	ld	de, #1600
-	add	hl, de
-	ld	de, #3201
-	or	a, a
-	sbc	hl, de
-	jp	nc, 40$
-	; step88
-	ld	a, (e_sh)
+	djnz	21$
+	jr	22$
+20$:
+	neg				; k < 8: 左へ 8 - k ずらしてから上位 16bit
 	ld	b, a
-	ld	a, (e_sl + 1)
-	ld	c, a			; BC = |step88|
-	push	bc
-	; off88 = step88 * (t << 4) >> 8
+23$:
+	add	hl, hl
+	rl	e
+	rl	d
+	djnz	23$
+	ex	de, hl
+22$:
+	bit	7, h
+	jr	z, 24$
+	pop	hl			; 傾き >= 128 ブロック/行: 一般の経路へ
+	pop	de
+	jp	30$
+24$:
+	pop	af			; 取っておいた P は要らない
+	pop	af
+	; off88 = step88 * (t << 4) >> 8(MULUW の中央 2 バイト)
+	ld	b, h
+	ld	c, l			; BC = |step88|
 	ld	hl, (e_t)
 	add	hl, hl
 	add	hl, hl
@@ -409,35 +427,36 @@ edge::
 	add	hl, hl
 	MULUW_HL_BC			; DE:HL
 	ld	l, h
-	ld	h, e			; HL = off88
-	; x88 = (x0 + 8) << 4 ± off88
-	ex	de, hl
+	ld	h, e
+	ex	de, hl			; DE = off88
+	; x88 = (x0 + 8) << 4 ± off88、DE = ±step88
 	ld	hl, (e_x0)
+	push	bc
 	ld	bc, #8
 	add	hl, bc
 	add	hl, hl
 	add	hl, hl
 	add	hl, hl
 	add	hl, hl
-	pop	bc			; |step88|
+	pop	bc
 	ld	a, (e_neg)
 	rla
-	jr	c, 41$
+	jr	c, 25$
 	add	hl, de
 	ld	d, b
 	ld	e, c
-	jr	42$
-41$:
+	jr	26$
+25$:
 	or	a, a
 	sbc	hl, de
-	xor	a, a			; step88 を負に
+	xor	a, a
 	sub	a, c
 	ld	e, a
 	sbc	a, a
 	sub	a, b
 	ld	d, a
-42$:
-	; HL = x88、DE = step88
+26$:
+	; HL = x88、DE = step88。書き込み先 IY = e_dst + rs、B = 行数
 	ld	a, (e_cnt)
 	ld	b, a
 	ld	a, (e_rs)
@@ -447,6 +466,19 @@ edge::
 	ld	d, #0
 	add	iy, de
 	pop	de
+	; 始点・終点とも画面の中(0 <= x < 1024)なら丸めずに書くだけ
+	ld	a, (e_x0 + 1)
+	cp	a, #4
+	jr	nc, 43$
+	ld	a, (e_x1 + 1)
+	cp	a, #4
+	jr	nc, 43$
+27$:
+	ld	0 (iy), h
+	inc	iy
+	add	hl, de
+	djnz	27$
+	ret
 43$:
 	ld	a, h
 	bit	7, a
@@ -464,6 +496,29 @@ edge::
 	djnz	43$
 	ret
 
+	; ---- 一般の経路へ: 16.16 の傾き S = P >> k を e_sl / e_sh に
+30$:
+	ld	a, c
+	cp	a, #8
+	jr	c, 35$
+	ld	l, h			; まず 8bit はバイトの入れ替えで
+	ld	h, e
+	ld	e, d
+	ld	d, #0
+	sub	a, #8
+35$:
+	or	a, a
+	jr	z, 34$
+	ld	b, a
+33$:
+	srl	d
+	rr	e
+	rr	h
+	rr	l
+	djnz	33$
+34$:
+	ld	(e_sl), hl
+	ld	(e_sh), de
 	; ---- 一般の経路: 32bit のずれ計算
 40$:
 	ld	hl, (e_sl)
@@ -749,7 +804,7 @@ _project2::
 	dec	c
 	jr	nz, 13$
 14$:
-	ld	(p_q), hl
+	ld	(_p_q), hl
 	ld	hl, (p_x)
 	call	p_scale
 	ld	hl, #512
@@ -786,7 +841,7 @@ p_scale:
 	sub	a, h
 	ld	h, a
 1$:
-	ld	bc, (p_q)
+	ld	bc, (_p_q)
 	MULUW_HL_BC			; DE:HL
 	; >> 14: 結果 = DE << 2 | H >> 6。DE >= 0x1000 なら 16bit を超える
 	ld	a, d

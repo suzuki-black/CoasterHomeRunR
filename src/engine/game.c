@@ -82,8 +82,8 @@ static u8 draw_order[MAX_EN];
 /* 当たり判定用: 直前に描いた矩形(ブロック座標) */
 typedef struct { u8 x0, y0, x1, y1; i16 z; u8 id; } HitRect;
 #define MAX_HIT 48
-static HitRect hits[MAX_HIT];
-static u8 n_hits;
+HitRect hits[MAX_HIT];            /* geom.s の draw_model が足す */
+u8 n_hits;
 
 u16 cam_s;
 static u8  cam_sub;
@@ -376,31 +376,23 @@ static void trolley_update(void)
 /* ---------------------------------------------------------------------------
  * 描画
  * --------------------------------------------------------------------------- */
+/* 敵モデルを描く(本体は geom.s の draw_model) */
+extern const MRect *g_dm_rects;
+extern u8 g_dm_n, g_dm_flash, g_dm_id, g_dm_hit;
+void draw_model(const V3 *c);
+
 static void draw_enemy(u8 id)
 {
     Enemy *e = &en[id];
     const Model *md;
-    const MRect *r;
-    i16 sx, sy, k;
-    u8 i, hit_ok;
     if (e->c.z < NEAR_Z + 32) return;
     md = (e->type == ET_E02 && (e->anim & 4)) ? &model_e02b : &models[e->type];
-    if (!project(&e->c, &sx, &sy)) return;
-    k = muldiv(8192, 256, e->c.z);           /* 1/16m あたりの画面量(12.4)の 8.8 */
-    hit_ok = e->type != ET_TREASURE && e->state != ST_DEAD;
-    for (i = 0, r = md->r; i < md->n; i++, r++) {
-        if (!rect_clip(sx + fmul(r->x0, k), sy - fmul(r->y1, k),
-                       sx + fmul(r->x1, k), sy - fmul(r->y0, k))) continue;
-        g_color = e->flash ? C_WHITE : r->color;
-        rect_fill();
-        if (hit_ok && n_hits < MAX_HIT) {
-            HitRect *h = &hits[n_hits++];
-            h->x0 = g_rx; h->y0 = g_ry;
-            h->x1 = g_rx + g_rw; h->y1 = g_ry + g_rh;
-            h->z = e->c.z;
-            h->id = id;
-        }
-    }
+    g_dm_rects = md->r;
+    g_dm_n = md->n;
+    g_dm_flash = e->flash ? C_WHITE : 0;
+    g_dm_id = id;
+    g_dm_hit = e->type != ET_TREASURE && e->state != ST_DEAD;
+    draw_model(&e->c);
 }
 
 static void draw_enemies(void)

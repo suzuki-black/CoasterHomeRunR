@@ -202,3 +202,52 @@ _runs_draw::
 	ld	de, #5
 	add	hl, de
 	jr	1$
+
+; ---------------------------------------------------------------------------
+; void glyph1(const u8 *g)   HL = 3×5 の字形(5 バイト、下位 3bit)。g_rx, g_ry の位置に g_color で描く
+;   倍率 1 の文字用。画面内(x <= 61, y <= 43)であること(hud.c が確かめる)
+; ---------------------------------------------------------------------------
+_glyph1::
+	ex	de, hl			; DE = 字形
+	ld	a, (_g_ry)
+	ld	l, a
+	ld	h, #0
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	ld	a, (_g_rx)
+	ld	c, a
+	ld	b, #0
+	add	hl, bc
+	ld	a, (_g_buf_hi)
+	add	a, h
+	ld	h, a			; HL = 左上
+	ld	a, (_g_color)
+	ld	c, a
+	ld	b, #5
+1$:
+	ld	a, (de)
+	inc	de
+	bit	2, a
+	jr	z, 2$
+	ld	(hl), c
+2$:
+	inc	hl
+	bit	1, a
+	jr	z, 3$
+	ld	(hl), c
+3$:
+	inc	hl
+	bit	0, a
+	jr	z, 4$
+	ld	(hl), c
+4$:
+	push	de
+	ld	de, #62
+	add	hl, de
+	pop	de
+	djnz	1$
+	ret

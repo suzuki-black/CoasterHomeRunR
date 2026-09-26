@@ -15,6 +15,8 @@ static void block(i8 x, i8 y, u8 color, u8 scale)
     }
 }
 
+void glyph1(const u8 *g);    /* gfx.s: 倍率 1 の字形を g_rx, g_ry に描く */
+
 static void char_draw(i8 x, i8 y, char ch, u8 color, u8 scale)
 {
     u8 n, r, bits, c;
@@ -23,6 +25,11 @@ static void char_draw(i8 x, i8 y, char ch, u8 color, u8 scale)
     n = font35_map[ch - 0x20];
     if (n == 0xFF) return;
     g = &font35[n * 5];
+    if (scale == 1 && x >= 0 && x <= 61 && y >= 0 && y <= 43) {
+        g_rx = (u8)x; g_ry = (u8)y; g_color = color;
+        glyph1(g);
+        return;
+    }
     for (r = 0; r < 5; r++) {
         bits = g[r];
         for (c = 0; c < 3; c++) {
