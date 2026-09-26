@@ -8,6 +8,7 @@
 - spr_patterns: 16×16 スプライト(照準・ヒットマーク)
 - recip9      : 9bit 仮数の逆数表(多角形の辺の傾きを割り算なしで求める)
 - trolley_img : 画面下部のトロッコの縁(64×9)と、ライフが減るごとの壊れ方(trolley_dmg)
+- psg_period  : PSG の音程表(MIDI の音番号 24〜95)
 """
 import math
 import sys
@@ -190,6 +191,12 @@ def main(out):
             dmg += [x, y, w, h, c]
         dmg.append(0xFF)               # 段の区切り
 
+    # PSG の音程表: MIDI の音番号 24(C1)〜95(B6)の周期 = 3579545 / (16 * 周波数)
+    ptab = []
+    for n in range(24, 96):
+        f = 440.0 * 2 ** ((n - 69) / 12)
+        ptab.append(min(4095, round(3579545 / (16 * f))))
+
     # 逆数表: m = 256..511 について round(2^24 / m)(m=256 は 65535 に丸める)。raster.s の傾き計算
     rtab = [min(65535, round((1 << 24) / m)) for m in range(256, 512)]
 
@@ -206,7 +213,8 @@ def main(out):
         f.write(carray('spr_patterns', 'u8', spr) + '\n\n')
         f.write(carray('recip9', 'u16', rtab) + '\n\n')
         f.write(carray('trolley_img', 'u8', tro) + '\n\n')
-        f.write(carray('trolley_dmg', 'u8', dmg) + '\n')
+        f.write(carray('trolley_dmg', 'u8', dmg) + '\n\n')
+        f.write(carray('psg_period', 'u16', ptab) + '\n')
 
 
 if __name__ == '__main__':

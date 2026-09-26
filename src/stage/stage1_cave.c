@@ -37,6 +37,30 @@ static const Caption cave_captions[] = {
     { "CAVE CLEAR!", C_YELLOW, 1 },
 };
 
+/* BGM「逃走」: 150BPM の短調(Dm → B♭ → C → A)。8 分音符 = 12 ティック。勇ましく、急き立てる感じ */
+#define E8 12
+#define Q  24
+#define DQ 36
+#define H  48
+static const u8 bgm_melody[] = {
+    74,E8, 74,E8, 69,E8, 74,E8, 77,Q,  76,E8, 74,E8,     /* Dm */
+    72,DQ, 70,E8, 69,Q,  67,Q,                           /* B♭ */
+    67,E8, 69,E8, 70,E8, 72,E8, 76,Q,  72,Q,             /* C  */
+    69,H,  73,Q,  76,Q,                                  /* A  */
+    74,E8, 74,E8, 69,E8, 74,E8, 77,E8, 79,E8, 81,Q,      /* Dm */
+    82,Q,  81,E8, 79,E8, 77,Q,  74,Q,                    /* B♭ */
+    76,E8, 77,E8, 79,E8, 76,E8, 72,Q,  76,Q,             /* C  */
+    81,Q,  79,E8, 77,E8, 76,Q,  73,Q,                    /* A  */
+    0xFF, 0,
+};
+static const u8 bgm_bass[] = {                           /* 8 分のオクターブ刻み */
+    38,E8, 50,E8, 38,E8, 50,E8, 38,E8, 50,E8, 38,E8, 50,E8,
+    34,E8, 46,E8, 34,E8, 46,E8, 34,E8, 46,E8, 34,E8, 46,E8,
+    36,E8, 48,E8, 36,E8, 48,E8, 36,E8, 48,E8, 36,E8, 48,E8,
+    33,E8, 45,E8, 33,E8, 45,E8, 33,E8, 45,E8, 40,E8, 43,E8,
+    0xFF, 0,
+};
+
 static const Event cave_events[] = {
     /* ---- オープニング: 宝の間でトロッコは止まったまま、後ろ(宝の間)を向いている ---- */
     { S(0),    EV_CTRL,  0,           0,   0 },
@@ -55,6 +79,7 @@ static const Event cave_events[] = {
     { S(6),    EV_TURN,  0,           0,   0 },
     { S(6),    EV_CTRL,  1,           0,   0 },
     { S(6),    EV_DIR,   DIR_BACK,    0,   0 },
+    { S(6),    EV_BGM,   1,           0,   0 },
     /* ---- 雑魚: 前から猿人 ---- */
     { S(10),   EV_DIR,   DIR_FRONT,   0,   0 },
     { S(10),   EV_SPAWN, ET_E01,      22,  10 },
@@ -108,4 +133,5 @@ const Stage stage_data = {
     8,          /* 宝の間の 8m 地点から */
     1,          /* 後ろ(宝の間)を向いて始まる */
     S(6),       /* A でオープニングを飛ばす先 */
+    bgm_melody, bgm_bass,
 };

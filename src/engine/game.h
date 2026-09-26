@@ -24,6 +24,7 @@ enum {
     EV_CTRL,    /* a = 1 で操作できる、0 で操作できない(演出中) */
     EV_TURN,    /* a = 0 で前、1 で後ろへ自動で振り向く */
     EV_GRAB,    /* 宝箱を取る(宝箱がカメラへ飛んできて消える) */
+    EV_BGM,     /* a = 1 でステージの BGM を鳴らす、0 で止める */
 };
 enum { DIR_NONE, DIR_FRONT, DIR_BACK };
 typedef struct {
@@ -44,6 +45,8 @@ typedef struct {
     u8  start_m;              /* 開始位置[m] */
     u8  start_back;           /* 1 = 後ろを向いて始まる(オープニング) */
     u16 skip_tick;            /* 演出中に A を押したらこの時刻まで飛ばす(0 = 飛ばせない) */
+    const u8 *bgm_melody;     /* BGM(sound.h の形式) */
+    const u8 *bgm_bass;
 } Stage;
 
 /* ステージデータの読み込み先(ROM バンクから写す。先頭 2 バイトが Stage へのポインタ) */

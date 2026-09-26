@@ -121,6 +121,7 @@ static u8  sc_end;
 static u8  ctrl;                 /* 1 = 操作できる(オープニングの演出中は 0) */
 static u8  spd_over;             /* 0 以外: トロッコの速度(m/秒 × 4)をスクリプトで指定 */
 static u8  cap_id, cap_time;     /* 字幕の番号と残りフレーム */
+static u8  warn_prev, warn_time; /* 警告の出始めと繰り返しで警告音を鳴らす */
 static const Stage *stage;
 u16 g_score;
 u16 g_perf_logic[4];
@@ -404,6 +405,10 @@ static void script_update(void)
         case EV_TURN:
             if (facing != ev->a) { facing = ev->a; turning = 8; }
             break;
+        case EV_BGM:
+            if (ev->a) bgm_play(stage->bgm_melody, stage->bgm_bass);
+            else bgm_stop();
+            break;
         case EV_GRAB: {
             u8 i;
             for (i = 0; i < MAX_EN; i++)
@@ -540,6 +545,10 @@ static void draw_hud(void)
     hud_life(life);
     if (attack_dir == DIR_BACK && !facing) warn = 1;
     if (attack_dir == DIR_FRONT && facing) warn = 2;
+    /* 警告音: 出始めに鳴らし、続いている間は約 2 秒ごとに鳴らす */
+    if (warn && (warn != warn_prev || !warn_time)) { se_play(SE_ALARM); warn_time = 40; }
+    if (warn_time) warn_time--;
+    warn_prev = warn;
     if (warn) {
         if (blink < 8) text_center(1, warn == 1 ? "ENEMY BEHIND!" : "ENEMY AHEAD!", C_RED, 1);
     } else {
@@ -596,7 +605,7 @@ u8 game_run(const Stage *st)
     stage = st;
     cam_s = M(st->start_m); cam_sub = 0; cam_v = 0; hold = 1;
     facing = st->start_back; look = facing ? 0x8000 : 0; turning = 0;
-    ctrl = 1; spd_over = 0; cap_id = 0; cap_time = 0;
+    ctrl = 1; spd_over = 0; cap_id = 0; cap_time = 0; warn_prev = 0; warn_time = 0;
     aim_x = 128; aim_y = 92; aim_hold = 0;
     in_prev = 0xFF;                      /* タイトルで押したボタンを射撃と見なさない */
     fire_cd = 0; hitmark = 0;
@@ -631,6 +640,7 @@ u8 game_run(const Stage *st)
 
     g_spr_attr[0] = 209;
     g_spr_attr[4] = 209;
+    bgm_stop();
     if (!over) {
         g_score += (u16)life * 100;      /* 残りライフ × 1000 点(仕様書 5.2) */
         g_scene = 3;
