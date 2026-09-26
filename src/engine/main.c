@@ -111,6 +111,28 @@ static void vdp_init(void)
     vdp_wreg(1, 0xEB);             /* 表示オン、垂直帰線割り込み */
 }
 
+/* 仮エンディング(ステージ 1 クリア後)。本エンディングは SCREEN 1 のひらがなで作る(仕様書 5.2) */
+void ending_run(void)
+{
+    u16 t;
+    u8 prev = 0xFF, in;
+    set_stage_palette(pal_title);
+    for (t = 0; t < 400; t++) {
+        buf_fill(C_BLACK, BUF);
+        text_center(2, "CAVE ESCAPED!", C_YELLOW, 1);
+        text_center(11, "THE TREASURE", C_WHITE, 1);
+        text_center(17, "IS YOURS!", C_WHITE, 1);
+        text_center(26, "SCORE", C_CYAN, 1);
+        num_draw(18, 32, g_score, 5, C_WHITE);
+        if (g_score) text_draw(38, 32, "0", C_WHITE, 1);
+        if (t & 32) text_center(41, "TO BE CONTINUED", C_ORANGE, 1);
+        present();
+        in = input_raw();
+        if (t > 60 && (in & IN_A) && !(prev & IN_A)) break;
+        prev = in;
+    }
+}
+
 static void title(void)
 {
     u16 t = 0;

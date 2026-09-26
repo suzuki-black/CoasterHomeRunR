@@ -4,6 +4,7 @@
 #  make            ASCII8 メガロム build/TrolleyHomeRun.rom を生成
 #  make run        openMSX(開発用機種 TH_turboR_dev)で起動して目視
 #  make test       openMSX で起動〜ゲーム進行を判定(tools/test_game.tcl)
+#  make flow       自動で遊んで流れを判定(tools/test_flow.tcl、GOD=1 でライフを減らさない)
 #  make perf       速度の計測(tools/perf.tcl)
 #  make pcprof     PC サンプリングの統計プロファイル(tools/pcprof.tcl)
 #  make machine    開発用機種定義を ~/.openMSX/share/machines にコピー(初回のみ)
@@ -51,7 +52,7 @@ HDRS = $(wildcard $(ENG)/*.h)
 
 ROM = $(BUILD)/TrolleyHomeRun.rom
 
-.PHONY: all run test perf pcprof machine clean
+.PHONY: all run test flow perf pcprof machine clean
 
 all: $(ROM)
 
@@ -98,6 +99,14 @@ test: $(ROM)
 	TH_NOI=$(abspath $(BUILD)/engine.noi) TH_OUT=$(abspath $(RUNDIR)) \
 	  timeout $(TIMEOUT) $(OPENMSX_ROM) -script $(abspath $(RUNDIR))/test_game.tcl >/dev/null 2>&1 || true
 	@cat $(RUNDIR)/result.txt
+
+# 自動で遊んでタイトル〜オープニング〜ボス〜エンディングの流れを確かめる(tools/test_flow.tcl)。GOD=1 でライフを減らさない
+flow: $(ROM)
+	@mkdir -p $(RUNDIR)
+	cp $(TOOLS)/test_flow.tcl $(RUNDIR)/
+	TH_NOI=$(abspath $(BUILD)/engine.noi) TH_OUT=$(abspath $(RUNDIR)) TH_GOD=$(GOD) \
+	  timeout $(TIMEOUT) $(OPENMSX_ROM) -script $(abspath $(RUNDIR))/test_flow.tcl >/dev/null 2>&1 || true
+	@cat $(RUNDIR)/flow.txt
 
 # 速度の計測(tools/perf.tcl)。PERF_FN="_env_draw _raster" のように関数を渡すと区間ごとの時間も出す
 perf: $(ROM)

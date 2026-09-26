@@ -7,10 +7,24 @@
 typedef struct { i8 x0, y0, x1, y1; u8 color; u8 part; } MRect;   /* part: 0=胴 1=頭 2=脚 */
 typedef struct { const MRect *r; u8 n; } Model;
 
-enum { ET_NONE, ET_E01, ET_E02, ET_E03, ET_E04, ET_E05, ET_B01, ET_TREASURE, ET_MEDKIT, ET_COUNT };
+enum { ET_NONE, ET_E01, ET_E02, ET_E03, ET_E04, ET_E05, ET_B01, ET_TREASURE, ET_MEDKIT,
+       ET_BOSS1,     /* 洞窟の主(ステージ 1 の大ボス) */
+       ET_ROCK,      /* 投げた岩(敵弾。撃ち落とせる) */
+       ET_COUNT };
 
 /* ステージスクリプト(仕様書 7.7)。時刻は 60Hz ティック */
-enum { EV_SPAWN, EV_DIR, EV_GO, EV_BOSS, EV_END };
+enum {
+    EV_SPAWN,   /* a = 敵、b = 距離[m]、c = 横位置(1/8m) */
+    EV_DIR,     /* a = 襲撃方向(警告表示) */
+    EV_GO,      /* トロッコ発進 */
+    EV_BOSS,    /* a = ボス、b = 距離[m]。撃破までスクリプトは止まる */
+    EV_END,     /* ステージクリア */
+    EV_TEXT,    /* a = 字幕の番号(0 = 消す)。約 2 秒で消える */
+    EV_SPEED,   /* a = トロッコの速度(m/秒 × 4)、0 = レールの指定に戻す */
+    EV_CTRL,    /* a = 1 で操作できる、0 で操作できない(演出中) */
+    EV_TURN,    /* a = 0 で前、1 で後ろへ自動で振り向く */
+    EV_GRAB,    /* 宝箱を取る(宝箱がカメラへ飛んできて消える) */
+};
 enum { DIR_NONE, DIR_FRONT, DIR_BACK };
 typedef struct {
     u16 tick;
@@ -20,13 +34,22 @@ typedef struct {
     i8  c;       /* SPAWN: 横位置(1/8m、正 = 右) */
 } Event;
 
+typedef struct { const char *text; u8 color; u8 scale; } Caption;
+
 typedef struct {
     const RailSeg *track;
     const u8      *palette;   /* 9-15 の 7 色(RB, G)× 7 */
     const Event   *events;
+    const Caption *captions;  /* 字幕(番号 1 から) */
+    u8  start_m;              /* 開始位置[m] */
+    u8  start_back;           /* 1 = 後ろを向いて始まる(オープニング) */
+    u16 skip_tick;            /* 演出中に A を押したらこの時刻まで飛ばす(0 = 飛ばせない) */
 } Stage;
 
 extern const Stage stage_cave;
+
+/* 仮エンディング(main.c) */
+void ending_run(void);
 
 /* 1 回遊ぶ。戻り値 0 = ゲームオーバー、1 = クリア */
 u8 game_run(const Stage *st);
