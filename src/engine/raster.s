@@ -88,9 +88,6 @@ e_t:		.ds	2
 e_ol:		.ds	2
 e_oh:		.ds	2
 e_xh:		.ds	2
-p_out:		.ds	2
-p_x:		.ds	2
-p_y:		.ds	2
 _p_q::		.ds	2	; 直前の投影の 2^23 / z(geom.s の draw_model が使う)
 
 	.area	_CODE
@@ -753,24 +750,23 @@ fill_cmp:
 ;   割り算は q = 2^23 / z の 1 回だけ。x*q >> 14 = x*512/z
 ; ---------------------------------------------------------------------------
 _project2::
-	ld	(p_out), de
+	; 変数をメモリに置かず、スタックとレジスタで回す(R800 はデータのメモリアクセスが重い)
+	push	de			; 出力先
 	ld	e, (hl)
 	inc	hl
 	ld	d, (hl)
 	inc	hl
-	ld	(p_x), de
+	push	de			; x
 	ld	e, (hl)
 	inc	hl
 	ld	d, (hl)
 	inc	hl
-	ld	(p_y), de
-	ld	c, (hl)
+	push	de			; y
+	ld	a, (hl)
 	inc	hl
-	ld	b, (hl)			; BC = z
-	; q = 2^23 / z を逆数表で求める(割り算の代わり)。z を 9bit の仮数 m(256..511)にそろえ、
-	;   q = recip9[m] >> k(k = z を右へずらした回数 + 1。z >= 129 なので k >= 0)
-	ld	h, b
-	ld	l, c
+	ld	h, (hl)
+	ld	l, a			; HL = z
+	; q = 2^23 / z を逆数表で。z を 9bit の仮数 m(256..511)にそろえ、q = recip9[m] >> k
 	ld	c, #1
 10$:
 	ld	a, h
@@ -805,70 +801,66 @@ _project2::
 	jr	nz, 13$
 14$:
 	ld	(_p_q), hl
-	ld	hl, (p_x)
-	call	p_scale
-	ld	hl, #512
-	add	hl, de
-	ex	de, hl
-	ld	hl, (p_out)
-	ld	(hl), e
-	inc	hl
-	ld	(hl), d
-	inc	hl
-	push	hl
-	ld	hl, (p_y)
+	ld	b, h
+	ld	c, l			; BC = q(p_scale の間は保たれる)
+	pop	hl			; y
 	call	p_scale
 	ld	hl, #368
 	or	a, a
-	sbc	hl, de
-	ex	de, hl
-	pop	hl
+	sbc	hl, de			; sy
+	ex	(sp), hl		; スタック = sy、HL = x
+	call	p_scale
+	ld	hl, #512
+	add	hl, de			; sx
+	pop	de			; sy
+	ex	(sp), hl		; スタック = sx、HL = 出力先
+	pop	bc			; sx
+	ld	(hl), c
+	inc	hl
+	ld	(hl), b
+	inc	hl
 	ld	(hl), e
 	inc	hl
 	ld	(hl), d
 	ret
 
-; DE = clamp((HL * p_q) >> 14, ±15000)(HL 符号付き)
+; DE = clamp((HL * BC) >> 14, ±15000)(HL 符号付き、BC = q)。BC は保つ
 p_scale:
-	ld	a, h
-	push	af
 	bit	7, h
-	jr	z, 1$
+	jr	nz, 5$
+	MULUW_HL_BC			; DE:HL
+	call	6$
+	ret
+5$:
 	xor	a, a
 	sub	a, l
 	ld	l, a
 	sbc	a, a
 	sub	a, h
 	ld	h, a
-1$:
-	ld	bc, (_p_q)
-	MULUW_HL_BC			; DE:HL
-	; >> 14: 結果 = DE << 2 | H >> 6。DE >= 0x1000 なら 16bit を超える
-	ld	a, d
-	and	a, #0xF0
-	jr	nz, 3$
-	add	hl, hl
-	rl	e
-	rl	d
-	add	hl, hl
-	rl	e
-	rl	d			; DE = 結果
-	ld	hl, #15000
-	or	a, a
-	sbc	hl, de
-	jr	nc, 4$
-3$:
-	ld	de, #15000
-4$:
-	pop	af
-	bit	7, a
-	ret	z
+	MULUW_HL_BC
+	call	6$
 	xor	a, a
 	sub	a, e
 	ld	e, a
 	sbc	a, a
 	sub	a, d
 	ld	d, a
+	ret
+	; DE:HL >> 14 → DE(15000 で飽和)。結果 = DE << 2 | H >> 6
+6$:
+	ld	a, d
+	cp	a, #0x0E
+	jr	nc, 7$			; 14336 以上は飽和
+	add	hl, hl
+	rl	e
+	rl	d
+	add	hl, hl
+	rl	e
+	rl	d
+	ret
+7$:
+	ld	de, #15000
 	ret
 
 ; ---------------------------------------------------------------------------
