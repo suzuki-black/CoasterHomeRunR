@@ -14,6 +14,7 @@ u16 g_perf_render;
 u16 g_perf_xfer;
 u16 g_perf_env;
 u8 g_scene;
+u8 g_stage;                      /* 遊んでいるステージ(1 から) */
 
 static u8 back_page = 1;
 static u16 last_flip;
@@ -111,22 +112,22 @@ static void vdp_init(void)
     vdp_wreg(1, 0xEB);             /* 表示オン、垂直帰線割り込み */
 }
 
-/* 仮エンディング(ステージ 1 クリア後)。本エンディングは SCREEN 1 のひらがなで作る(仕様書 5.2) */
+/* 仮エンディング(森を抜けた後)。本エンディングは SCREEN 1 のひらがなで作る(仕様書 5.2) */
 void ending_run(void)
 {
     u16 t;
     u8 prev = 0xFF, in;
-    set_stage_palette(pal_title);
     for (t = 0; t < 400; t++) {
         buf_fill(C_BLACK, BUF);
-        text_center(2, "CAVE ESCAPED!", C_YELLOW, 1);
-        text_center(11, "THE TREASURE", C_WHITE, 1);
-        text_center(17, "IS YOURS!", C_WHITE, 1);
+        text_center(2, "FOREST CLEARED!", C_YELLOW, 1);
+        text_center(11, "THE TOWN", C_WHITE, 1);
+        text_center(17, "IS NEAR...", C_WHITE, 1);
         text_center(26, "SCORE", C_CYAN, 1);
         num_draw(18, 32, g_score, 5, C_WHITE);
         if (g_score) text_draw(38, 32, "0", C_WHITE, 1);
         if (t & 32) text_center(41, "TO BE CONTINUED", C_ORANGE, 1);
         present();
+        if (t == 1) set_stage_palette(pal_title);   /* 前の画面が消えてから(一瞬でも前の画面の色が変わらないように) */
         in = input_raw();
         if (t > 60 && (in & IN_A) && !(prev & IN_A)) break;
         prev = in;
@@ -175,6 +176,36 @@ static const Stage *stage_load(u8 bank)
     return *(const Stage * const *)STAGE_BUF;
 }
 
+/* ステージの始めに名前を出す(約 1.5 秒) */
+static void stage_card(const Stage *st)
+{
+    u8 t;
+    for (t = 0; t < 45; t++) {
+        buf_fill(C_BLACK, BUF);
+        if (t >= 2) {
+            text_center(16, st->name, C_YELLOW, 1);
+            text_center(24, st->title2, C_WHITE, 1);
+        }
+        present();
+        if (t == 1) set_stage_palette(pal_title);   /* 前の画面が消えてから */
+    }
+}
+
+/* ステージ 1 から順に遊ぶ。ライフとスコアはステージをまたいで持ち越す */
+static void play(void)
+{
+    u8 n;
+    for (n = 0; n < STAGE_COUNT; n++) {
+        const Stage *st = stage_load(STAGE1_BANK + n * 2);
+        g_stage = n + 1;
+        stage_card(st);
+        if (!game_run(st, n == 0)) return;
+    }
+    g_score += (u16)life * 100;          /* 残りライフ × 1000 点(仕様書 5.2) */
+    g_scene = 3;
+    ending_run();
+}
+
 void main(void)
 {
     g_buf_hi = BUF_A_HI;
@@ -188,6 +219,6 @@ void main(void)
     vdp_init();
     for (;;) {
         title();
-        game_run(stage_load(STAGE1_BANK));
+        play();
     }
 }

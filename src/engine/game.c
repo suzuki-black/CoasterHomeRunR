@@ -63,15 +63,65 @@ static const MRect m_rock[] = {         /* 投げた岩 */
 static const MRect m_medkit[] = {       /* 救急箱・赤+白の十字 */
     { -4, 0, 4, 7, C_RED, 0 }, { -1, 1, 1, 6, C_WHITE, 0 }, { -3, 2, 3, 5, C_WHITE, 0 },
 };
+static const MRect m_e03[] = {          /* キリン人(槍)・黄。首が長く、槍のリーチが長い */
+    { -4,  0, -1, 12, C_YELLOW, 2 }, {  1,  0,  4, 12, C_YELLOW, 2 },
+    { -5, 12,  5, 24, C_YELLOW, 0 }, { -3, 15, -1, 17, C_BROWN, 0 }, { 1, 19, 3, 21, C_BROWN, 0 },
+    { -2, 24,  2, 38, C_YELLOW, 1 }, { -3, 38,  4, 43, C_YELLOW, 1 },
+    {  1, 40,  3, 41, C_BLACK, 1 },  { -3, 43, -2, 46, C_BROWN, 1 }, { 2, 43, 3, 46, C_BROWN, 1 },
+    {  6,  4,  7, 40, C_BLACK, 0 },  {  5, 40,  8, 45, C_WHITE, 0 },
+};
+static const MRect m_e04[] = {          /* 弓兵(猿人系)・橙。高台から矢を撃つ */
+    { -4,  0, -1,  8, C_ORANGE, 2 }, {  1,  0,  4,  8, C_ORANGE, 2 },
+    { -5,  8,  5, 17, C_ORANGE, 0 }, { -3, 17,  3, 23, C_ORANGE, 1 },
+    { -2, 19,  2, 20, C_BLACK, 1 },
+    { -9,  7, -7, 23, C_BROWN, 0 },  { -7,  8, -6, 22, C_WHITE, 0 },
+    {  4, 14,  6, 23, C_BROWN, 0 },
+};
+static const MRect m_e05[] = {          /* 魔法使い(コウモリ人系)・水色。杖から魔法弾 */
+    { -5,  0,  5, 12, C_CYAN, 0 },   { -4, 12,  4, 16, C_CYAN, 0 },
+    { -2, 16,  2, 20, C_CYAN, 1 },   { -2, 20, -1, 22, C_CYAN, 1 }, { 1, 20, 2, 22, C_CYAN, 1 },
+    { -1, 17,  1, 18, C_RED, 1 },
+    { -11, 8, -5, 14, C_BLACK, 0 },  {  5,  8, 11, 14, C_BLACK, 0 },
+    {  7,  0,  8, 20, C_BROWN, 0 },  {  6, 20,  9, 23, C_RED, 0 },
+};
+static const MRect m_arrow[] = {        /* 矢(正面から見た鏃と矢羽) */
+    { -2, 0, 2, 3, C_ORANGE, 0 }, { -1, 1, 1, 2, C_WHITE, 0 },
+};
+static const MRect m_magic[] = {        /* 魔法弾・水の玉 */
+    { -4, 0, 4, 7, C_RED, 0 }, { -2, 2, 2, 5, C_YELLOW, 0 },
+};
+static const MRect m_crate[] = {        /* 川に浮いた木箱と、その上の救急箱 */
+    { -7, 0, 7, 8, C_BROWN, 0 }, { -7, 3, 7, 4, C_BLACK, 0 },
+    { -4, 8, 4, 15, C_RED, 0 }, { -1, 9, 1, 14, C_WHITE, 0 }, { -3, 10, 3, 13, C_WHITE, 0 },
+};
+static const MRect m_boss2[] = {        /* 川の主(大ガエル人)・水色+黒、赤い口、黄色い目 */
+    { -16,  0, -6,  8, C_CYAN, 2 },   {  6,  0, 16,  8, C_CYAN, 2 },
+    { -18,  8, 18, 30, C_CYAN, 0 },   { -12, 10, 12, 24, C_WHITE, 0 },
+    { -25, 14, -18, 28, C_CYAN, 0 },  { 18, 14, 25, 28, C_CYAN, 0 },
+    { -16, 30, 16, 40, C_CYAN, 1 },   { -14, 30, 14, 33, C_RED, 1 },
+    { -15, 40, -7, 46, C_YELLOW, 1 }, {  7, 40, 15, 46, C_YELLOW, 1 },
+    { -12, 42, -10, 45, C_BLACK, 1 }, { 10, 42, 12, 45, C_BLACK, 1 },
+};
+static const MRect m_b02[] = {          /* 森の番人(巨大コウモリ人)・紫+黒、赤い目 */
+    { -6,  0,  6, 18, C_PURPLE, 0 },  { -5, 18,  5, 26, C_PURPLE, 1 },
+    { -5, 26, -3, 31, C_PURPLE, 1 },  {  3, 26,  5, 31, C_PURPLE, 1 },
+    { -3, 21, -1, 23, C_RED, 1 },     {  1, 21,  3, 23, C_RED, 1 },
+    { -30,  6, -6, 20, C_BLACK, 0 },  {  6,  6, 30, 20, C_BLACK, 0 },
+    { -38, 10, -30, 22, C_BLACK, 0 }, { 30, 10, 38, 22, C_BLACK, 0 },
+    { -30, 18, -6, 19, C_PURPLE, 0 }, {  6, 18, 30, 19, C_PURPLE, 0 },
+};
 #define MODEL(a) { a, sizeof(a) / sizeof(a[0]) }
 static const Model models[] = {
-    { 0, 0 }, MODEL(m_e01), MODEL(m_e02a), { 0, 0 }, { 0, 0 }, { 0, 0 },
+    { 0, 0 }, MODEL(m_e01), MODEL(m_e02a), MODEL(m_e03), MODEL(m_e04), MODEL(m_e05),
     MODEL(m_b01), MODEL(m_treasure), MODEL(m_medkit), MODEL(m_boss1), MODEL(m_rock),
+    MODEL(m_arrow), MODEL(m_magic), MODEL(m_crate), MODEL(m_boss2), MODEL(m_b02),
 };
 static const Model model_e02b = MODEL(m_e02b);
 
 /* 敵種ごとの定数 */
-static const u8 et_hp[ET_COUNT] = { 0, 1, 2, 3, 2, 3, 30, 0, 1, 60, 1 };
+static const u8 et_hp[ET_COUNT] = { 0, 1, 2, 3, 2, 3, 30, 0, 1, 60, 1, 1, 2, 1, 40, 60 };
+/* 敵弾の速さ(カメラに対して、m/秒) */
+#define SHOT_V(t) ((t) == ET_ARROW ? MPS(8) : (t) == ET_MAGIC ? MPS(3) : MPS(5))
 
 /* ---------------------------------------------------------------------------
  * 状態
@@ -115,6 +165,7 @@ u8  attack_dir;
 u8  boss_alive;
 static u8  blink;
 static u8  shake;                /* 被弾でトロッコを揺らす残りフレーム */
+static u8  whiteout;             /* 画面を白くする残りフレーム(着水など) */
 u16 sc_tick;
 static const Event *sc_ev;
 static u8  sc_end;
@@ -159,14 +210,19 @@ static Enemy *spawn(u8 type, i8 dist, i8 lat8)
     e->v = 0;
     e->lat = e->lat_t = (i16)lat8 << 5;       /* 1/8m → 8.8 */
     e->up = FLOOR_Y;                           /* 地上の敵は床に立つ */
-    if (type == ET_E02) {
+    if (type == ET_E02 || type == ET_E05) {
         e->up = FLY_Y;
         e->state = ST_APPROACH;
         e->lat_t = e->side ? F88(-0.5) : F88(0.5);
-    } else if (type == ET_B01 || type == ET_BOSS1) {
+    } else if (IS_BOSS(type)) {
         e->state = ST_APPROACH;
         e->lat_t = 0;
+        if (type == ET_B02) e->up = F88(0.2);
         boss_alive = 1;
+    } else if (type == ET_E04) {
+        e->up = F88(1.75);                     /* 川の高台に立つ */
+    } else if (type == ET_CRATE) {
+        e->up = F88(-1.45);                    /* 水面に浮く */
     } else if (type == ET_E01 && dist < 0) {
         e->state = ST_CHASE;                   /* 後ろから走って追いかけてくる */
         e->v = MPS(3.3);
@@ -212,6 +268,21 @@ static void melee(Enemy *e, u8 period)
     }
 }
 
+/* 敵弾を撃つ(e の位置から、カメラへ向かって飛ぶ) */
+static void shoot(Enemy *e, u8 type, i16 d, i16 up)
+{
+    Enemy *r = spawn(type, (i8)(d >> 6), (i8)(e->lat >> 5));
+    if (!r) return;
+    r->s = (d > 0) ? e->s - M(0.5) : e->s + M(0.5);
+    r->up = up;
+    r->lat = e->lat;
+    r->lat_t = 0;
+    r->state = ST_APPROACH;
+    e->flash = 2;
+}
+
+static i16 iabs(i16 v) { return v < 0 ? -v : v; }
+
 static void update_enemy(Enemy *e)
 {
     i16 d = (i16)(e->s - cam_s);
@@ -223,7 +294,7 @@ static void update_enemy(Enemy *e)
         e->up -= 24;
         move_enemy(e);
         if (++e->timer >= 12) {
-            if (e->type == ET_B01 || e->type == ET_BOSS1) boss_alive = 0;
+            if (IS_BOSS(e->type)) boss_alive = 0;
             e->type = ET_NONE;
         }
         return;
@@ -249,15 +320,31 @@ static void update_enemy(Enemy *e)
         }
         break;
     case ST_IDLE:
-        if (e->type == ET_E01 && d > 0 && d < (i16)M(14)) {
+        if ((e->type == ET_E01 || e->type == ET_E03) && d > 0 && d < (i16)M(14)) {
             e->state = ST_APPROACH;
             e->v = -MPS(2.5);
             e->lat_t = e->side ? F88(-0.35) : F88(0.35);
+        } else if (e->type == ET_E04) {
+            /* 弓兵: 6〜24m の間で、予備動作(点滅)の後に矢を撃つ */
+            if (iabs(d) > (i16)M(6) && iabs(d) < (i16)M(24)) {
+                e->timer++;
+                if (e->timer >= 30 && e->timer < 45) e->flash = (e->timer & 2) ? 1 : 0;
+                else if (e->timer == 45) shoot(e, ET_ARROW, d, e->up + F88(0.8));
+                else if (e->timer >= 80) e->timer = 0;
+            }
         }
         break;
     case ST_APPROACH:
         if (e->type == ET_E01) {
             if (d > 0 && d <= (i16)M(2)) { e->state = ST_ATTACK; e->timer = 0; }
+        } else if (e->type == ET_E03) {
+            if (d > 0 && d <= (i16)M(3.5)) { e->state = ST_ATTACK; e->timer = 0; }
+        } else if (e->type == ET_E05) {
+            /* 8m 先(または後ろ)まで寄ってきて、そこから魔法弾を撃つ */
+            if (d < -(i16)M(8)) e->v = (i16)cam_v + MPS(3);
+            else if (d > (i16)M(8)) e->v = (i16)cam_v - MPS(3);
+            else { e->state = ST_ATTACK; e->timer = 0; }
+            e->up = FLY_Y + ((e->anim & 16) ? 24 : 0);
         } else if (e->type == ET_E02) {
             /* 後方(または前方)から追跡してきて 2.2m に張り付く */
             if (d < -(i16)M(2.2) + 0) e->v = (i16)cam_v + MPS(3);
@@ -267,12 +354,15 @@ static void update_enemy(Enemy *e)
         } else if (e->type == ET_B01) {
             e->v = (i16)cam_v - MPS(2);
             if (d <= (i16)M(3.5)) { e->state = ST_ATTACK; e->timer = 0; }
-        } else if (e->type == ET_BOSS1) {
+        } else if (e->type == ET_BOSS1 || e->type == ET_B02) {
             e->v = (i16)cam_v - MPS(2);
             if (d <= (i16)M(7)) { e->state = ST_ATTACK; e->timer = 0; e->attacks = 0; }
-        } else if (e->type == ET_ROCK) {
-            /* 岩: カメラへ向かってまっすぐ飛ぶ。手前 0.8m に来たら当たる */
-            e->v = (d > 0) ? (i16)cam_v - MPS(5) : (i16)cam_v + MPS(5);
+        } else if (e->type == ET_BOSS2) {
+            e->v = (i16)cam_v + MPS(2);          /* 後ろから追いついてくる */
+            if (d >= -(i16)M(7)) { e->state = ST_ATTACK; e->timer = 0; e->attacks = 0; }
+        } else if (IS_SHOT(e->type)) {
+            /* 敵弾: カメラへ向かってまっすぐ飛ぶ。手前 0.8m に来たら当たる */
+            e->v = (d > 0) ? (i16)cam_v - SHOT_V(e->type) : (i16)cam_v + SHOT_V(e->type);
             if (e->up > F88(-0.3)) e->up -= 12;
             if (d < (i16)M(0.8) && d > -(i16)M(0.8)) {
                 damage_player();
@@ -282,10 +372,28 @@ static void update_enemy(Enemy *e)
         }
         break;
     case ST_ATTACK:
-        if (e->type == ET_E01) {
+        if (e->type == ET_E01 || e->type == ET_E03) {
             e->v = (i16)cam_v;
             melee(e, 60);
             if (e->attacks >= 2) { e->state = ST_PASS; e->v = 0; e->flash = 0; }
+        } else if (e->type == ET_E05) {
+            i16 tgt = (d < 0) ? -(i16)M(8) : (i16)M(8);
+            e->v = (i16)cam_v + ((tgt - d) << 3);
+            e->up = FLY_Y + ((e->anim & 16) ? 24 : 0);
+            e->lat_t = (e->anim & 64) ? F88(0.7) : F88(-0.7);
+            e->timer++;
+            if (e->timer >= 40 && e->timer < 55) e->flash = (e->timer & 2) ? 1 : 0;
+            else if (e->timer == 55) shoot(e, ET_MAGIC, d, e->up + F88(0.6));
+            else if (e->timer >= 100) e->timer = 0;
+        } else if (e->type == ET_B02) {
+            /* 森の番人: 8m 先で左右に飛び回り、魔法弾を 3 連射する */
+            e->v = (i16)cam_v + (((i16)M(8) - d) << 2);
+            e->lat_t = (e->anim & 32) ? F88(1.3) : F88(-1.3);
+            e->up = F88(0.2) + ((e->anim & 8) ? 32 : 0);
+            e->timer++;
+            if (e->timer >= 25 && e->timer < 40) e->flash = (e->timer & 2) ? 1 : 0;
+            else if (e->timer == 40 || e->timer == 48 || e->timer == 56) shoot(e, ET_MAGIC, d, e->up + F88(1.0));
+            else if (e->timer >= 95) e->timer = 0;
         } else if (e->type == ET_E02) {
             i16 tgt = (d < 0) ? -(i16)M(2.2) : (i16)M(2.2);
             e->v = (i16)cam_v + ((tgt - d) << 3);
@@ -296,14 +404,16 @@ static void update_enemy(Enemy *e)
             e->lat_t = (e->anim & 64) ? F88(0.6) : F88(-0.6);
             melee(e, 45);
             if ((e->anim & 127) == 0) spawn(ET_E01, 14, (e->anim & 128) ? 10 : -10);
-        } else if (e->type == ET_BOSS1) {
-            /* 洞窟の主: 7m 先を保ちながら岩を投げる。3 回に 1 回は突進して爪で殴り、また下がる */
+        } else if (e->type == ET_BOSS1 || e->type == ET_BOSS2) {
+            /* 洞窟の主: 7m 先を保ちながら岩を投げる。3 回に 1 回は突進して爪で殴り、また下がる。
+             * 川の主: 同じ動きを後ろから(水の玉を吐き、跳びかかって噛みつく) */
             i16 keep = (e->attacks % 3 == 2) ? (i16)M(2.5) : (i16)M(7);
+            if (e->type == ET_BOSS2) keep = -keep;
             e->v = (i16)cam_v + ((keep - d) << 2);
             e->lat_t = (e->anim & 64) ? F88(0.8) : F88(-0.8);
             e->timer++;
             if (e->attacks % 3 == 2) {
-                if (d <= (i16)M(3)) {
+                if (iabs(d) <= (i16)M(3)) {
                     if (e->timer < 60) e->timer = 60;
                     if (e->timer < 75) e->flash = (e->timer & 2) ? 1 : 0;
                     else if (e->timer == 75) damage_player();
@@ -311,9 +421,7 @@ static void update_enemy(Enemy *e)
                 }
             } else {
                 if (e->timer == 30 || e->timer == 60) {
-                    Enemy *r = spawn(ET_ROCK, (i8)(d >> 6), (i8)(e->lat >> 5));
-                    if (r) { r->s = e->s - M(0.5); r->up = F88(0.9); r->state = ST_APPROACH; }
-                    e->flash = 2;
+                    shoot(e, e->type == ET_BOSS1 ? ET_ROCK : ET_MAGIC, d, F88(0.9));
                 } else if (e->timer >= 90) {
                     e->timer = 0;
                     e->attacks++;
@@ -327,7 +435,7 @@ static void update_enemy(Enemy *e)
     /* カメラの後方へ抜けた敵を消す(追跡型・ボス・演出中の宝箱を除く) */
     if (e->state == ST_CHASE) {
         if (d < -(i16)M(24)) e->type = ET_NONE;
-    } else if (e->type != ET_E02 && e->type != ET_B01 && e->type != ET_BOSS1 && e->type != ET_TREASURE) {
+    } else if (e->type != ET_E02 && e->type != ET_E05 && !IS_BOSS(e->type) && e->type != ET_TREASURE) {
         if (d < -(i16)M(3)) e->type = ET_NONE;
     }
     if (d > (i16)M(60) || d < -(i16)M(40)) e->type = ET_NONE;
@@ -336,20 +444,20 @@ static void update_enemy(Enemy *e)
 static void kill_enemy(Enemy *e)
 {
     u8 t = e->type;
-    if (t == ET_MEDKIT) {
+    if (t == ET_MEDKIT || t == ET_CRATE) {
         life += 2;
         if (life > 8) life = 8;
         e->type = ET_NONE;
         se_play(SE_HEAL);
         return;
     }
-    if (t == ET_ROCK) {                      /* 敵弾の撃墜: 50 点 */
+    if (IS_SHOT(t)) {                        /* 敵弾の撃墜: 50 点 */
         g_score += 5;
         e->type = ET_NONE;
         se_play(SE_HIT);
         return;
     }
-    g_score += (t == ET_B01 || t == ET_BOSS1) ? et_hp[t] * 20 : et_hp[t] * 10;
+    g_score += IS_BOSS(t) ? et_hp[t] * 20 : et_hp[t] * 10;
     e->state = ST_DEAD;
     e->timer = 0;
     e->flash = 12;
@@ -396,9 +504,15 @@ static void script_update(void)
 {
     if (boss_alive) return;              /* ボス戦中は進行を止める */
     sc_tick += 2;
-    while (!sc_end && sc_ev->tick <= sc_tick) {
-        const Event *ev = sc_ev++;
-        switch (ev->cmd) {
+    while (!sc_end) {
+        const Event *ev = sc_ev;
+        if (ev->cmd & EV_AT) {
+            if ((cam_s >> 6) < ev->tick) break;
+        } else if (ev->tick > sc_tick) {
+            break;
+        }
+        sc_ev++;
+        switch (ev->cmd & 0x7F) {
         case EV_SPAWN: spawn(ev->a, ev->b, ev->c); break;
         case EV_DIR:   attack_dir = ev->a; break;
         case EV_GO:    hold = 0; break;
@@ -413,6 +527,11 @@ static void script_update(void)
         case EV_BGM:
             if (ev->a) bgm_play(stage->bgm_melody, stage->bgm_bass);
             else bgm_stop();
+            break;
+        case EV_FX:
+            if (ev->a) se_play(ev->a);
+            shake = (u8)ev->b;
+            whiteout = (u8)ev->c;
             break;
         case EV_GRAB: {
             u8 i;
@@ -598,14 +717,19 @@ static void render(void)
         i8 tgt;
         if (i + 1 >= rail_len) i = rail_len - 2;
         dy = rail[i + 1].y - rail[i].y;          /* 1m あたりの高さ変化(8.8) */
-        tgt = (i8)((dy * 41) >> 8);
-        if (pitch_cur < tgt) pitch_cur++;
-        else if (pitch_cur > tgt) pitch_cur--;
+        /* atan(x) ≒ x / (1 + 0.28x²)(崖・滝の急な下りでも破綻しない)。1 フレームで差の 1/4 ずつ追う */
+        tgt = (i8)(((i32)dy * 41) / (256 + (((i32)dy * dy * 72) >> 16)));
+        {
+            i8 st = (i8)((tgt - pitch_cur) >> 2);
+            if (!st) st = (tgt > pitch_cur) ? 1 : (tgt < pitch_cur) ? -1 : 0;
+            pitch_cur += st;
+        }
     }
     render_set_camera(p.x, p.y, p.z, yaw + look, (i8)fmul(pitch_cur, COS((u8)(look >> 8))));
     env_draw(cam_s, (u8)(look >> 8));
     g_perf_env = timer_read() - t0;
     draw_enemies();
+    if (whiteout) { whiteout--; buf_fill(C_WHITE, BUF); }
     /* トロッコの縁。振り向き中は横へ滑らせて一度画面外へ出し、反対側から戻す */
     trolley_set_life(life);
     {
@@ -621,28 +745,31 @@ static void render(void)
 /* ---------------------------------------------------------------------------
  * 1 プレイ
  * --------------------------------------------------------------------------- */
-u8 game_run(const Stage *st)
+u8 game_run(const Stage *st, u8 first)
 {
     u8 i, over = 0;
     rail_build(st->track);
-    env_build(0x5EED);
+    env_build(st->seed, st->zones);
     set_stage_palette(st->palette);
     for (i = 0; i < MAX_EN; i++) en[i].type = ET_NONE;
     n_hits = 0;
     stage = st;
     cam_s = M(st->start_m); cam_sub = 0; cam_v = 0; hold = 1;
+    if (!st->skip_tick) {                /* 演出の無いステージは走っている状態から始まる */
+        hold = 0;
+        cam_v = (u16)rail_spd[st->start_m] * 137;
+    }
     facing = st->start_back; look = facing ? 0x8000 : 0; turning = 0;
     ctrl = 1; spd_over = 0; cap_id = 0; cap_time = 0; warn_prev = 0; warn_time = 0; pitch_cur = 0;
     aim_x = 128; aim_y = 92; aim_hold = 0;
     in_prev = 0xFF;                      /* タイトルで押したボタンを射撃と見なさない */
     fire_cd = 0; hitmark = 0;
-    life = 8;
+    if (first) { life = 8; g_score = 0; }
     attack_dir = DIR_NONE;
     boss_alive = 0;
     blink = 0;
-    shake = 0;
+    shake = 0; whiteout = 0;
     sc_tick = 0; sc_ev = st->events; sc_end = 0;
-    g_score = 0;
     g_scene = 1;
 
     for (;;) {
@@ -668,12 +795,7 @@ u8 game_run(const Stage *st)
     g_spr_attr[0] = 209;
     g_spr_attr[4] = 209;
     bgm_stop();
-    if (!over) {
-        g_score += (u16)life * 100;      /* 残りライフ × 1000 点(仕様書 5.2) */
-        g_scene = 3;
-        ending_run();
-        return 1;
-    }
+    if (!over) return 1;
     /* ゲームオーバー(約 4 秒) */
     g_scene = 2;
     for (i = 0; i < 120; i++) {

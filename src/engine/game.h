@@ -10,7 +10,14 @@ typedef struct { const MRect *r; u8 n; } Model;
 enum { ET_NONE, ET_E01, ET_E02, ET_E03, ET_E04, ET_E05, ET_B01, ET_TREASURE, ET_MEDKIT,
        ET_BOSS1,     /* 洞窟の主(ステージ 1 の大ボス) */
        ET_ROCK,      /* 投げた岩(敵弾。撃ち落とせる) */
+       ET_ARROW,     /* 矢(E04 の敵弾) */
+       ET_MAGIC,     /* 魔法弾・水の玉(E05・ボスの敵弾。大きく遅い) */
+       ET_CRATE,     /* 川に浮いた木箱の上の救急箱 */
+       ET_BOSS2,     /* 川の主(ステージ 2 のボス。後ろから追ってくる大ガエル人) */
+       ET_B02,       /* 森の番人(ステージ 3 のボス。巨大コウモリ人) */
        ET_COUNT };
+#define IS_BOSS(t) ((t) == ET_B01 || (t) == ET_BOSS1 || (t) == ET_BOSS2 || (t) == ET_B02)
+#define IS_SHOT(t) ((t) == ET_ROCK || (t) == ET_ARROW || (t) == ET_MAGIC)
 
 /* ステージスクリプト(仕様書 7.7)。時刻は 60Hz ティック */
 enum {
@@ -25,7 +32,10 @@ enum {
     EV_TURN,    /* a = 0 で前、1 で後ろへ自動で振り向く */
     EV_GRAB,    /* 宝箱を取る(宝箱がカメラへ飛んできて消える) */
     EV_BGM,     /* a = 1 でステージの BGM を鳴らす、0 で止める */
+    EV_FX,      /* a = 効果音、b = 揺れのフレーム数、c = 1 で画面を光らせる */
 };
+/* cmd にこの印を付けると、tick は時刻ではなくレール上の位置[m](カメラがそこを過ぎたら実行) */
+#define EV_AT 0x80
 enum { DIR_NONE, DIR_FRONT, DIR_BACK };
 typedef struct {
     u16 tick;
@@ -47,18 +57,26 @@ typedef struct {
     u16 skip_tick;            /* 演出中に A を押したらこの時刻まで飛ばす(0 = 飛ばせない) */
     const u8 *bgm_melody;     /* BGM(sound.h の形式) */
     const u8 *bgm_bass;
+    const u8 *zones;          /* 地形の区間(env.h の env_build) */
+    u16 seed;                 /* 地形の乱数の種 */
+    const char *name;         /* ステージの始めに出す名前(2 行目は title2) */
+    const char *title2;
 } Stage;
 
 /* ステージデータの読み込み先(ROM バンクから写す。先頭 2 バイトが Stage へのポインタ) */
 #define STAGE_BUF    0xB400
 #define STAGE1_BANK  6
+#define STAGE_COUNT  3        /* バンク 6, 8, 10 */
 
 /* 仮エンディング(main.c) */
 void ending_run(void);
 
-/* 1 回遊ぶ。戻り値 0 = ゲームオーバー、1 = クリア */
-u8 game_run(const Stage *st);
+/* ステージを 1 つ遊ぶ。first = 1 ならライフとスコアを初期化する。
+ * 戻り値 0 = ゲームオーバー、1 = クリア */
+u8 game_run(const Stage *st, u8 first);
 extern u16 g_score;          /* スコア / 10 */
+extern u8  life;
+extern u8  g_stage;
 
 /* 表示(main.c) */
 extern u8 g_spr_attr[17];

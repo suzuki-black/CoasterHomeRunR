@@ -1,4 +1,5 @@
-# test_flow.tcl — タイトル → オープニング → ステージ 1(中ボス・大ボス)→ 仮エンディング → タイトル を自動で遊んで確かめる
+# test_flow.tcl — タイトル → オープニング → ステージ 1(中ボス・大ボス)→ ステージ 2(崖・川・川の主)
+#                  → ステージ 3(森・森の番人)→ 仮エンディング → タイトル を自動で遊んで確かめる
 #
 #   TH_NOI=build/engine.noi TH_OUT=<出力ディレクトリ> [TH_GOD=1] \
 #     openmsx -machine TH_turboR_dev -carta build/TrolleyHomeRun.rom -romtype ASCII8 -script test_flow.tcl
@@ -26,6 +27,9 @@ set mute on
 set ::god [expr {[info exists ::env(TH_GOD)] && $::env(TH_GOD)}]
 
 set ::scene -1
+set ::stage 0
+set ::tsum 0
+set ::tn 0
 set ::seen {}
 set ::boss_seen 0
 set ::fire 0
@@ -40,8 +44,17 @@ proc bot {} {
         shot scene$sc
         if {$sc == 1} { set ::game_t [machine_info time] }
     }
+    set st [peek8 [sym _g_stage]]
+    if {$st != $::stage} {
+        fps_log
+        log [format "t=%7.2f stage %d → %d  score=%d0 life=%d" [machine_info time] $::stage $st [peek16 [sym _g_score]] [peek8 [sym _life]]]
+        set ::stage $st
+        if {$st >= 2} { stage_shots $st }
+    }
     if {$sc == 1} {
         if {$::god} { debug write memory [sym _life] 8 }
+        incr ::tsum [peek8 [sym _g_perf_ticks]]
+        incr ::tn
         # 一番手前の矩形を狙う
         set n [peek8 [sym _n_hits]]
         set best -1; set bz 99999
@@ -69,10 +82,16 @@ proc bot {} {
     after time 0.1 [list bot]
 }
 set ::bosses 0
+# ステージごとの平均 fps(直前のフレームのティック数を 0.1 秒ごとに見た平均から)
+proc fps_log {} {
+    if {$::tn} { log [format "  stage %d: 平均 %.1f fps" $::stage [expr {60.0 * $::tn / $::tsum}]] }
+    set ::tsum 0; set ::tn 0
+}
 proc finish {} {
+    fps_log
     log "scenes: $::seen  bosses=$::bosses"
     set ok [expr {[lsearch $::seen 1] >= 0 && ([lsearch $::seen 3] >= 0 || [lsearch $::seen 2] >= 0)}]
-    if {$::god && [lsearch $::seen 3] < 0} { set ok 0 }
+    if {$::god && ([lsearch $::seen 3] < 0 || $::bosses < 4)} { set ok 0 }
     log [expr {$ok ? "PASS" : "FAIL"}]
     close $::f
     exit
@@ -83,6 +102,13 @@ proc opening_shots {} {
     after time 4.8 [list shot open3_grrr]
     after time 6.6 [list shot open4_escape]
     after time 8.0 [list shot open5_run]
+}
+
+# ステージ 2・3 の節目の画面(ステージの名前の表示から数えた秒)
+proc stage_shots {st} {
+    foreach t {2.5 4.5 6.5 9.0 11.0 13.0 16.0 22.0 30.0 40.0} {
+        after time $t [list shot st${st}_[string map {. _} $t]]
+    }
 }
 
 after time 5.0 {tap 8 0x01; opening_shots}

@@ -5,6 +5,7 @@
  * エンジンは常駐ローダーで RAM へ写してから使う(仕様書 7.3)。変数(初期値つき含む)は置けない。
  */
 #include "game.h"
+#include "env.h"
 
 #define S(sec) ((u16)((sec) * 60))
 
@@ -136,10 +137,15 @@ static const Event cave_events[] = {
     { S(58),   EV_END,   0,           0,   0 },
 };
 
+/* 地形: 全部が坑道。先頭はレールの色 */
+static const u8 cave_zones[] = { 15, 0xFF, K_CAVE };
+
 const Stage stage_data = {
     cave_rail, cave_pal, cave_events, cave_captions,
     8,          /* 宝の間の 8m 地点から */
     1,          /* 後ろ(宝の間)を向いて始まる */
     S(6),       /* A でオープニングを飛ばす先 */
     bgm_melody, bgm_bass,
+    cave_zones, 0x5EED,
+    "STAGE 1", "THE CAVE",
 };

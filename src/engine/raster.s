@@ -1181,6 +1181,15 @@ _band_fast::
 	ld	ix, #sl_tbl
 	ld	(bf_k), a
 2$:
+	; 面の色。0 の面は塗らない(屋外の区間の空・落下中の床など)
+	ld	hl, (_g_band_col)
+	ld	e, a
+	ld	d, #0
+	add	hl, de
+	ld	a, (hl)
+	or	a, a
+	jr	z, 4$
+	ld	(_g_color), a
 	ld	l, 0 (ix)		; リング a の辺 k(作った向きのまま)
 	ld	h, 1 (ix)
 	xor	a, a
@@ -1202,21 +1211,15 @@ _band_fast::
 	ld	h, 25 (ix)
 	ld	a, #1
 	call	seg_copy
-	ld	hl, (_g_band_col)
-	ld	a, (bf_k)
-	ld	e, a
-	ld	d, #0
-	add	hl, de
-	ld	a, (hl)
-	ld	(_g_color), a
 	call	sc_fill
+4$:
 	inc	ix
 	inc	ix
 	ld	a, (bf_k)
 	inc	a
 	ld	(bf_k), a
 	cp	a, #6
-	jr	nz, 2$
+	jp	nz, 2$
 	pop	ix
 	ret
 
