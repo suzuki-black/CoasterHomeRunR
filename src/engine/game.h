@@ -14,10 +14,10 @@ enum { ET_NONE, ET_E01, ET_E02, ET_E03, ET_E04, ET_E05, ET_B01, ET_TREASURE, ET_
        ET_ROCK,      /* 投げた岩(敵弾。撃ち落とせる) */
        ET_ARROW,     /* 矢(E04 の敵弾) */
        ET_MAGIC,     /* 魔法弾・水の玉(E05・ボスの敵弾。大きく遅い) */
-       ET_CRATE,     /* 川に浮いた木箱の上の救急箱 */
-       ET_BOSS2,     /* 川の主(ステージ 2 のボス。後ろから追ってくる大ガエル人) */
+       ET_CRATE,     /* 地底湖に浮いた木箱の上の金貨袋 */
+       ET_BOSS2,     /* 湖の主(ステージ 2 のボス。後ろから追ってくる大ガエル人) */
        ET_B02,       /* 森の番人(ステージ 3 のボス。巨大コウモリ人) */
-       ET_B03,       /* 暴走汽車(町。並走レールを後ろから来て体当たり。避けられない) */
+       ET_B03,       /* 祭りの山車(町。獣人たちが引いて後ろから追ってくる。花火を撃ち、ときどきぶつかってくる) */
        ET_B04,       /* 亜人の王(自宅前のラスボス。キリン人系) */
        ET_COUNT };
 #define IS_BOSS(t) ((t) == ET_B01 || (t) == ET_BOSS1 || (t) == ET_BOSS2 || (t) == ET_B02 || \
@@ -67,7 +67,7 @@ typedef struct {
     const char *name;         /* ステージの始めに出す名前(2 行目は title2) */
     const char *title2;
     /* 最後のステージだけ: エンディング(SCREEN 1、BIOS のフォント)の文と BGM */
-    const u8 *ending;         /* (行, 桁, 文字コード…, 0) の並び、0xFF で終わり */
+    const u8 *ending;         /* (行, 桁, 文字コード…, 0) の並び、0xFF で終わり。行の bit7 = 宝の量で選ぶ行(main.c) */
     const u8 *end_melody;
     const u8 *end_bass;
 } Stage;

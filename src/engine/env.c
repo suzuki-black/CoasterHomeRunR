@@ -3,12 +3,11 @@
  * レール上 RSTEP[m] ごとに断面(リング)を置き、隣り合うリングの間を 6 枚の四角形で塗る。
  * 断面の形・面の色・飾りは「地形の種類」(ステージの zones で区間ごとに指定)で決まる。
  *   洞窟(炭鉱の坑道): ほぼ垂直な壁と平らな天井。手前ほど明るく奥ほど暗い(トロッコのランプ)。
- *   崖: 空に突き出た岩の尾根。落下: 周りに何も無い(空と、はるか下の川だけが見える)。
- *   川: 水面と両岸の土手、その上の高台。滝: 急な下りの白い水の流れ。
+ *   地底湖: 大きな空洞の水面と岩壁の岩棚、垂れ下がる鍾乳石、水面の岩(レールは無い。筏で渡る)。
  *   森: 土の道、両側の下草と茂み、木の幹と葉の塊。
- *   町: 両側の家並み(壁と屋根。家と家の間は空く)、並走レール。自宅前: 道の突き当たりに自宅。
+ *   町: 両側の家並み(壁と屋根。家と家の間は空く)。自宅前: 道の突き当たりに自宅。
  * 色 0 の面は塗らない(屋外の区間は天井の面が空)。屋外が見えるときは、先に空と地面を
- * 地平線の高さで塗り分け(仕様書 5.1 の 2 色塗り)、遠くの山を置いてから区間を描く。
+ * 地平線の高さで塗り分け(仕様書 5.1 の 2 色塗り)てから区間を描く。
  * リング面の飾りとレールは、リング中心の投影と 1/z(ring_c)から 2D で求める(投影を増やさない)。
  *
  * ペインター法: カメラから遠い区間から順に描く。区間ごとに「面 → 枕木 → レール」、
@@ -36,12 +35,12 @@
  * 町では LAMP_L / LAMP_R = 左 / 右の家の始まり(手前の妻壁)、ROCK_L / ROCK_R = 家の終わり、TIMBER = 自宅の正面 */
 enum { D_LAMP_L = 1, D_ROCK_L = 2, D_ROCK_R = 4, D_TIMBER = 8, D_LAMP_R = 16,
        D_OPEN = 32,      /* 天井が無い(空が見える) */
-       D_NORAIL = 64,    /* レールを描かない */
-       D_EMPTY = 128 };  /* 面を 1 枚も描かない */
+       D_NORAIL = 64 };  /* レールを描かない */
 
 /* 色(パレット 9-15、stage のパレットで決まる)
  *   洞窟(ステージ 1): 9 = 木、10〜12 = 岩(暗→明)、13〜14 = 土(暗→明)、15 = レール
- *   屋外: 9 = 木・幹、10 = 暗い岩・遠くの山、11 = 土・岩、12 = 草、13 = 水・茂み、14 = 明るい水・葉、15 = 空
+ *   地底湖(出口の坑道も): 9 = 木、10 = 暗い岩・レール、11 = 岩、12 = 鍾乳石、13 = 水、14 = 明るい水
+ *   森: 9 = 幹・落ち葉、10 = 影・レール、11 = 土の道、12 = 下草、13 = 茂み、14 = 葉、15 = 空
  *   町: 9 = 戸、10 = 窓・レール、11 = 道、12 = 壁、13 = 屋根、14 = 別の色の壁(自宅前では自宅の壁)、15 = 空 */
 #define C_WOOD   9
 #define C_ROCK0 10
@@ -94,10 +93,7 @@ static i16 jit(i16 amp)
 static const i16 base_uv[K_COUNT][12] = {
     /* 洞窟 */  { -320, 320,  320, 320,  345,  -40,  300, -333, -300, -333, -345,  -40 },
     /* 出口 */  { -320, 320,  320, 320,  345,  -40,  300, -333, -300, -333, -345,  -40 },
-    /* 崖   */  { -400, 200,  400, 200,  700, -333,  380, -333, -380, -333, -700, -333 },
-    /* 落下 */  { -400, 200,  400, 200,  700, -333,  380, -333, -380, -333, -700, -333 },
-    /* 川   */  {-1000, 600, 1000, 600,  720,  380,  380, -380, -380, -380, -720,  380 },
-    /* 滝   */  {-1000, 600, 1000, 600,  720,  380,  380, -380, -380, -380, -720,  380 },
+    /* 地底湖 */{-1300,1400, 1300,1400, 1150,  420, 1000, -380,-1000, -380,-1150,  420 },
     /* 森   */  { -760,1400,  760,1400,  720,  250,  420, -345, -420, -345, -720,  250 },
     /* 町   */  { -950, 900,  950, 900,  650,  520,  650, -345, -650, -345, -650,  520 },
     /* 自宅 */  { -950, 900,  950, 900,  650,  520,  650, -345, -650, -345, -650,  520 },
@@ -158,33 +154,17 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         for (k = 0; k < 6; k++) t[k] = (k == 3 || (rnd() & 1)) ? C_ROCK1 : C_ROCK0;
         d = D_TIMBER;
         break;
-    case K_CLIFF:
-        t[0] = 0; t[1] = 0; t[5] = 0;
-        t[2] = C_ROCK0; t[4] = C_ROCK0;
-        t[3] = (rnd() & 1) ? C_ROCK1 : C_ROCK0;
-        d = D_OPEN;
-        if (rnd() < 70) d |= D_ROCK_L;
-        if (rnd() < 70) d |= D_ROCK_R;
-        break;
-    case K_FALL:
-        for (k = 0; k < 6; k++) t[k] = 0;
-        d = D_OPEN | D_NORAIL | D_EMPTY;
-        break;
-    case K_RIVER:
-    case K_FALLS:
-        t[0] = 0;
-        t[1] = C_GRASS; t[5] = C_GRASS;
-        t[2] = C_ROCK1; t[4] = C_ROCK1;
-        if (kind == K_RIVER) {
-            t[3] = (r & 1) ? C_WATER : C_WATER1;   /* 流れの縞 */
-            d = D_OPEN;
-            if (rnd() < 45) d |= D_ROCK_L;
-            else if (rnd() < 45) d |= D_ROCK_R;
-        } else {
-            t[3] = (r & 1) ? C_WHITE : C_WATER1;   /* 白い水しぶき */
-            t[2] = C_ROCK0; t[4] = C_ROCK0;
-            d = D_OPEN | D_NORAIL;
-        }
+    case K_LAKE:
+        /* 天井は暗い岩、岩壁は岩棚(上)と水際(下)、水面は波の縞 */
+        t[0] = C_ROCK0;
+        t[1] = t[5] = C_ROCK1;
+        t[2] = t[4] = (rnd() & 1) ? C_ROCK1 : C_ROCK0;
+        t[3] = (r & 1) ? C_WATER : C_WATER1;
+        d = D_NORAIL;
+        if (rnd() < 110) d |= D_LAMP_L;         /* 鍾乳石 */
+        if (rnd() < 110) d |= D_LAMP_R;
+        if (rnd() < 40) d |= D_ROCK_L;          /* 水面の岩 */
+        else if (rnd() < 40) d |= D_ROCK_R;
         break;
     case K_TOWN:
     case K_HOME: {
@@ -332,17 +312,6 @@ static void rails_draw(u8 a, u8 b)
         rpt(3, b, u0, FLOOR_V);
         raster(4, rail_col);
     }
-    if (KIND[ring_no[a < b ? a : b]] == K_TOWN) {
-        /* 並走レール(暴走汽車が走る) */
-        for (side = 0; side < 2; side++) {
-            i16 u0 = side ? 390 : 290, u1 = u0 + 26;
-            rpt(0, a, u0, FLOOR_V);
-            rpt(1, a, u1, FLOOR_V);
-            rpt(2, b, u1, FLOOR_V);
-            rpt(3, b, u0, FLOOR_V);
-            raster(4, rail_col);
-        }
-    }
 }
 
 /* 床の石(三角形)。u0..u1 の幅、高さ ht */
@@ -405,13 +374,18 @@ static void deco_draw(u8 idx)
         if (d & D_ROCK_L) rock_draw(idx, -275, -170, 70, C_ROCK2);
         if (d & D_ROCK_R) rock_draw(idx, 170, 270, 60, C_ROCK2);
         break;
-    case K_CLIFF:
-        if (d & D_ROCK_L) rock_draw(idx, -560, -300, 110, C_ROCK1);
-        if (d & D_ROCK_R) rock_draw(idx, 300, 520, 90, C_ROCK1);
-        break;
-    case K_RIVER:                                         /* 水面から顔を出した岩 */
-        if (d & D_ROCK_L) rock_draw(idx, -370, -230, 90, C_ROCK0);
-        if (d & D_ROCK_R) rock_draw(idx, 230, 370, 80, C_ROCK0);
+    case K_LAKE:
+        /* 天井から垂れ下がる鍾乳石と、水面から顔を出した岩 */
+        if (d & D_LAMP_L) {
+            rpt(0, idx, -900, 1400); rpt(1, idx, -600, 1400); rpt(2, idx, -760, 760);
+            raster(3, C_ROCK2);
+        }
+        if (d & D_LAMP_R) {
+            rpt(0, idx, 520, 1400); rpt(1, idx, 820, 1400); rpt(2, idx, 690, 860);
+            raster(3, C_ROCK2);
+        }
+        if (d & D_ROCK_L) rock_draw(idx, -760, -500, 150, C_ROCK0);
+        if (d & D_ROCK_R) rock_draw(idx, 480, 720, 130, C_ROCK0);
         break;
     case K_FOREST: {
         i16 o = (no & 1) ? 90 : 0;                        /* 幹の位置をリングごとにずらす */
@@ -452,8 +426,9 @@ static void set_band_col(u8 na, u8 dist)
     u8 kind = KIND[na];
     for (k = 0; k < 6; k++) {
         c = t[k];
-        if (kind == K_EXIT) {
-            if (dist >= 2) c = C_ROCK0;
+        if (kind == K_EXIT || kind == K_LAKE) {
+            /* 奥は暗い岩(水面はそのまま) */
+            if (dist >= 2 && c != C_WATER && c != C_WATER1) c = C_ROCK0;
         } else if (kind == K_CAVE && dist >= 2) {
             if (c == C_ROCK2) c = C_ROCK1;
             else if (c == C_ROCK1 || c == C_DIRT0) c = C_ROCK0;
@@ -476,7 +451,6 @@ static void band_draw(u8 a, u8 b, u8 dist)
     fb = ring_front[b];
     if (!fa && !fb) return;
     na = ring_no[a < b ? a : b];
-    if (DECO[na] & D_EMPTY) return;
     set_band_col(na, dist);
     if (fa == 0x3F && fb == 0x3F) {
         band_fast(a, b);
@@ -528,39 +502,37 @@ static u8 cap_ok(i8 r)
     return ring_ok[idx] && ring_front[idx] == 0x3F;
 }
 
+/* 遠くのリングを断面 1 枚で近似してよいか(6 頂点とも手前で、水面の見える地底湖ではない) */
+static u8 far_ok(i8 r)
+{
+    u8 idx = (u8)(r + NB);
+    return cap_ok(r) && KIND[ring_no[idx]] != K_LAKE;
+}
+
+/* 奥の開口部を塞ぐ色: 坑道は闇(黒)、地底湖は岩壁と同じ暗い岩の色(黒い穴に見えないように) */
+static u8 cap_col(i8 r)
+{
+    return KIND[ring_no[(u8)(r + NB)]] == K_LAKE ? C_ROCK0 : C_BLACK;
+}
+
 static void hex_draw(i8 r, u8 color)
 {
     g_color = color;
     hex_fast((u8)(r + NB));
 }
 
-/* 空と地面(地平線の高さで 2 色に塗り分ける)と遠くの山。far = 一番遠くに見える地形 */
-static const u8 mt_az[4] = { 0x08, 0x3A, 0x9C, 0xD2 };   /* 山の方角(ワールドのヨー) */
-static const u8 mt_w[4]  = { 20, 14, 24, 16 };            /* 裾の半幅・高さ(ブロック) */
-static const u8 mt_h[4]  = { 6, 4, 7, 5 };
-
+/* 空と地面(地平線の高さで 2 色に塗り分ける)。far = 一番遠くに見える地形 */
 static void sky_draw(u8 far)
 {
     i16 yh = SCR_CY;
-    u8 row, i;
+    u8 row;
     if (cam_pcos > 16) yh += muldiv(PROJ_F, cam_psin, cam_pcos);
     else if (cam_psin < 0) yh = -1;
     row = (yh < 0) ? 0 : (yh >= 48 * 16) ? 48 : (u8)(yh >> 4);
     g_rh = row;
     buf_fill_rows(C_SKY, BUF);
     g_rh = 48 - row;
-    buf_fill_rows(far == K_FOREST ? C_DIRT0 : far >= K_TOWN ? C_ROCK1 : C_GRASS, BUF + (u16)row * BUF_W);
-    if (far >= K_FOREST || !row || row >= GAME_ROWS) return;
-    for (i = 0; i < 4; i++) {
-        i8 rel = (i8)(mt_az[i] - cam_yaw);
-        i16 x = SCR_CX + (i16)rel * 12 + (rel >> 1);
-        i16 w = (i16)mt_w[i] << 4;
-        if (rel < -60 || rel > 60) continue;
-        scr[0] = x - w; scr[1] = yh + 8;
-        scr[2] = x;     scr[3] = yh - ((i16)mt_h[i] << 4);
-        scr[4] = x + w; scr[5] = yh + 8;
-        raster(3, C_ROCK0);
-    }
+    buf_fill_rows(far == K_FOREST ? C_DIRT0 : C_ROCK1, BUF + (u16)row * BUF_W);
 }
 
 void env_draw(u16 s, u8 look)
@@ -605,13 +577,13 @@ void env_draw(u16 s, u8 look)
         /* 遠方(12m〜): リングの断面を一番暗い岩の色で手前から奥へ重ねる(遠いリングほど画面の内側)。
          * どれかのリングが画面外へ回り込んでいれば全部を普通に描く */
         if (capped) {
-            for (k = FAR_K; k < NF; k++) if (!cap_ok(k)) break;
+            for (k = FAR_K; k < NF; k++) if (!far_ok(k)) break;
             if (k == NF) {
                 for (k = FAR_K; k < NF; k++) hex_draw(k, C_ROCK0);
             } else {
                 kn = NF;
             }
-            hex_draw(NF, C_BLACK);
+            hex_draw(NF, cap_col(NF));
         } else {
             kn = NF;
         }
@@ -631,13 +603,13 @@ void env_draw(u16 s, u8 look)
         u16 sv = s - VR_D;
         i8 kn = -FAR_K;
         if (capped) {
-            for (k = -FAR_K; k > -NB; k--) if (!cap_ok(k)) break;
+            for (k = -FAR_K; k > -NB; k--) if (!far_ok(k)) break;
             if (k == -NB) {
                 for (k = -FAR_K; k > -NB; k--) hex_draw(k, C_ROCK0);
             } else {
                 kn = -NB;
             }
-            hex_draw(-NB, C_BLACK);
+            hex_draw(-NB, cap_col(-NB));
         } else {
             kn = -NB;
         }
@@ -652,8 +624,8 @@ void env_draw(u16 s, u8 look)
         return;
     }
     if (capped) {
-        if (fwd) hex_draw(NF, C_BLACK);
-        if (back) hex_draw(-NB, C_BLACK);
+        if (fwd) hex_draw(NF, cap_col(NF));
+        if (back) hex_draw(-NB, cap_col(-NB));
     }
 
     /* 振り向き中(と後方の端): 前後の区間を距離の遠い順に交互に描き、カメラを含む区間はクリップ */

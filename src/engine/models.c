@@ -45,8 +45,10 @@ static const MRect m_boss1[] = {        /* 洞窟の主(巨大な岩熊人)・�
 static const MRect m_rock[] = {         /* 投げた岩 */
     { -3, 0, 3, 5, C_BLACK, 0 }, { -2, 1, 2, 4, C_BROWN, 0 },
 };
-static const MRect m_medkit[] = {       /* 救急箱・赤+白の十字 */
-    { -4, 0, 4, 7, C_RED, 0 }, { -1, 1, 1, 6, C_WHITE, 0 }, { -3, 2, 3, 5, C_WHITE, 0 },
+static const MRect m_medkit[] = {       /* 金貨袋(撃つと宝が増える = 回復)・茶の袋、黄の金貨 */
+    { -4, 0, 4, 6, C_BROWN, 0 }, { -3, 6, 3, 7, C_BROWN, 0 }, { -2, 7, 2, 8, C_BLACK, 0 },
+    { -3, 8, 3, 10, C_BROWN, 0 }, { -1, 2, 1, 5, C_YELLOW, 0 },
+    { -7, 0, -4, 1, C_YELLOW, 0 }, { 4, 0, 7, 1, C_YELLOW, 0 },
 };
 static const MRect m_e03[] = {          /* キリン人(槍)・黄。首が長く、槍のリーチが長い */
     { -4,  0, -1, 12, C_YELLOW, 2 }, {  1,  0,  4, 12, C_YELLOW, 2 },
@@ -75,11 +77,11 @@ static const MRect m_arrow[] = {        /* 矢(正面から見た鏃と矢羽) *
 static const MRect m_magic[] = {        /* 魔法弾・水の玉 */
     { -4, 0, 4, 7, C_RED, 0 }, { -2, 2, 2, 5, C_YELLOW, 0 },
 };
-static const MRect m_crate[] = {        /* 川に浮いた木箱と、その上の救急箱 */
+static const MRect m_crate[] = {        /* 湖に浮いた木箱と、その上の金貨袋 */
     { -7, 0, 7, 8, C_BROWN, 0 }, { -7, 3, 7, 4, C_BLACK, 0 },
-    { -4, 8, 4, 15, C_RED, 0 }, { -1, 9, 1, 14, C_WHITE, 0 }, { -3, 10, 3, 13, C_WHITE, 0 },
+    { -4, 8, 4, 14, C_BROWN, 0 }, { -2, 14, 2, 15, C_BLACK, 0 }, { -1, 10, 1, 13, C_YELLOW, 0 },
 };
-static const MRect m_boss2[] = {        /* 川の主(大ガエル人)・水色+黒、赤い口、黄色い目 */
+static const MRect m_boss2[] = {        /* 湖の主(大ガエル人)・水色+黒、赤い口、黄色い目 */
     { -16,  0, -6,  8, C_CYAN, 2 },   {  6,  0, 16,  8, C_CYAN, 2 },
     { -18,  8, 18, 30, C_CYAN, 0 },   { -12, 10, 12, 24, C_WHITE, 0 },
     { -25, 14, -18, 28, C_CYAN, 0 },  { 18, 14, 25, 28, C_CYAN, 0 },
@@ -95,12 +97,13 @@ static const MRect m_b02[] = {          /* 森の番人(巨大コウモリ人)�
     { -38, 10, -30, 22, C_BLACK, 0 }, { 30, 10, 38, 22, C_BLACK, 0 },
     { -30, 18, -6, 19, C_PURPLE, 0 }, {  6, 18, 30, 19, C_PURPLE, 0 },
 };
-static const MRect m_b03[] = {          /* 暴走汽車(正面): 黒い車体、赤い帯、光る目、煙突 */
-    { -18,  2, 18,  8, C_RED, 2 },    { -16,  8, 16, 34, C_BLACK, 0 },
-    { -16,  8, 16, 11, C_RED, 0 },    { -10, 18, -5, 22, C_RED, 1 },  { 5, 18, 10, 22, C_RED, 1 },
-    {  -3, 25,  3, 30, C_YELLOW, 1 }, {  -4, 34,  4, 46, C_BLACK, 1 }, { -6, 46, 6, 49, C_RED, 1 },
-    { -18, 34, -8, 44, C_BLACK, 0 },  {  8, 34, 18, 44, C_BLACK, 0 },
-    { -19, 44, -7, 46, C_RED, 0 },    {  7, 44, 19, 46, C_RED, 0 },
+static const MRect m_b03[] = {          /* 祭りの山車: 車輪、木の台、赤と白の幕、提灯、屋根、上で太鼓を叩く猿人 */
+    { -16,  0, -10,  6, C_BLACK, 2 }, { 10,  0, 16,  6, C_BLACK, 2 },
+    { -18,  6, 18, 12, C_BROWN, 0 },  { -15, 12, 15, 26, C_RED, 0 },   { -15, 18, 15, 20, C_WHITE, 0 },
+    { -19, 14, -15, 21, C_YELLOW, 0 }, { 15, 14, 19, 21, C_YELLOW, 0 },
+    { -20, 26, 20, 30, C_BLACK, 0 },  { -14, 30, 14, 32, C_BLACK, 0 },
+    {  -3, 32,  3, 40, C_BROWN, 1 },  { -2, 40,  2, 45, C_BROWN, 1 },  { -1, 42, 1, 43, C_BLACK, 1 },
+    {   4, 33,  9, 38, C_WHITE, 0 },
 };
 static const MRect m_b04[] = {          /* 亜人の王(キリン人系)・黄+紫+白。王冠、槍、魔法の玉 */
     { -5,  0, -2, 14, C_YELLOW, 2 },  {  2,  0,  5, 14, C_YELLOW, 2 },

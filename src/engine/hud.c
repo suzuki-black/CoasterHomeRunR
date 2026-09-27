@@ -74,7 +74,7 @@ void hud_life(u8 life)
     buf_fill_rows(C_BLACK, BUF + 46 * 64);
     for (i = 0; i < 8; i++) {
         g_rx = 4 + i * 7; g_ry = 46; g_rw = 6; g_rh = 2;
-        g_color = (i < life) ? C_RED : 9;
+        g_color = (i < life) ? C_YELLOW : 9;     /* 積んだ宝の量(金) */
         rect_fill();
     }
 }

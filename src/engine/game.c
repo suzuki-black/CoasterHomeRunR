@@ -117,10 +117,9 @@ static Enemy *spawn(u8 type, i8 dist, i8 lat8)
         e->state = ST_APPROACH;
         e->lat_t = 0;
         if (type == ET_B02) e->up = F88(0.2);
-        if (type == ET_B03) e->lat_t = e->lat;     /* 並走レールの上 */
         boss_alive = 1;
     } else if (type == ET_E04) {
-        e->up = F88(1.75);                     /* 川の高台に立つ */
+        e->up = F88(1.75);                     /* 岩棚・高台・屋根の上に立つ */
     } else if (type == ET_CRATE) {
         e->up = F88(-1.45);                    /* 水面に浮く */
     } else if (type == ET_E01 && dist < 0) {
@@ -130,13 +129,57 @@ static Enemy *spawn(u8 type, i8 dist, i8 lat8)
     return e;
 }
 
+/* 被弾で宝の山から飛び散る金貨(画面座標 8.8 ブロック) */
+#define N_COIN 6
+static i16 coin_x[N_COIN], coin_y[N_COIN], coin_vx[N_COIN], coin_vy[N_COIN];
+static u8  coin_t;
+
 static void damage_player(void)
 {
+    u8 i, r;
     if (!life) return;
     life--;
     shake = 4;
     flash_palette();
     se_play(SE_DAMAGE);
+    r = (u8)g_tick;
+    for (i = 0; i < N_COIN; i++) {
+        r = r * 5 + 7;
+        coin_x[i] = F88(32) + ((i16)(r & 31) - 16) * 64;
+        coin_y[i] = F88(TROLLEY_Y + 2);
+        coin_vx[i] = ((i16)(r & 63) - 32) * 12;
+        coin_vy[i] = -F88(1.2) - (i16)(r & 7) * 24;
+    }
+    coin_t = 14;
+}
+
+static void coins_draw(void)
+{
+    u8 i;
+    if (!coin_t) return;
+    coin_t--;
+    for (i = 0; i < N_COIN; i++) {
+        i16 x = coin_x[i] >> 8, y = coin_y[i] >> 8;
+        coin_x[i] += coin_vx[i];
+        coin_y[i] += coin_vy[i];
+        coin_vy[i] += 64;
+        if (x >= 0 && x < 64 && y >= 0 && y < GAME_ROWS) BUF[(u8)y * 64 + (u8)x] = (i & 1) ? C_YELLOW : C_WHITE;
+    }
+}
+
+/* 振り向きの合図: 画面の左右に、赤い下向きの矢印(いま見ている向きの反対側から敵が来る) */
+static void turn_arrows(void)
+{
+    u8 k;
+    for (k = 0; k < 2; k++) {
+        i16 x0 = k ? 54 : 2;
+        g_rx = (u8)x0 + 2; g_ry = 14; g_rw = 4; g_rh = 6; g_color = C_RED;
+        rect_fill();
+        scr[0] = x0 << 4;       scr[1] = 20 << 4;
+        scr[2] = (x0 + 8) << 4; scr[3] = 20 << 4;
+        scr[4] = (x0 + 4) << 4; scr[5] = 26 << 4;
+        raster(3, C_RED);
+    }
 }
 
 static void move_enemy(Enemy *e)
@@ -304,29 +347,14 @@ static void update_enemy(Enemy *e)
             e->lat_t = (e->anim & 64) ? F88(0.6) : F88(-0.6);
             melee(e, 45);
             if ((e->anim & 127) == 0) spawn(ET_E01, 14, (e->anim & 128) ? 10 : -10);
-        } else if (e->type == ET_B03) {
-            /* 暴走汽車: 8m 後ろで様子を見て(最後に点滅)、並走レールを突っ込んで体当たり(避けられない)、また下がる */
-            if (!(e->attacks & 1)) {
-                e->v = (i16)cam_v + ((-(i16)M(8) - d) << 2);
-                e->timer++;
-                if (e->timer >= 45) e->flash = (e->timer & 2) ? 1 : 0;
-                if (e->timer >= 60) { e->attacks++; e->flash = 0; }
-            } else {
-                e->v = (i16)cam_v + MPS(6);
-                if (d >= -(i16)M(1)) {
-                    damage_player();
-                    shake = 8;
-                    e->attacks++;
-                    e->timer = 0;
-                }
-            }
-        } else if (e->type == ET_BOSS1 || e->type == ET_BOSS2 || e->type == ET_B04) {
+        } else if (e->type == ET_BOSS1 || e->type == ET_BOSS2 || e->type == ET_B03 || e->type == ET_B04) {
             /* 洞窟の主: 7m 先を保ちながら岩を投げる。3 回に 1 回は突進して爪で殴り、また下がる。
-             * 川の主: 同じ動きを後ろから(水の玉を吐き、跳びかかって噛みつく)。
+             * 湖の主: 同じ動きを後ろから(水の玉を吐き、跳びかかって噛みつく)。
+             * 祭りの山車: 同じ動きを後ろから(上の猿人が花火を撃ち、ときどきぶつけてくる)。
              * 亜人の王: 6m 先から魔法弾、3 回に 1 回は槍で突く。耐久が半分を切ると 2 倍の速さで攻める */
             u8 n = (e->type == ET_B04 && e->hp < 50) ? 2 : 1;
             i16 keep = (e->attacks % 3 == 2) ? (i16)M(2.5) : (e->type == ET_B04) ? (i16)M(6) : (i16)M(7);
-            if (e->type == ET_BOSS2) keep = -keep;
+            if (e->type == ET_BOSS2 || e->type == ET_B03) keep = -keep;
             e->v = (i16)cam_v + ((keep - d) << 2);
             e->lat_t = (e->anim & 64) ? F88(0.8) : F88(-0.8);
             while (n--) {
@@ -593,12 +621,9 @@ static void draw_hud(void)
     if (warn && (warn != warn_prev || !warn_time)) { se_play(SE_ALARM); warn_time = 40; }
     if (warn_time) warn_time--;
     warn_prev = warn;
-    if (warn) {
-        if (blink < 8) text_center(1, warn == 1 ? "ENEMY BEHIND!" : "ENEMY AHEAD!", C_RED, 1);
-    } else {
-        num_draw(40, 1, g_score, 5, C_WHITE);
-        if (g_score) text_draw(60, 1, "0", C_WHITE, 1);
-    }
+    if (warn && blink < 8) turn_arrows();
+    num_draw(40, 1, g_score, 5, C_WHITE);
+    if (g_score) text_draw(60, 1, "0", C_WHITE, 1);
     if (++blink >= 16) blink = 0;       /* 約 15 ティック点灯 / 15 ティック消灯 */
     if (cap_id) {
         const Caption *c = &stage->captions[cap_id - 1];
@@ -637,7 +662,7 @@ static void render(void)
         i8 tgt;
         if (i + 1 >= rail_len) i = rail_len - 2;
         dy = rail[i + 1].y - rail[i].y;          /* 1m あたりの高さ変化(8.8) */
-        /* atan(x) ≒ x / (1 + 0.28x²)(崖・滝の急な下りでも破綻しない)。1 フレームで差の 1/4 ずつ追う */
+        /* atan(x) ≒ x / (1 + 0.28x²)(急な坂でも破綻しない)。1 フレームで差の 1/4 ずつ追う */
         tgt = (i8)(((i32)dy * 41) / (256 + (((i32)dy * dy * 72) >> 16)));
         {
             i8 st = (i8)((tgt - pitch_cur) >> 2);
@@ -657,6 +682,7 @@ static void render(void)
         if (slide > 64) slide = 64; else if (slide < -64) slide = -64;
         trolley_draw((i8)slide, (shake & 2) ? 1 : 0);
     }
+    coins_draw();
     if (shake) shake--;
     draw_hud();
     g_perf_render = timer_read() - t0;
@@ -688,7 +714,7 @@ u8 game_run(const Stage *st, u8 first)
     attack_dir = DIR_NONE;
     boss_alive = 0;
     blink = 0;
-    shake = 0; whiteout = 0;
+    shake = 0; whiteout = 0; coin_t = 0;
     sc_tick = 0; sc_ev = st->events; sc_end = 0;
     g_scene = 1;
 
@@ -722,6 +748,7 @@ u8 game_run(const Stage *st, u8 first)
         buf_fill(C_BLACK, BUF);
         if (i & 16) text_center(12, "GAME", C_RED, 2);
         if (i & 16) text_center(24, "OVER", C_RED, 2);
+        text_center(38, "NO TREASURE LEFT", C_YELLOW, 1);
         present();
     }
     return 0;

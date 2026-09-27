@@ -1,13 +1,13 @@
-/* trolley.c — 画面下部のトロッコの縁(自機・手は描かない)
+/* trolley.c — 画面下部のトロッコの縁(自機・手は描かない)と、縁の上に積んだ宝の山
  *
- * 絵は tools/gen_data.py の trolley_img(64×9、0 = 透過)。ライフが 1 減るごとに
- * trolley_dmg の 1 段(穴 = 透過にする / ひび = 黒)を累積で当て、トロッコが徐々に壊れていく。
- * 穴からは奥の景色が見える。
+ * 絵は tools/gen_data.py の trolley_img(64×13、0 = 透過。上の 4 行は空き)。ライフ = 積んだ宝の量で、
+ * trolley_pile の点のうち「見えるのに要るライフ」が今のライフ以下のものだけを重ねる。
+ * 被弾するたびに宝の山が外側・上から減っていく(金貨が飛び散る演出は game.c)。
  */
 #include "trolley.h"
 
 extern const u8 trolley_img[TROLLEY_W * TROLLEY_H];
-extern const u8 trolley_dmg[];
+extern const u8 trolley_pile[TROLLEY_W * PILE_H];
 extern u8 *g_bt_src, *g_bt_dst;
 void blit_trans(u8 count);
 void runs_draw(const u8 *tbl, u8 *base);
@@ -22,25 +22,14 @@ static u8 last_y;
 
 void trolley_set_life(u8 life)
 {
-    u8 level, i;
-    const u8 *d = trolley_dmg;
     u16 k;
+    u8 lv = life << 4;
     if (life == built_life) return;
     built_life = life;
     for (k = 0; k < sizeof(timg); k++) timg[k] = trolley_img[k];
-    level = (life >= 8) ? 0 : 8 - life;
-    for (i = 0; i < level; i++) {
-        for (; *d != 0xFF; d += 5) {
-            u8 x, y;
-            for (y = d[1]; y < d[1] + d[3] && y < TROLLEY_H; y++) {
-                for (x = d[0]; x < d[0] + d[2] && x < TROLLEY_W; x++) {
-                    u8 *p = &timg[y * TROLLEY_W + x];
-                    if (d[4] == 0) *p = 0;
-                    else if (*p) *p = d[4];
-                }
-            }
-        }
-        d++;                               /* 段の区切り */
+    for (k = 0; k < TROLLEY_W * PILE_H; k++) {
+        u8 c = trolley_pile[k];
+        if (c && (c & 0xF0) <= lv) timg[k] = c & 0x0F;
     }
     /* 連続区間の表を作る */
     {

@@ -92,7 +92,7 @@ $(BUILD)/stagehead.rel: $(STG)/stagehead.s Makefile | $(BUILD)
 $(BUILD)/stage1.rel: $(STG)/stage1_cave.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-$(BUILD)/stage2.rel: $(STG)/stage2_river.c $(HDRS) Makefile | $(BUILD)
+$(BUILD)/stage2.rel: $(STG)/stage2_lake.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BUILD)/stage3.rel: $(STG)/stage3_forest.c $(HDRS) Makefile | $(BUILD)

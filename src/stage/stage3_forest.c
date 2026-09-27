@@ -1,7 +1,7 @@
 /* stage3_forest.c — ステージ 3: 森(仕様書 5 章 #5)
  *
- * 流れ: 滝の下の森のレールに着地 → キリン人(前)と魔法使い → 後ろからコウモリ人・魔法使い
- *       → キリン人・魔法使い・救急箱 → 森の番人(巨大コウモリ人) → ステージ 4(町)
+ * 流れ: 洞窟を出て森の小道へ → キリン人(前)と魔法使い → 後ろからコウモリ人・魔法使い
+ *       → キリン人・魔法使い・金貨袋 → 森の番人(巨大コウモリ人) → ステージ 4(町)
  * ステージデータは定数だけで書き、読み込み先(0xB400)に合わせて単独でリンクする(stage1_cave.c と同じ)。
  */
 #include "game.h"
@@ -12,7 +12,7 @@
 
 /* (長さ[m], ヨー角の変化(65536 = 1 周、正 = 右), 1m あたりの高さ変化(1/16m), 速度(m/秒 × 4)) */
 static const RailSeg forest_rail[] = {
-    {  16,       0,   0, 16 },   /* 着地 */
+    {  16,       0,   0, 16 },   /* 洞窟を出たところ */
     {  24,       0,   0, 18 },
     {  20,  0x2000,   1, 16 },   /* 上りながら右へ */
     {  24,       0,   0, 18 },
@@ -38,9 +38,9 @@ static const u8 forest_pal[14] = {
     0x31, 2,  0x11, 1,  0x42, 3,  0x21, 5,  0x01, 3,  0x31, 6,  0x26, 4,
 };
 
-enum { T_NONE, T_THUD, T_WARNING, T_CLEAR };
+enum { T_NONE, T_FOREST, T_WARNING, T_CLEAR };
 static const Caption forest_captions[] = {
-    { "THUD!",         C_WHITE,  2 },
+    { "INTO THE WOODS", C_WHITE, 1 },
     { "WARNING!",      C_RED,    2 },
     { "FOREST CLEAR!", C_YELLOW, 1 },
 };
@@ -70,10 +70,9 @@ static const u8 bgm_bass[] = {                           /* 4 分のズンチャ
 };
 
 static const Event forest_events[] = {
-    /* ---- 着地 ---- */
+    /* ---- 森へ ---- */
     { S(0),    EV_DIR,   DIR_NONE,    0,   0 },
-    { S(0),    EV_FX,    SE_TRAIN,    8,   0 },
-    { S(0),    EV_TEXT,  T_THUD,      0,   0 },
+    { S(1),    EV_TEXT,  T_FOREST,    0,   0 },
     { S(0),    EV_BGM,   1,           0,   0 },
     /* ---- 前からキリン人(槍のリーチが長い)と魔法使い ---- */
     { S(5),    EV_DIR,   DIR_FRONT,   0,   0 },
@@ -92,7 +91,7 @@ static const Event forest_events[] = {
     { S(19.5), EV_SPAWN, ET_E05,     -14,  -6 },
     { S(21),   EV_SPAWN, ET_E02,     -14,   6 },
     { S(23),   EV_SPAWN, ET_E02,     -16,  -6 },
-    /* ---- 前から: キリン人・魔法使い・救急箱 ---- */
+    /* ---- 前から: キリン人・魔法使い・金貨袋 ---- */
     { S(26),   EV_DIR,   DIR_FRONT,   0,   0 },
     { S(26),   EV_SPAWN, ET_E03,      22,  10 },
     { S(27),   EV_SPAWN, ET_E05,      20,  -8 },
@@ -117,7 +116,7 @@ const Stage stage_data = {
     forest_rail, forest_pal, forest_events, forest_captions,
     2,
     0,
-    0,          /* 演出は飛ばさない(着地して走りながら始まる) */
+    0,          /* 演出は飛ばさない(走りながら始まる) */
     bgm_melody, bgm_bass,
     forest_zones, 0x7A3C,
     "STAGE 3", "THE FOREST",

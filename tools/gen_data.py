@@ -7,7 +7,8 @@
 - font35      : 3×5 ブロックフォント(仕様書 3.5 / 5.3)
 - spr_patterns: 16×16 スプライト(照準・ヒットマーク)
 - recip9      : 9bit 仮数の逆数表(多角形の辺の傾きを割り算なしで求める)
-- trolley_img : 画面下部のトロッコの縁(64×9)と、ライフが減るごとの壊れ方(trolley_dmg)
+- trolley_img : 画面下部のトロッコの縁(64×13。上の 4 行は宝の山の場所で空き)と、
+                積んだ宝の山(trolley_pile。ライフの量だけ見える)
 - psg_period  : PSG の音程表(MIDI の音番号 24〜95)
 """
 import math
@@ -104,16 +105,18 @@ SPRITES = [
 
 
 # ---------------------------------------------------------------------------
-# トロッコ(画面下部に重ねる縁。64×9 ブロック)。0 = 透過(奥の景色が見える)
+# トロッコ(画面下部に重ねる縁。64×13 ブロック)。0 = 透過(奥の景色が見える)
+#   上の 4 行 = 縁の上に積んだ宝の山(ライフ)、下の 9 行 = 縁
 #   色: 1 黒(鉄・影) 2 白(鋲) 4 茶(板) 7 橙(縁の明るい面)
 # 前を向いているときは前の縁、後ろを向いているときは後ろの縁として同じ絵を使う。
 # ---------------------------------------------------------------------------
-TROLLEY_W, TROLLEY_H = 64, 9
+TROLLEY_W, PILE_H, RIM_H = 64, 4, 9
+TROLLEY_H = PILE_H + RIM_H
 
 
 def trolley_base():
     img = [[0] * TROLLEY_W for _ in range(TROLLEY_H)]
-    for y in range(TROLLEY_H):
+    for y in range(RIM_H):
         x0 = max(0, 6 - y)             # 側面の縁は手前ほど外へ広がる
         x1 = min(TROLLEY_W - 1, 57 + y)
         for x in range(x0, x1 + 1):
@@ -125,31 +128,43 @@ def trolley_base():
                 c = 4                  # 板
                 if (x - 6) % 11 == 0 and 1 <= y <= 6:
                     c = 1              # 板の継ぎ目
-            img[y][x] = c
-        img[y][x0] = 7                 # 側面の縁
-        img[y][x1] = 7
+            img[PILE_H + y][x] = c
+        img[PILE_H + y][x0] = 7        # 側面の縁
+        img[PILE_H + y][x1] = 7
     # 角の金具と鋲
     for (bx, by, bw, bh) in ((7, 0, 4, 7), (53, 0, 4, 7)):
         for y in range(by, by + bh):
             for x in range(bx, bx + bw):
-                img[y][x] = 1
-        img[by + 1][bx + 1] = 2
-        img[by + 4][bx + 2] = 2
+                img[PILE_H + y][x] = 1
+        img[PILE_H + by + 1][bx + 1] = 2
+        img[PILE_H + by + 4][bx + 2] = 2
     return img
 
 
-# 壊れ方: ライフが 1 減るごとに 1 段ずつ追加で当てる(累積)。(x, y, w, h, 色) 色 0 = 穴、1 = ひび
-TROLLEY_DAMAGE = [
-    [(18, 1, 1, 1, 1), (19, 2, 1, 1, 1), (20, 3, 1, 1, 1), (21, 4, 1, 1, 1)],          # ひび
-    [(24, 0, 5, 1, 0), (25, 1, 3, 1, 0)],                                              # 縁の欠け
-    [(53, 0, 4, 2, 0), (54, 2, 2, 1, 0), (55, 3, 2, 1, 1)],                            # 右の金具が外れる
-    [(31, 1, 8, 1, 0), (32, 2, 6, 1, 0), (33, 4, 4, 1, 0), (35, 5, 2, 1, 1)],          # 板が抜ける
-    [(2, 3, 3, 3, 0), (4, 1, 2, 2, 0), (10, 4, 1, 2, 1), (11, 5, 1, 1, 1)],            # 左の側面が割れる
-    [(43, 0, 9, 3, 0), (44, 3, 7, 2, 0), (46, 5, 3, 1, 0)],                            # 右に大穴
-    [(12, 0, 12, 2, 0), (14, 2, 8, 2, 0), (26, 2, 5, 3, 0), (39, 1, 4, 4, 0),
-     (58, 2, 5, 4, 0), (7, 0, 4, 3, 0)],                                               # ぼろぼろ
-    [(0, 0, 64, 1, 0), (16, 1, 30, 2, 0), (48, 3, 10, 2, 0)],                          # 崩れかけ
-]
+def treasure_pile():
+    """縁の上の宝の山(64×4)。1 バイト = (見えるのに要るライフ << 4) | 色、0 = 無し。
+    ライフ L の山は高さ ceil(L/2) 行、裾の半幅 4 + 2L の山形。金貨(黄)に、光(白)と宝石(赤・水色)を散らし、
+    一番下の行は影(橙)。ライフが減ると外側・上から消えていく"""
+    pile = [[0] * TROLLEY_W for _ in range(PILE_H)]
+    for L in range(8, 0, -1):
+        h = (L + 1) // 2
+        hw = 4 + 2 * L
+        for b in range(h):             # b = 下から数えた行
+            w = hw * (h - b) // h
+            y = PILE_H - 1 - b
+            for x in range(32 - w, 32 + w):
+                k = (x * 7 + y * 13) % 23
+                c = 6
+                if k == 0:
+                    c = 2
+                elif k == 5:
+                    c = 3
+                elif k == 11:
+                    c = 8
+                elif b == 0 and k % 3 == 0:
+                    c = 7
+                pile[y][x] = (L << 4) | c
+    return pile
 
 
 def sprite_bytes(rows):
@@ -185,11 +200,7 @@ def main(out):
             font.append(sum((1 << (2 - i)) for i, c in enumerate(row) if c == '#'))
 
     tro = [c for row in trolley_base() for c in row]
-    dmg = []
-    for level in TROLLEY_DAMAGE:
-        for (x, y, w, h, c) in level:
-            dmg += [x, y, w, h, c]
-        dmg.append(0xFF)               # 段の区切り
+    pile = [c for row in treasure_pile() for c in row]
 
     # PSG の音程表: MIDI の音番号 24(C1)〜95(B6)の周期 = 3579545 / (16 * 周波数)
     ptab = []
@@ -213,7 +224,7 @@ def main(out):
         f.write(carray('spr_patterns', 'u8', spr) + '\n\n')
         f.write(carray('recip9', 'u16', rtab) + '\n\n')
         f.write(carray('trolley_img', 'u8', tro) + '\n\n')
-        f.write(carray('trolley_dmg', 'u8', dmg) + '\n\n')
+        f.write(carray('trolley_pile', 'u8', pile) + '\n\n')
         f.write(carray('psg_period', 'u16', ptab) + '\n')
 
 

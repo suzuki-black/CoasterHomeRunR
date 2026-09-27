@@ -1,7 +1,7 @@
 /* stage4_town.c — ステージ 4: 町(仕様書 5 章 #6)
  *
  * 流れ: 森を抜けると町の中(なぜか道にレールが敷いてある)→ 前から E01〜E05 の混成 → 後ろからコウモリ人・魔法使い・追ってくる猿人
- *       → 暴走汽車 B03(並走レールを後ろから来て、周期的に体当たり。避けられないので早く倒す)→ 前から混成 → 自宅前へ
+ *       → 祭りの山車 B03(獣人たちが引いて後ろから追ってくる。上の猿人が花火を撃ち、ときどきぶつけてくる)→ 前から混成 → 自宅前へ
  * ステージデータは定数だけで書き、読み込み先(0xB400)に合わせて単独でリンクする(stage1_cave.c と同じ)。
  */
 #include "game.h"
@@ -17,7 +17,7 @@ static const RailSeg town_rail[] = {
     {  40,       0,   0, 20 },
     {  12, -0x3000,   0, 16 },   /* 左の角 */
     {  36,       0,   0, 20 },
-    {  40,       0,   0, 14 },   /* 暴走汽車と戦う長い通り */
+    {  40,       0,   0, 14 },   /* 祭りの山車と戦う長い通り */
     {  12,  0x2000,   0, 16 },
     {  40,       0,   0, 22 },
     {  64,       0,   0, 22 },
@@ -34,10 +34,10 @@ static const u8 town_pal[14] = {
     0x31, 2,  0x12, 1,  0x33, 3,  0x64, 6,  0x41, 1,  0x45, 5,  0x26, 4,
 };
 
-enum { T_NONE, T_WHY, T_TRAIN, T_NEAR };
+enum { T_NONE, T_WHY, T_FLOAT, T_NEAR };
 static const Caption town_captions[] = {
     { "WHY RAILS HERE?", C_YELLOW, 1 },
-    { "RUNAWAY TRAIN!",  C_RED,    1 },
+    { "FESTIVAL FLOAT!", C_RED,    1 },
     { "HOME IS NEAR!",   C_YELLOW, 1 },
 };
 
@@ -82,11 +82,11 @@ static const Event town_events[] = {
     { S(18),   EV_SPAWN, ET_E01,     -10,   8 },
     { S(20),   EV_SPAWN, ET_E02,     -14,  -6 },
     { S(22),   EV_SPAWN, ET_E02,     -16,   6 },
-    /* ---- 暴走汽車(後ろの並走レールから。撃破までスクリプトは止まる) ---- */
+    /* ---- 祭りの山車(後ろから。撃破までスクリプトは止まる) ---- */
     { S(25),   EV_DIR,   DIR_BACK,    0,   0 },
-    { S(25),   EV_TEXT,  T_TRAIN,     0,   0 },
+    { S(25),   EV_TEXT,  T_FLOAT,     0,   0 },
     { S(25),   EV_SPEED, 14,          0,   0 },
-    { S(26),   EV_BOSS,  ET_B03,     -24,  11 },
+    { S(26),   EV_BOSS,  ET_B03,     -20,  0 },
     { S(26.1), EV_SPEED, 0,           0,   0 },
     /* ---- 前から混成 ---- */
     { S(27),   EV_DIR,   DIR_FRONT,   0,   0 },
