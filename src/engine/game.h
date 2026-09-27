@@ -17,15 +17,18 @@ enum { ET_NONE, ET_E01, ET_E02, ET_E03, ET_E04, ET_E05, ET_B01, ET_TREASURE, ET_
        ET_CRATE,     /* 川に浮いた木箱の上の救急箱 */
        ET_BOSS2,     /* 川の主(ステージ 2 のボス。後ろから追ってくる大ガエル人) */
        ET_B02,       /* 森の番人(ステージ 3 のボス。巨大コウモリ人) */
+       ET_B03,       /* 暴走汽車(町。並走レールを後ろから来て体当たり。避けられない) */
+       ET_B04,       /* 亜人の王(自宅前のラスボス。キリン人系) */
        ET_COUNT };
-#define IS_BOSS(t) ((t) == ET_B01 || (t) == ET_BOSS1 || (t) == ET_BOSS2 || (t) == ET_B02)
+#define IS_BOSS(t) ((t) == ET_B01 || (t) == ET_BOSS1 || (t) == ET_BOSS2 || (t) == ET_B02 || \
+                    (t) == ET_B03 || (t) == ET_B04)
 #define IS_SHOT(t) ((t) == ET_ROCK || (t) == ET_ARROW || (t) == ET_MAGIC)
 
 /* ステージスクリプト(仕様書 7.7)。時刻は 60Hz ティック */
 enum {
     EV_SPAWN,   /* a = 敵、b = 距離[m]、c = 横位置(1/8m) */
     EV_DIR,     /* a = 襲撃方向(警告表示) */
-    EV_GO,      /* トロッコ発進 */
+    EV_GO,      /* a = 0 でトロッコ発進、1 で止める */
     EV_BOSS,    /* a = ボス、b = 距離[m]。撃破までスクリプトは止まる */
     EV_END,     /* ステージクリア */
     EV_TEXT,    /* a = 字幕の番号(0 = 消す)。約 2 秒で消える */
@@ -63,15 +66,16 @@ typedef struct {
     u16 seed;                 /* 地形の乱数の種 */
     const char *name;         /* ステージの始めに出す名前(2 行目は title2) */
     const char *title2;
+    /* 最後のステージだけ: エンディング(SCREEN 1、BIOS のフォント)の文と BGM */
+    const u8 *ending;         /* (行, 桁, 文字コード…, 0) の並び、0xFF で終わり */
+    const u8 *end_melody;
+    const u8 *end_bass;
 } Stage;
 
 /* ステージデータの読み込み先(ROM バンクから写す。先頭 2 バイトが Stage へのポインタ) */
 #define STAGE_BUF    0xB400
 #define STAGE1_BANK  6
-#define STAGE_COUNT  3        /* バンク 6, 8, 10 */
-
-/* 仮エンディング(main.c) */
-void ending_run(void);
+#define STAGE_COUNT  5        /* バンク 6, 8, 10, 12, 14 */
 
 /* ステージを 1 つ遊ぶ。first = 1 ならライフとスコアを初期化する。
  * 戻り値 0 = ゲームオーバー、1 = クリア */

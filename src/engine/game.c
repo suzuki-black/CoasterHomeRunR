@@ -18,7 +18,7 @@
 #define FLY_Y   F88(-0.3)                       /* コウモリ人の飛ぶ高さ */
 
 /* 敵種ごとの定数 */
-static const u8 et_hp[ET_COUNT] = { 0, 1, 2, 3, 2, 3, 30, 0, 1, 60, 1, 1, 2, 1, 40, 60 };
+static const u8 et_hp[ET_COUNT] = { 0, 1, 2, 3, 2, 3, 30, 0, 1, 60, 1, 1, 2, 1, 40, 60, 60, 100 };
 /* 敵弾の速さ(カメラに対して、m/秒) */
 #define SHOT_V(t) ((t) == ET_ARROW ? MPS(8) : (t) == ET_MAGIC ? MPS(3) : MPS(5))
 
@@ -117,6 +117,7 @@ static Enemy *spawn(u8 type, i8 dist, i8 lat8)
         e->state = ST_APPROACH;
         e->lat_t = 0;
         if (type == ET_B02) e->up = F88(0.2);
+        if (type == ET_B03) e->lat_t = e->lat;     /* 並走レールの上 */
         boss_alive = 1;
     } else if (type == ET_E04) {
         e->up = F88(1.75);                     /* 川の高台に立つ */
@@ -253,12 +254,12 @@ static void update_enemy(Enemy *e)
         } else if (e->type == ET_B01) {
             e->v = (i16)cam_v - MPS(2);
             if (d <= (i16)M(3.5)) { e->state = ST_ATTACK; e->timer = 0; }
-        } else if (e->type == ET_BOSS1 || e->type == ET_B02) {
+        } else if (e->type == ET_BOSS1 || e->type == ET_B02 || e->type == ET_B04) {
             e->v = (i16)cam_v - MPS(2);
             if (d <= (i16)M(7)) { e->state = ST_ATTACK; e->timer = 0; e->attacks = 0; }
-        } else if (e->type == ET_BOSS2) {
+        } else if (e->type == ET_BOSS2 || e->type == ET_B03) {
             e->v = (i16)cam_v + MPS(2);          /* 後ろから追いついてくる */
-            if (d >= -(i16)M(7)) { e->state = ST_ATTACK; e->timer = 0; e->attacks = 0; }
+            if (d >= -(i16)M(8)) { e->state = ST_ATTACK; e->timer = 0; e->attacks = 0; }
         } else if (IS_SHOT(e->type)) {
             /* 敵弾: カメラへ向かってまっすぐ飛ぶ。手前 0.8m に来たら当たる */
             e->v = (d > 0) ? (i16)cam_v - SHOT_V(e->type) : (i16)cam_v + SHOT_V(e->type);
@@ -303,27 +304,47 @@ static void update_enemy(Enemy *e)
             e->lat_t = (e->anim & 64) ? F88(0.6) : F88(-0.6);
             melee(e, 45);
             if ((e->anim & 127) == 0) spawn(ET_E01, 14, (e->anim & 128) ? 10 : -10);
-        } else if (e->type == ET_BOSS1 || e->type == ET_BOSS2) {
+        } else if (e->type == ET_B03) {
+            /* 暴走汽車: 8m 後ろで様子を見て(最後に点滅)、並走レールを突っ込んで体当たり(避けられない)、また下がる */
+            if (!(e->attacks & 1)) {
+                e->v = (i16)cam_v + ((-(i16)M(8) - d) << 2);
+                e->timer++;
+                if (e->timer >= 45) e->flash = (e->timer & 2) ? 1 : 0;
+                if (e->timer >= 60) { e->attacks++; e->flash = 0; }
+            } else {
+                e->v = (i16)cam_v + MPS(6);
+                if (d >= -(i16)M(1)) {
+                    damage_player();
+                    shake = 8;
+                    e->attacks++;
+                    e->timer = 0;
+                }
+            }
+        } else if (e->type == ET_BOSS1 || e->type == ET_BOSS2 || e->type == ET_B04) {
             /* 洞窟の主: 7m 先を保ちながら岩を投げる。3 回に 1 回は突進して爪で殴り、また下がる。
-             * 川の主: 同じ動きを後ろから(水の玉を吐き、跳びかかって噛みつく) */
-            i16 keep = (e->attacks % 3 == 2) ? (i16)M(2.5) : (i16)M(7);
+             * 川の主: 同じ動きを後ろから(水の玉を吐き、跳びかかって噛みつく)。
+             * 亜人の王: 6m 先から魔法弾、3 回に 1 回は槍で突く。耐久が半分を切ると 2 倍の速さで攻める */
+            u8 n = (e->type == ET_B04 && e->hp < 50) ? 2 : 1;
+            i16 keep = (e->attacks % 3 == 2) ? (i16)M(2.5) : (e->type == ET_B04) ? (i16)M(6) : (i16)M(7);
             if (e->type == ET_BOSS2) keep = -keep;
             e->v = (i16)cam_v + ((keep - d) << 2);
             e->lat_t = (e->anim & 64) ? F88(0.8) : F88(-0.8);
-            e->timer++;
-            if (e->attacks % 3 == 2) {
-                if (iabs(d) <= (i16)M(3)) {
-                    if (e->timer < 60) e->timer = 60;
-                    if (e->timer < 75) e->flash = (e->timer & 2) ? 1 : 0;
-                    else if (e->timer == 75) damage_player();
-                    else if (e->timer >= 100) { e->timer = 0; e->attacks++; e->flash = 0; }
-                }
-            } else {
-                if (e->timer == 30 || e->timer == 60) {
-                    shoot(e, e->type == ET_BOSS1 ? ET_ROCK : ET_MAGIC, d, F88(0.9));
-                } else if (e->timer >= 90) {
-                    e->timer = 0;
-                    e->attacks++;
+            while (n--) {
+                e->timer++;
+                if (e->attacks % 3 == 2) {
+                    if (iabs(d) <= (i16)M(3)) {
+                        if (e->timer < 60) e->timer = 60;
+                        if (e->timer < 75) e->flash = (e->timer & 2) ? 1 : 0;
+                        else if (e->timer == 75) damage_player();
+                        else if (e->timer >= 100) { e->timer = 0; e->attacks++; e->flash = 0; }
+                    }
+                } else {
+                    if (e->timer == 30 || e->timer == 60) {
+                        shoot(e, e->type == ET_BOSS1 ? ET_ROCK : ET_MAGIC, d, F88(0.9));
+                    } else if (e->timer >= 90) {
+                        e->timer = 0;
+                        e->attacks++;
+                    }
                 }
             }
         }
@@ -414,7 +435,7 @@ static void script_update(void)
         switch (ev->cmd & 0x7F) {
         case EV_SPAWN: spawn(ev->a, ev->b, ev->c); break;
         case EV_DIR:   attack_dir = ev->a; break;
-        case EV_GO:    hold = 0; break;
+        case EV_GO:    hold = ev->a; break;
         case EV_BOSS:  spawn(ev->a, ev->b, 0); break;
         case EV_END:   sc_end = 1; break;
         case EV_TEXT:  cap_id = ev->a; cap_time = 40; break;

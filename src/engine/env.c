@@ -6,6 +6,7 @@
  *   崖: 空に突き出た岩の尾根。落下: 周りに何も無い(空と、はるか下の川だけが見える)。
  *   川: 水面と両岸の土手、その上の高台。滝: 急な下りの白い水の流れ。
  *   森: 土の道、両側の下草と茂み、木の幹と葉の塊。
+ *   町: 両側の家並み(壁と屋根。家と家の間は空く)、並走レール。自宅前: 道の突き当たりに自宅。
  * 色 0 の面は塗らない(屋外の区間は天井の面が空)。屋外が見えるときは、先に空と地面を
  * 地平線の高さで塗り分け(仕様書 5.1 の 2 色塗り)、遠くの山を置いてから区間を描く。
  * リング面の飾りとレールは、リング中心の投影と 1/z(ring_c)から 2D で求める(投影を増やさない)。
@@ -31,7 +32,8 @@
 #define DECO   ((u8 *)0x2680)     /* [リング] 飾りの印 */
 #define KIND   ((u8 *)0x2700)     /* [リング] 地形の種類 */
 #define MAX_RINGS 100
-/* 飾りの印。LAMP / TIMBER は森では木の幹 / 葉の塊 */
+/* 飾りの印。LAMP / TIMBER は森では木の幹 / 葉の塊。
+ * 町では LAMP_L / LAMP_R = 左 / 右の家の始まり(手前の妻壁)、ROCK_L / ROCK_R = 家の終わり、TIMBER = 自宅の正面 */
 enum { D_LAMP_L = 1, D_ROCK_L = 2, D_ROCK_R = 4, D_TIMBER = 8, D_LAMP_R = 16,
        D_OPEN = 32,      /* 天井が無い(空が見える) */
        D_NORAIL = 64,    /* レールを描かない */
@@ -39,7 +41,8 @@ enum { D_LAMP_L = 1, D_ROCK_L = 2, D_ROCK_R = 4, D_TIMBER = 8, D_LAMP_R = 16,
 
 /* 色(パレット 9-15、stage のパレットで決まる)
  *   洞窟(ステージ 1): 9 = 木、10〜12 = 岩(暗→明)、13〜14 = 土(暗→明)、15 = レール
- *   屋外: 9 = 木・幹、10 = 暗い岩・遠くの山、11 = 土・岩、12 = 草、13 = 水・茂み、14 = 明るい水・葉、15 = 空 */
+ *   屋外: 9 = 木・幹、10 = 暗い岩・遠くの山、11 = 土・岩、12 = 草、13 = 水・茂み、14 = 明るい水・葉、15 = 空
+ *   町: 9 = 戸、10 = 窓・レール、11 = 道、12 = 壁、13 = 屋根、14 = 別の色の壁(自宅前では自宅の壁)、15 = 空 */
 #define C_WOOD   9
 #define C_ROCK0 10
 #define C_ROCK1 11
@@ -96,7 +99,15 @@ static const i16 base_uv[K_COUNT][12] = {
     /* 川   */  {-1000, 600, 1000, 600,  720,  380,  380, -380, -380, -380, -720,  380 },
     /* 滝   */  {-1000, 600, 1000, 600,  720,  380,  380, -380, -380, -380, -720,  380 },
     /* 森   */  { -760,1400,  760,1400,  720,  250,  420, -345, -420, -345, -720,  250 },
+    /* 町   */  { -950, 900,  950, 900,  650,  520,  650, -345, -650, -345, -650,  520 },
+    /* 自宅 */  { -950, 900,  950, 900,  650,  520,  650, -345, -650, -345, -650,  520 },
 };
+#define HOUSE_U0  650      /* 家の壁(道に面した面)の横位置 */
+#define HOUSE_U1 1250      /* 家の奥行きの端 */
+#define EAVE_V    520      /* 軒の高さ */
+#define RIDGE_U   950      /* 棟の横位置と高さ */
+#define RIDGE_V   900
+static u8 hs_st[2], hs_cnt[2], hs_col[2];   /* 家並み: 左右それぞれの今の状態(1 = 家)・残りリング数・壁の色 */
 static u8 rail_col;
 
 /* 地形 kind のリング r の断面・色・飾りを作る。w / h は幅と高さのゆっくりした変化(256 = 基本) */
@@ -107,9 +118,12 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
     const i16 *b = base_uv[kind];
     u8 k, d = 0;
     for (k = 0; k < 6; k++) {
-        i16 u = (i16)(((i32)b[k * 2] * w) >> 8);
+        i16 u = b[k * 2];
         i16 v = b[k * 2 + 1];
-        if (kind <= K_EXIT) {
+        if (kind >= K_TOWN) {
+            /* 町: 家の壁はまっすぐ(幅も変えない。妻壁の位置と合わせる) */
+        } else if (kind <= K_EXIT) {
+            u = (i16)(((i32)u * w) >> 8);
             if (k == 3 || k == 4) {            /* 床は平らに(レールを敷く) */
                 u += jit(12);
             } else if (k <= 1) {               /* 天井: 手掘りの凹凸 */
@@ -120,7 +134,7 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
                 v += jit(40);
             }
         } else if (k != 3 && k != 4) {          /* 屋外: 岸・高台・茂みの凹凸。床(水面・道)は平ら */
-            u += jit(40);
+            u = (i16)(((i32)u * w) >> 8) + jit(40);
             v = (i16)(((i32)v * h) >> 8) + jit(30);
         }
         p[k * 2] = u;
@@ -172,6 +186,34 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
             d = D_OPEN | D_NORAIL;
         }
         break;
+    case K_TOWN:
+    case K_HOME: {
+        /* 家並み: 左右それぞれ「家(1〜3 リング)」と「間(1〜2 リング)」を交互に。
+         * 家の始まりのリングに手前の妻壁、終わりのリングに奥の妻壁の印を付ける */
+        u8 sd;
+        t[0] = 0;
+        t[3] = C_ROCK1;
+        d = D_OPEN;
+        for (sd = 0; sd < 2; sd++) {
+            u8 prev = hs_st[sd];
+            if (!hs_cnt[sd]) {
+                hs_st[sd] ^= 1;
+                if (hs_st[sd]) {
+                    hs_cnt[sd] = 1 + (rnd() % 3);
+                    hs_col[sd] = (kind == K_TOWN && (rnd() & 1)) ? C_DIRT1 : C_ROCK2;
+                } else {
+                    hs_cnt[sd] = (rnd() < 100) ? 2 : 1;
+                }
+            }
+            hs_cnt[sd]--;
+            if (hs_st[sd] && !prev) d |= sd ? D_LAMP_R : D_LAMP_L;
+            if (!hs_st[sd] && prev) d |= sd ? D_ROCK_R : D_ROCK_L;
+            /* 右 = 面 1(屋根)・2(壁)、左 = 面 5(屋根)・4(壁) */
+            t[sd ? 1 : 5] = hs_st[sd] ? C_DIRT0 : 0;
+            t[sd ? 2 : 4] = hs_st[sd] ? hs_col[sd] : 0;
+        }
+        break;
+    }
     default:                                    /* 森 */
         t[0] = 0;
         t[1] = C_DIRT0; t[5] = C_DIRT0;         /* 茂み(濃い緑) */
@@ -194,6 +236,8 @@ void env_build(u16 seed, const u8 *zones)
     i16 w = 256, h = 256;
     rng = seed;
     rail_col = *zones++;
+    hs_st[0] = hs_st[1] = 0;
+    hs_cnt[0] = hs_cnt[1] = 0;
     n = (u8)(rail_len / RSTEP + 2);
     if (n > MAX_RINGS) n = MAX_RINGS;
     for (r = 0; r < n; r++) {
@@ -204,6 +248,9 @@ void env_build(u16 seed, const u8 *zones)
         h += jit(12); if (h < 240) h = 240; if (h > 285) h = 285;
         ring_build(r, kind, w, h);
     }
+    /* 自宅: レールの終わりのリングに正面を置く */
+    r = (u8)((rail_len - 1) / RSTEP);
+    if (r < n && KIND[r] == K_HOME) DECO[r] |= D_TIMBER;
 }
 
 /* ---------------------------------------------------------------------------
@@ -285,6 +332,17 @@ static void rails_draw(u8 a, u8 b)
         rpt(3, b, u0, FLOOR_V);
         raster(4, rail_col);
     }
+    if (KIND[ring_no[a < b ? a : b]] == K_TOWN) {
+        /* 並走レール(暴走汽車が走る) */
+        for (side = 0; side < 2; side++) {
+            i16 u0 = side ? 390 : 290, u1 = u0 + 26;
+            rpt(0, a, u0, FLOOR_V);
+            rpt(1, a, u1, FLOOR_V);
+            rpt(2, b, u1, FLOOR_V);
+            rpt(3, b, u0, FLOOR_V);
+            raster(4, rail_col);
+        }
+    }
 }
 
 /* 床の石(三角形)。u0..u1 の幅、高さ ht */
@@ -294,6 +352,35 @@ static void rock_draw(u8 idx, i16 u0, i16 u1, i16 ht, u8 color)
     rpt(1, idx, u1, FLOOR_V);
     rpt(2, idx, (u0 + u1) >> 1, FLOOR_V + ht);
     raster(3, color);
+}
+
+static u8 view_back;              /* 1 = 後ろだけを見ている(家の奥の妻壁を描く) */
+
+/* 家の妻壁(リング面の、道から奥への壁と三角の破風、窓 2 つ)。sgn = 1 右 / -1 左 */
+static void house_end(u8 idx, i8 sgn, u8 col)
+{
+    i16 u0 = HOUSE_U0 * sgn, u1 = HOUSE_U1 * sgn, ur = RIDGE_U * sgn;
+    rquad(idx, u0, u1, FLOOR_V, EAVE_V, col);
+    rpt(0, idx, u0, EAVE_V);
+    rpt(1, idx, u1, EAVE_V);
+    rpt(2, idx, ur, RIDGE_V);
+    raster(3, col);
+    rquad(idx, 720 * sgn, 880 * sgn, 170, 380, C_ROCK0);
+    rquad(idx, 1020 * sgn, 1180 * sgn, 170, 380, C_ROCK0);
+}
+
+/* 自宅の正面(道の突き当たり。ほかの家より大きく、壁は 14 番の色) */
+static void home_draw(u8 idx)
+{
+    rquad(idx, -1000, 1000, FLOOR_V - 12, 620, C_DIRT1);
+    rpt(0, idx, -1150, 620);
+    rpt(1, idx, 1150, 620);
+    rpt(2, idx, 0, 1180);
+    raster(3, C_DIRT0);
+    rquad(idx, 520, 660, 850, 1180, C_DIRT0);          /* 煙突 */
+    rquad(idx, -130, 130, FLOOR_V, 170, C_WOOD);        /* 玄関 */
+    rquad(idx, -760, -420, 220, 460, C_ROCK0);
+    rquad(idx, 420, 760, 220, 460, C_ROCK0);
 }
 
 /* リング idx の面の飾り
@@ -337,6 +424,18 @@ static void deco_draw(u8 idx)
         if (d & D_LAMP_R) rquad(idx, 490 - o, 580 - o, FLOOR_V, 940, C_WOOD);
         break;
     }
+    case K_TOWN:
+    case K_HOME:
+        /* 前を見ているときは家の手前の妻壁、後ろを見ているときは奥の妻壁(見えない側は道側の壁に隠れる) */
+        if (!view_back) {
+            if (d & D_LAMP_R) house_end(idx, 1, TONE[no * 6 + 2]);
+            if (d & D_LAMP_L) house_end(idx, -1, TONE[no * 6 + 4]);
+        } else if (no) {
+            if (d & D_ROCK_R) house_end(idx, 1, TONE[(no - 1) * 6 + 2]);
+            if (d & D_ROCK_L) house_end(idx, -1, TONE[(no - 1) * 6 + 4]);
+        }
+        if (d & D_TIMBER) home_draw(idx);
+        break;
     }
 }
 
@@ -450,8 +549,8 @@ static void sky_draw(u8 far)
     g_rh = row;
     buf_fill_rows(C_SKY, BUF);
     g_rh = 48 - row;
-    buf_fill_rows(far == K_FOREST ? C_DIRT0 : C_GRASS, BUF + (u16)row * BUF_W);
-    if (far == K_FOREST || !row || row >= GAME_ROWS) return;
+    buf_fill_rows(far == K_FOREST ? C_DIRT0 : far >= K_TOWN ? C_ROCK1 : C_GRASS, BUF + (u16)row * BUF_W);
+    if (far >= K_FOREST || !row || row >= GAME_ROWS) return;
     for (i = 0; i < 4; i++) {
         i8 rel = (i8)(mt_az[i] - cam_yaw);
         i16 x = SCR_CX + (i16)rel * 12 + (rel >> 1);
@@ -473,6 +572,7 @@ void env_draw(u16 s, u8 look)
     u8 capped = 1;
 
     ring_m0 = (s >> 6) - (s >> 6) % RSTEP;
+    view_back = back && !fwd;
     for (r = 0; r <= NR; r++) ring_ok[r] = 0;
     g_ring_s = &ring_s[0][0];
     eslot_clear();

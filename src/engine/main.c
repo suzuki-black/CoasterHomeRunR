@@ -112,26 +112,63 @@ static void vdp_init(void)
     vdp_wreg(1, 0xEB);             /* 表示オン、垂直帰線割り込み */
 }
 
-/* 仮エンディング(森を抜けた後)。本エンディングは SCREEN 1 のひらがなで作る(仕様書 5.2) */
-void ending_run(void)
+/* エンディング(仕様書 5.2): SCREEN 1 に切り替え、BIOS のフォント(ひらがな)で最後のステージの ending の文を出す。
+ * 約 8 秒後(1 秒過ぎたら A でも)タイトルへ。戻るときに SCREEN 3 を作り直す */
+static void ending_run(const Stage *st)
 {
+    static const u8 regs[] = {
+        1, 0xA2,        /* 表示オフ、16×16(スプライトは隠す) */
+        0, 0x00,        /* GRAPHIC 1 */
+        2, 0x06,        /* ネームテーブル 1800h */
+        3, 0x80,        /* カラーテーブル 2000h */
+        4, 0x00,        /* パターンジェネレータ 0000h */
+        7, 0x01,        /* 背景 = 黒 */
+    };
+    const u8 *p = st->ending;
     u16 t;
-    u8 prev = 0xFF, in;
-    for (t = 0; t < 400; t++) {
-        buf_fill(C_BLACK, BUF);
-        text_center(2, "FOREST CLEARED!", C_YELLOW, 1);
-        text_center(11, "THE TOWN", C_WHITE, 1);
-        text_center(17, "IS NEAR...", C_WHITE, 1);
-        text_center(26, "SCORE", C_CYAN, 1);
-        num_draw(18, 32, g_score, 5, C_WHITE);
-        if (g_score) text_draw(38, 32, "0", C_WHITE, 1);
-        if (t & 32) text_center(41, "TO BE CONTINUED", C_ORANGE, 1);
-        present();
-        if (t == 1) set_stage_palette(pal_title);   /* 前の画面が消えてから(一瞬でも前の画面の色が変わらないように) */
+    u8 i, prev = 0xFF, in;
+    u8 row[32];
+    char num[6];
+    u16 sc = g_score;
+
+    while (g_flip_req) wait_tick();
+    for (i = 0; i < 16; i += 4) g_spr_attr[i] = 209;
+    for (i = 0; i < sizeof(regs); i += 2) vdp_wreg(regs[i], regs[i + 1]);
+    bios_font(BUF);
+    vdp_set_write(0x0000);
+    vdp_out(BUF, 2048);
+    for (i = 0; i < 32; i++) row[i] = 0x21;          /* 文字 = 白(2)、背景 = 黒(1)。8 文字ごとに 1 バイト */
+    row[6] = row[7] = 0x61;                            /* 数字(30h-3Fh)は黄色 */
+    vdp_set_write(0x2000);
+    vdp_out(row, 32);
+    vdp_set_write(0x1800);
+    vdp_fill(0x20, 768);
+    /* 文: (行, 桁, 文字…, 0) の並び */
+    while (p && *p != 0xFF) {
+        u8 r = *p++, c = *p++;
+        const u8 *q = p;
+        while (*p) p++;
+        vdp_set_write(0x1800 + (u16)r * 32 + c);
+        vdp_out(q, (u16)(p - q));
+        p++;
+    }
+    /* スコア(内部は 1/10 なので末尾に 0) */
+    for (i = 0; i < 5; i++) { num[4 - i] = (char)('0' + sc % 10); sc /= 10; }
+    for (i = 0; i < 4 && num[i] == '0'; i++) num[i] = ' ';   /* 先頭の 0 は空白に */
+    vdp_set_write(0x1800 + 19 * 32 + 10);
+    vdp_out((const u8 *)"SCORE ", 6);
+    vdp_out((const u8 *)num, 5);
+    vdp_out((const u8 *)"0", 1);
+    vdp_wreg(1, 0xE2);                                 /* 表示オン、垂直帰線割り込み */
+    if (st->end_melody) bgm_play(st->end_melody, st->end_bass);
+    for (t = 0; t < 480; t++) {
+        wait_tick();
         in = input_raw();
         if (t > 60 && (in & IN_A) && !(prev & IN_A)) break;
         prev = in;
     }
+    bgm_stop();
+    vdp_init();
 }
 
 static void title(void)
@@ -195,15 +232,16 @@ static void stage_card(const Stage *st)
 static void play(void)
 {
     u8 n;
+    const Stage *st = 0;
     for (n = 0; n < STAGE_COUNT; n++) {
-        const Stage *st = stage_load(STAGE1_BANK + n * 2);
+        st = stage_load(STAGE1_BANK + n * 2);
         g_stage = n + 1;
         stage_card(st);
         if (!game_run(st, n == 0)) return;
     }
     g_score += (u16)life * 100;          /* 残りライフ × 1000 点(仕様書 5.2) */
     g_scene = 3;
-    ending_run();
+    ending_run(st);                      /* 最後のステージのデータ(エンディングの文と BGM)は読み込んだまま */
 }
 
 void main(void)

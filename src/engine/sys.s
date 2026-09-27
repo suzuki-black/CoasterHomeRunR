@@ -335,6 +335,19 @@ _rom_load::
 	ld	(RL_LEN), hl
 	jp	RL_ADDR
 
+; void bios_font(u8 *dst) — BIOS のフォント(CGTABL の指す 2KB。ひらがなを含む)を dst(ページ2・3)へ写す。
+;   エンディングの SCREEN 1 で使う。写す間だけページ0を BIOS に戻す
+_bios_font::
+	ex	de, hl
+	di
+	P0_TO_BIOS
+	ld	hl, (0x0004)		; CGTABL
+	ld	bc, #2048
+	ldir
+	P0_TO_RAM
+	ei
+	ret
+
 ; void sys_page0_data(void) — ページ0の表(sin 表・逆数表・フォント・敵の絵など、エリア _PAGE0)を
 ;   ROM のバンク P0D_BANK から読み込む。sys_page0_ram の後、表を使う前に 1 回。
 ;   ページ0へは直接写せない(読み込み中はページ0が BIOS)ので、ページ2の空きを経由する

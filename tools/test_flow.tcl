@@ -1,5 +1,6 @@
 # test_flow.tcl — タイトル → オープニング → ステージ 1(中ボス・大ボス)→ ステージ 2(崖・川・川の主)
-#                  → ステージ 3(森・森の番人)→ 仮エンディング → タイトル を自動で遊んで確かめる
+#                  → ステージ 3(森・森の番人)→ ステージ 4(町・暴走汽車)→ ステージ 5(自宅前・亜人の王)
+#                  → エンディング(SCREEN 1)→ タイトル を自動で遊んで確かめる
 #
 #   TH_NOI=build/engine.noi TH_OUT=<出力ディレクトリ> [TH_GOD=1] \
 #     openmsx -machine TH_turboR_dev -carta build/TrolleyHomeRun.rom -romtype ASCII8 -script test_flow.tcl
@@ -43,6 +44,7 @@ proc bot {} {
         lappend ::seen $sc
         shot scene$sc
         if {$sc == 1} { set ::game_t [machine_info time] }
+        if {$sc == 3} { after time 3.0 [list shot ending] }
     }
     set st [peek8 [sym _g_stage]]
     if {$st != $::stage} {
@@ -91,7 +93,7 @@ proc finish {} {
     fps_log
     log "scenes: $::seen  bosses=$::bosses"
     set ok [expr {[lsearch $::seen 1] >= 0 && ([lsearch $::seen 3] >= 0 || [lsearch $::seen 2] >= 0)}]
-    if {$::god && ([lsearch $::seen 3] < 0 || $::bosses < 4)} { set ok 0 }
+    if {$::god && ([lsearch $::seen 3] < 0 || $::bosses < 6)} { set ok 0 }
     log [expr {$ok ? "PASS" : "FAIL"}]
     close $::f
     exit

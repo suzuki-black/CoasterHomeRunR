@@ -98,6 +98,12 @@ $(BUILD)/stage2.rel: $(STG)/stage2_river.c $(HDRS) Makefile | $(BUILD)
 $(BUILD)/stage3.rel: $(STG)/stage3_forest.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+$(BUILD)/stage4.rel: $(STG)/stage4_town.c $(HDRS) Makefile | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD)/stage5.rel: $(STG)/stage5_home.c $(HDRS) Makefile | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 $(BUILD)/stage%.ihx: $(BUILD)/stagehead.rel $(BUILD)/stage%.rel
 	$(CC) -mz80 --no-std-crt0 --code-loc 0xB402 --data-loc 0xC000 -o $@ $^
 
@@ -107,11 +113,12 @@ $(BUILD)/boot.rel: $(BOOT)/boot.s Makefile | $(BUILD)
 $(BUILD)/boot.ihx: $(BUILD)/boot.rel
 	$(CC) -mz80 --no-std-crt0 --code-loc 0x4000 --data-loc 0xC000 -o $@ $<
 
-STAGES = $(BUILD)/stage1.ihx $(BUILD)/stage2.ihx $(BUILD)/stage3.ihx
+STAGES = $(BUILD)/stage1.ihx $(BUILD)/stage2.ihx $(BUILD)/stage3.ihx $(BUILD)/stage4.ihx $(BUILD)/stage5.ihx
 
 $(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(STAGES) $(TOOLS)/mkrom.py
 	$(PYTHON) $(TOOLS)/mkrom.py $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/engine.noi $@ \
-	  --stage 6 $(BUILD)/stage1.ihx --stage 8 $(BUILD)/stage2.ihx --stage 10 $(BUILD)/stage3.ihx
+	  --stage 6 $(BUILD)/stage1.ihx --stage 8 $(BUILD)/stage2.ihx --stage 10 $(BUILD)/stage3.ihx \
+	  --stage 12 $(BUILD)/stage4.ihx --stage 14 $(BUILD)/stage5.ihx
 	cp $@ "$(BUILD)/$(ROMNAME) [ASCII8].rom"
 
 # 計測用 ROM(fps 表示、タイトルに CPU の状態)。オブジェクトが混ざらないよう build/fps に分けてビルドする

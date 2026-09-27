@@ -95,11 +95,30 @@ static const MRect m_b02[] = {          /* 森の番人(巨大コウモリ人)�
     { -38, 10, -30, 22, C_BLACK, 0 }, { 30, 10, 38, 22, C_BLACK, 0 },
     { -30, 18, -6, 19, C_PURPLE, 0 }, {  6, 18, 30, 19, C_PURPLE, 0 },
 };
+static const MRect m_b03[] = {          /* 暴走汽車(正面): 黒い車体、赤い帯、光る目、煙突 */
+    { -18,  2, 18,  8, C_RED, 2 },    { -16,  8, 16, 34, C_BLACK, 0 },
+    { -16,  8, 16, 11, C_RED, 0 },    { -10, 18, -5, 22, C_RED, 1 },  { 5, 18, 10, 22, C_RED, 1 },
+    {  -3, 25,  3, 30, C_YELLOW, 1 }, {  -4, 34,  4, 46, C_BLACK, 1 }, { -6, 46, 6, 49, C_RED, 1 },
+    { -18, 34, -8, 44, C_BLACK, 0 },  {  8, 34, 18, 44, C_BLACK, 0 },
+    { -19, 44, -7, 46, C_RED, 0 },    {  7, 44, 19, 46, C_RED, 0 },
+};
+static const MRect m_b04[] = {          /* 亜人の王(キリン人系)・黄+紫+白。王冠、槍、魔法の玉 */
+    { -5,  0, -2, 14, C_YELLOW, 2 },  {  2,  0,  5, 14, C_YELLOW, 2 },
+    { -8, 12,  8, 30, C_PURPLE, 0 },  { -8, 12,  8, 14, C_WHITE, 0 },
+    { -11, 14, -8, 30, C_PURPLE, 0 }, {  8, 14, 11, 30, C_PURPLE, 0 },
+    { -2, 30,  2, 46, C_YELLOW, 1 },  { -2, 34,  0, 36, C_BROWN, 1 }, { 0, 40, 2, 42, C_BROWN, 1 },
+    { -4, 46,  5, 52, C_YELLOW, 1 },  {  2, 48,  4, 50, C_RED, 1 },
+    { -4, 52,  4, 54, C_WHITE, 1 },   { -4, 54, -3, 57, C_WHITE, 1 },
+    { -1, 54,  1, 58, C_WHITE, 1 },   {  3, 54,  4, 57, C_WHITE, 1 },
+    { 10,  4, 11, 54, C_BLACK, 0 },   {  9, 54, 12, 60, C_WHITE, 0 },
+    { -14, 26, -10, 30, C_CYAN, 0 },
+};
 #define MODEL(a) { a, sizeof(a) / sizeof(a[0]) }
 const Model models[] = {
     { 0, 0 }, MODEL(m_e01), MODEL(m_e02a), MODEL(m_e03), MODEL(m_e04), MODEL(m_e05),
     MODEL(m_b01), MODEL(m_treasure), MODEL(m_medkit), MODEL(m_boss1), MODEL(m_rock),
     MODEL(m_arrow), MODEL(m_magic), MODEL(m_crate), MODEL(m_boss2), MODEL(m_b02),
+    MODEL(m_b03), MODEL(m_b04),
 };
 const Model model_e02b = MODEL(m_e02b);
 
