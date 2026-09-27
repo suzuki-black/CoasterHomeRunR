@@ -123,6 +123,10 @@ static u8  spd_over;             /* 0 以外: トロッコの速度(m/秒 × 4)�
 static u8  cap_id, cap_time;     /* 字幕の番号と残りフレーム */
 static u8  warn_prev, warn_time; /* 警告の出始めと繰り返しで警告音を鳴らす */
 static i8  pitch_cur;            /* カメラのピッチ(坂に合わせて少しずつ追う) */
+#ifdef DEBUG_FPS
+static u16 fps_t0;               /* 計測用: 1 秒(60 ティック)の区切り */
+static u8  fps_n, fps_show;      /* その間の表示の切替回数と、表示する値 */
+#endif
 static const Stage *stage;
 u16 g_score;
 u16 g_perf_logic[4];
@@ -563,6 +567,15 @@ static void draw_hud(void)
         if (!--cap_time) cap_id = 0;
     }
 
+#ifdef DEBUG_FPS
+    /* 計測用: 左上に fps(直近 1 秒の表示の切替回数)と、直前のフレームのティック数 */
+    fps_n++;
+    if ((u16)(g_tick - fps_t0) >= 60) { fps_show = fps_n; fps_n = 0; fps_t0 = g_tick; }
+    text_draw(1, 8, "FPS", C_YELLOW, 1);
+    num_draw(15, 8, fps_show, 2, C_YELLOW);
+    text_draw(1, 14, "T", C_YELLOW, 1);
+    num_draw(7, 14, g_perf_ticks, 2, C_YELLOW);
+#endif
     if (!ctrl) { g_spr_attr[0] = 209; g_spr_attr[4] = 209; return; }
     set_sprite(0, (i16)aim_x - 16, (i16)aim_y - 16, 0, C_WHITE);
     if (hitmark) set_sprite(1, (i16)aim_x - 16, (i16)aim_y - 16, 4, C_YELLOW);

@@ -147,7 +147,15 @@ static void title(void)
         text_center(6, "TROLLEY", C_YELLOW, 2);
         text_center(18, "HOME RUN", C_ORANGE, 2);
         if (t & 32) text_center(34, "PUSH SPACE", C_WHITE, 1);
+#ifdef DEBUG_FPS
+        {   /* 計測用: CPU の状態(実機・WebMSX で R800 DRAM モードに入っているかの確認) */
+            u8 c = sys_cpu_status();
+            text_center(41, (c & 0x20) ? "CPU:Z80" : (c & 0x40) ? "CPU:R800 ROM" : "CPU:R800 DRAM",
+                        (c & 0x60) ? C_RED : C_CYAN, 1);
+        }
+#else
         text_center(41, "A:FIRE  B:TURN", C_CYAN, 1);
+#endif
         present();
         t++;
         in = input_raw();

@@ -1,7 +1,8 @@
 # ============================================================================
 #  TrolleyHomeRun — MSX turbo R 専用 3D レールシューター ビルド定義
 #
-#  make            ASCII8 メガロム build/TrolleyHomeRun.rom を生成
+#  make            ASCII8 メガロム build/TrolleyHomeRun.rom を生成(WebMSX 用に "… [ASCII8].rom" も)
+#  make fpsrom     計測用 ROM build/fps/TrolleyHomeRun_FPS [ASCII8].rom(fps 表示、タイトルに CPU の状態)
 #  make run        openMSX(開発用機種 TH_turboR_dev)で起動して目視
 #  make test       openMSX で起動〜ゲーム進行を判定(tools/test_game.tcl)
 #  make flow       自動で遊んで流れを判定(tools/test_flow.tcl、GOD=1 でライフを減らさない)
@@ -19,7 +20,7 @@ AS      = sdasz80
 PYTHON  = python3
 OPENMSX = openmsx
 
-BUILD   = build
+BUILD  ?= build
 BOOT    = src/boot
 ENG     = src/engine
 TOOLS   = tools
@@ -30,7 +31,9 @@ RUNDIR  ?= $(BUILD)/run
 TIMEOUT ?= 120
 MACHINE ?= TH_turboR_dev
 
-CFLAGS  = -mz80 --std-c11 -I$(ENG) --opt-code-speed --max-allocs-per-node 5000
+CFLAGS  = -mz80 --std-c11 -I$(ENG) --opt-code-speed --max-allocs-per-node 5000 $(EXTRA_CFLAGS)
+# WebMSX 用のコピーの名前(マッパーの種類をファイル名で指定する)
+ROMNAME ?= TrolleyHomeRun
 # コードは RAM 0x4000-0xBFFF、変数は 0xCC00-0xDFFF(仕様書 7.3)
 LDFLAGS = -mz80 --no-std-crt0 --code-loc 0x4008 --data-loc 0xCC00 -Wl-j -Wl-m -Wl-u
 
@@ -53,7 +56,7 @@ HDRS = $(wildcard $(ENG)/*.h)
 
 ROM = $(BUILD)/TrolleyHomeRun.rom
 
-.PHONY: all run test flow slotcheck perf pcprof machine clean
+.PHONY: all fpsrom run test flow slotcheck perf pcprof machine clean
 
 all: $(ROM)
 
@@ -96,6 +99,11 @@ $(BUILD)/boot.ihx: $(BUILD)/boot.rel
 $(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/stage1.ihx $(TOOLS)/mkrom.py
 	$(PYTHON) $(TOOLS)/mkrom.py $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/engine.noi $@ \
 	  --stage 6 $(BUILD)/stage1.ihx
+	cp $@ "$(BUILD)/$(ROMNAME) [ASCII8].rom"
+
+# 計測用 ROM(fps 表示、タイトルに CPU の状態)。オブジェクトが混ざらないよう build/fps に分けてビルドする
+fpsrom:
+	$(MAKE) BUILD=build/fps EXTRA_CFLAGS=-DDEBUG_FPS ROMNAME=TrolleyHomeRun_FPS
 
 machine:
 	cp $(TOOLS)/openmsx/TH_turboR_dev.xml $(HOME)/.openMSX/share/machines/

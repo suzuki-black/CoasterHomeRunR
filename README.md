@@ -49,6 +49,17 @@ make
 make run
 ```
 
+WebMSX で遊ぶときは、ターボR の機種を選び、`build/TrolleyHomeRun [ASCII8].rom` を読み込む
+（ファイル名の `[ASCII8]` で WebMSX にマッパーの種類を伝える。自動判定は誤ることがある）。
+
+```bash
+make fpsrom
+```
+
+計測用 ROM `build/fps/TrolleyHomeRun_FPS [ASCII8].rom` を作る。ゲーム中の左上に fps（直近 1 秒の表示の切替回数）と
+直前のフレームのティック数（1 ティック = 1/60 秒）、タイトルに CPU の状態（`CPU:R800 DRAM` / `R800 ROM` / `Z80`。
+DRAM モード以外は赤）を出す。WebMSX・実機での計測用。
+
 openMSX で起動して遊ぶ。
 
 ```bash

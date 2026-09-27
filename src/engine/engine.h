@@ -47,6 +47,7 @@ u8   input_raw(void);
 void psg_write(u8 reg, u8 val);
 void timer_reset(void);
 u16  timer_read(void);
+u8   sys_cpu_status(void);          /* S1990 レジスタ 6(bit5 = 0 で R800、bit6 = 0 で DRAM モード) */
 void sys_install_loader(void);
 void sys_page0_ram(void);           /* ページ0を自前の RAM に(0x0038 に割り込み処理) */
 void rom_load(u8 bank, void *dst);   /* ROM の bank, bank+1 から 3KB を dst へ(ページ2・3 のみ) */
