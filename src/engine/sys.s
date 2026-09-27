@@ -317,6 +317,9 @@ _timer_read::
 ENASLT	= 0x0024
 RL_ADDR	= 0xE000		; 常駐ローダー(0xE0F0 からはスロット ID など)
 STAGE_SIZE = 0x0C00		; 1 回に写す大きさ(ステージデータの読み込み先 0xB400-0xBFFF)
+RL_LEN	= 0xE0F4		; 常駐ローダーが写す大きさ(rom_load が書く)
+P0D_BANK = 1			; ページ0に置く表(エリア _PAGE0)の ROM バンク
+P0D_TMP	= 0xB400		; その一時置き場(ステージデータ〜描画バッファ 0xB400-0xCBFF、起動時は空き)
 
 ; void sys_install_loader(void) — 常駐ローダーをページ3へ写す(起動時に 1 回)
 _sys_install_loader::
@@ -328,7 +331,25 @@ _sys_install_loader::
 
 ; void rom_load(u8 bank, void *dst)   A = 最初のバンク(8KB 単位。bank と bank+1 を 0x4000-0x7FFF に出す)、DE = 写し先
 _rom_load::
+	ld	hl, #STAGE_SIZE
+	ld	(RL_LEN), hl
 	jp	RL_ADDR
+
+; void sys_page0_data(void) — ページ0の表(sin 表・逆数表・フォント・敵の絵など、エリア _PAGE0)を
+;   ROM のバンク P0D_BANK から読み込む。sys_page0_ram の後、表を使う前に 1 回。
+;   ページ0へは直接写せない(読み込み中はページ0が BIOS)ので、ページ2の空きを経由する
+	.globl	s__PAGE0, l__PAGE0
+_sys_page0_data::
+	ld	hl, #l__PAGE0
+	ld	(RL_LEN), hl
+	ld	a, #P0D_BANK
+	ld	de, #P0D_TMP
+	call	RL_ADDR
+	ld	hl, #P0D_TMP
+	ld	de, #s__PAGE0
+	ld	bc, #l__PAGE0
+	ldir
+	ret
 
 ; 常駐ローダー本体(RL_ADDR で動く。位置に依存しない: 相対・内部ジャンプなし、固定番地だけ使う)
 rl_blob:
@@ -345,7 +366,7 @@ rl_blob:
 	ld	(0x6800), a		; 0x6000-0x7FFF = bank + 1
 	pop	de
 	ld	hl, #0x4000
-	ld	bc, #STAGE_SIZE
+	ld	bc, (RL_LEN)
 	ldir
 	ld	a, (V_RAM)
 	ld	h, #0x40

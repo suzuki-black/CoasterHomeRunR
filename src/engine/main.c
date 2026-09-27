@@ -209,12 +209,13 @@ static void play(void)
 void main(void)
 {
     g_buf_hi = BUF_A_HI;
-#ifdef BENCH
-    bench_run();
-#endif
     sys_install_loader();
     sys_install_isr();
     sys_page0_ram();
+    sys_page0_data();                /* 表(sin・逆数・フォント・敵の絵など)をページ0へ */
+#ifdef BENCH
+    bench_run();
+#endif
     sound_init();
     vdp_init();
     for (;;) {

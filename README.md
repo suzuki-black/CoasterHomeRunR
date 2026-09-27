@@ -94,6 +94,7 @@ src/engine/           RAM 実行部(0x4000-0xBFFF)
   render.c env.c      カメラ・ニアクリップ、トンネル
   rail.c              レール表
   game.c              プレイヤー・敵・当たり判定・スクリプト
+  models.c            敵モデル(gen_data の表と同じくページ0の RAM 0x2800- に置く。ROM のバンク 1 から起動時に読み込む)
   trolley.c hud.c     トロッコの縁、文字・ゲージ
   sound.c             効果音ドライバ
 src/stage/            ステージデータ(ROM バンク 6 / 8 / 10。RAM 0xB400 へ読み込む)

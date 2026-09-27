@@ -6,6 +6,8 @@
 /* 敵モデル = カメラ正対の矩形の集まり(仕様書 7.4)。単位 1/16m、y は足元から上 */
 typedef struct { i8 x0, y0, x1, y1; u8 color; u8 part; } MRect;   /* part: 0=胴 1=頭 2=脚 */
 typedef struct { const MRect *r; u8 n; } Model;
+extern const Model models[];     /* 敵の種類ごと(models.c、ページ0) */
+extern const Model model_e02b;   /* コウモリ人の翼を下げた絵 */
 
 enum { ET_NONE, ET_E01, ET_E02, ET_E03, ET_E04, ET_E05, ET_B01, ET_TREASURE, ET_MEDKIT,
        ET_BOSS1,     /* 洞窟の主(ステージ 1 の大ボス) */

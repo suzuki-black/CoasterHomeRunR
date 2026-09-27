@@ -35,11 +35,13 @@ CFLAGS  = -mz80 --std-c11 -I$(ENG) --opt-code-speed --max-allocs-per-node 5000 $
 # WebMSX 用のコピーの名前(マッパーの種類をファイル名で指定する)
 ROMNAME ?= TrolleyHomeRun
 # コードは RAM 0x4000-0xBFFF、変数は 0xCC00-0xDFFF(仕様書 7.3)
-LDFLAGS = -mz80 --no-std-crt0 --code-loc 0x4008 --data-loc 0xCC00 -Wl-j -Wl-m -Wl-u
+# 定数の表(gen_data.c・models.c)はエリア _PAGE0 としてページ0の RAM 0x2800- に置く(ROM のバンク 1 から起動時に読み込む)
+LDFLAGS = -mz80 --no-std-crt0 --code-loc 0x4008 --data-loc 0xCC00 -Wl-b_PAGE0=0x2800 -Wl-j -Wl-m -Wl-u
+P0FLAGS = --constseg PAGE0
 
 ASM_SRCS = $(ENG)/crt0.s $(ENG)/sys.s $(ENG)/vdp.s $(ENG)/gfx.s $(ENG)/math.s $(ENG)/raster.s $(ENG)/geom.s
 C_SRCS   = $(ENG)/main.c $(ENG)/game.c $(ENG)/render.c $(ENG)/rail.c $(ENG)/env.c \
-           $(ENG)/hud.c $(ENG)/sound.c $(ENG)/trolley.c
+           $(ENG)/hud.c $(ENG)/sound.c $(ENG)/trolley.c $(ENG)/models.c
 
 # crt0 は必ず先頭にリンクする
 RELS = $(BUILD)/crt0.rel \
@@ -67,7 +69,10 @@ $(BUILD)/gen_data.c: $(TOOLS)/gen_data.py | $(BUILD)
 	$(PYTHON) $< $@
 
 $(BUILD)/gen_data.rel: $(BUILD)/gen_data.c $(HDRS) Makefile
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $(P0FLAGS) -c -o $@ $<
+
+$(BUILD)/models.rel: $(ENG)/models.c $(HDRS) Makefile | $(BUILD)
+	$(CC) $(CFLAGS) $(P0FLAGS) -c -o $@ $<
 
 # ヘッダを変えたら全 C を作り直す(古い構造体レイアウトの混在を防ぐ)
 $(BUILD)/%.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)

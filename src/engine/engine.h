@@ -51,6 +51,7 @@ u8   sys_cpu_status(void);          /* S1990 レジスタ 6(bit5 = 0 で R800、
 void sys_install_loader(void);
 void sys_page0_ram(void);           /* ページ0を自前の RAM に(0x0038 に割り込み処理) */
 void rom_load(u8 bank, void *dst);   /* ROM の bank, bank+1 から 3KB を dst へ(ページ2・3 のみ) */
+void sys_page0_data(void);          /* ページ0の表(エリア _PAGE0 = 0x2800-)を ROM のバンク 1 から読み込む */
 
 /* ---- vdp.s ---- */
 void vdp_wreg(u8 reg, u8 val);
@@ -77,7 +78,7 @@ i16 fmul(i16 a, i16 b);
 i16 muldiv(i16 a, i16 b, i16 c);
 u32 div_slope(u16 n, u16 d);
 
-/* ---- gen_data.c(tools/gen_data.py が生成) ---- */
+/* ---- gen_data.c(tools/gen_data.py が生成)。ページ0の RAM(0x2800-)に置く(sys_page0_data) ---- */
 extern const i16 sin_tab[320];      /* 8.8。cos は sin_tab[a + 64] */
 #define SIN(a) (sin_tab[(u8)(a)])
 #define COS(a) (sin_tab[(u8)(a) + 64])
