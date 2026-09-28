@@ -22,6 +22,15 @@
 
 	.globl	_sound_tick
 	.globl	_g_spr_attr
+	.globl	_g_seg2
+
+; ページ2(0x8000-0xBFFF)のマッパーのセグメント(仕様書 7.3 のオーバーレイ)
+SEG_GAME = 1			; ゲームモジュール(ステージごとに読み込む。BGM のデータもここ)
+SEG_ENV	= 5			; 地形モジュール(起動時に 1 回読み込む)
+MOD_ADDR = 0x8000		; モジュールの先頭(0x8000: 入口の jp、0x8003: ゲームは Stage へのポインタ / 地形は 2 つ目の jp)
+MOD_BSS	= 0xBC00		; モジュールの変数(読み込んだら 0 で埋める)。〜0xBFFF
+ENVM_BUILD = MOD_ADDR		; 地形モジュールの入口(jp envm_build / jp envm_draw)
+ENVM_DRAW = MOD_ADDR + 3
 
 H_TIMI	= 0xFD9F
 ; ページ3 の固定番地(常駐ローダーからも使う)
@@ -122,7 +131,44 @@ htimi:
 	xor	a, a
 	ld	(_g_flip_req), a
 1$:
-	jp	_sound_tick
+	; サウンドはゲームモジュールの BGM を読むので、ページ2をゲームのセグメントにしてから呼び、元に戻す
+	ld	a, #SEG_GAME
+	out	(0xFE), a
+	call	_sound_tick
+	ld	a, (_g_seg2)
+	out	(0xFE), a
+	ret
+
+; ---------------------------------------------------------------------------
+; void sys_seg2(u8 seg) — ページ2のセグメントを切り替える(割り込みが戻せるよう g_seg2 に先に書く)
+; ---------------------------------------------------------------------------
+_sys_seg2::
+	ld	(_g_seg2), a
+	out	(0xFE), a
+	ret
+
+; ---------------------------------------------------------------------------
+; void env_build(void) / void env_draw(u16 s, u16 look) — 地形モジュールを呼ぶ(ページ2を地形のセグメントにして呼び、戻す)
+;   引数はレジスタ(HL, DE)だけで渡すこと。スタックで渡す引数があると、ここで積む戻り番地の分ずれる
+; ---------------------------------------------------------------------------
+_env_build::
+	ld	a, #SEG_ENV
+	ld	(_g_seg2), a
+	out	(0xFE), a
+	call	ENVM_BUILD
+	jr	env_back
+_env_draw::
+	push	af
+	ld	a, #SEG_ENV
+	ld	(_g_seg2), a
+	out	(0xFE), a
+	pop	af
+	call	ENVM_DRAW
+env_back:
+	ld	a, #SEG_GAME
+	ld	(_g_seg2), a
+	out	(0xFE), a
+	ret
 
 ; ---------------------------------------------------------------------------
 ; void sys_page0_ram(void) — ページ0(0x0000-0x3FFF)を自前の RAM にする(起動時に 1 回)
@@ -320,10 +366,9 @@ _timer_read::
 ; ---------------------------------------------------------------------------
 ENASLT	= 0x0024
 RL_ADDR	= 0xE000		; 常駐ローダー(0xE0F0 からはスロット ID など)
-STAGE_SIZE = 0x0C00		; 1 回に写す大きさ(ステージデータの読み込み先 0xB400-0xBFFF)
 RL_LEN	= 0xE0F4		; 常駐ローダーが写す大きさ(rom_load が書く)
 P0D_BANK = 1			; ページ0に置く表(エリア _PAGE0)の ROM バンク
-P0D_TMP	= 0xB400		; その一時置き場(ステージデータ〜描画バッファ 0xB400-0xCBFF、起動時は空き)
+P0D_TMP	= 0xB400		; その一時置き場(0xB400-0xCBFF。起動時はモジュールを読み込む前のページ2と描画バッファなので空き)
 
 ; void sys_install_loader(void) — 常駐ローダーをページ3へ写す(起動時に 1 回)
 _sys_install_loader::
@@ -333,11 +378,19 @@ _sys_install_loader::
 	ldir
 	ret
 
-; void rom_load(u8 bank, void *dst)   A = 最初のバンク(8KB 単位。bank と bank+1 を 0x4000-0x7FFF に出す)、DE = 写し先
-_rom_load::
-	ld	hl, #STAGE_SIZE
+; void mod_load(u8 bank)   A = 最初のバンク。bank と bank+1(16KB)を、いまページ2に出ているセグメントの 0x8000- へ写し、
+;   モジュールの変数(0xBC00-0xBFFF)を 0 で埋める
+_mod_load::
+	ld	hl, #0x4000
 	ld	(RL_LEN), hl
-	jp	RL_ADDR
+	ld	de, #MOD_ADDR
+	call	RL_ADDR
+	ld	hl, #MOD_BSS
+	ld	de, #MOD_BSS + 1
+	ld	bc, #0x03FF
+	ld	(hl), #0
+	ldir
+	ret
 
 ; void bios_font(u8 *dst) — BIOS のフォント(CGTABL の指す 2KB。ひらがなを含む)を dst(ページ2・3)へ写す。
 ;   エンディングの SCREEN 1 で使う。写す間だけページ0を BIOS に戻す

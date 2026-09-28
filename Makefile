@@ -14,6 +14,8 @@
 
 # 失敗したレシピの出力を残さない(古い生成物で計測してしまうのを防ぐ)
 .DELETE_ON_ERROR:
+# 途中の .rel などを消さない(モジュールのリンクで何度も使う)
+.SECONDARY:
 
 CC      = sdcc
 AS      = sdasz80
@@ -34,15 +36,18 @@ MACHINE ?= TH_turboR_dev
 CFLAGS  = -mz80 --std-c11 -I$(ENG) --opt-code-speed --max-allocs-per-node 5000 $(EXTRA_CFLAGS)
 # WebMSX 用のコピーの名前(マッパーの種類をファイル名で指定する)
 ROMNAME ?= TrolleyHomeRun
-# コードは RAM 0x4000-0xBFFF、変数は 0xCC00-0xDFFF(仕様書 7.3)
+# 常駐部のコードは RAM ページ1 0x4000-0x7FFF、変数は 0xCC00-0xDFFF(仕様書 7.3)。
+# ページ2(0x8000-0xBFFF)はモジュール(オーバーレイ): 地形(env.c)とステージごとのゲーム(game.c・models.c・ステージのデータ)
 # 定数の表(gen_data.c・models.c)とタイトル・隠しコンフィグ(menu.c)はエリア _PAGE0 としてページ0の RAM 0x2C80- に置く
 # (ROM のバンク 1 から起動時に読み込む)
 LDFLAGS = -mz80 --no-std-crt0 --code-loc 0x4008 --data-loc 0xCC00 -Wl-b_PAGE0=0x2C80 -Wl-j -Wl-m -Wl-u
 P0FLAGS = --constseg PAGE0
 
 ASM_SRCS = $(ENG)/crt0.s $(ENG)/sys.s $(ENG)/vdp.s $(ENG)/gfx.s $(ENG)/math.s $(ENG)/raster.s $(ENG)/geom.s
-C_SRCS   = $(ENG)/main.c $(ENG)/game.c $(ENG)/render.c $(ENG)/rail.c $(ENG)/env.c \
-           $(ENG)/hud.c $(ENG)/sound.c $(ENG)/trolley.c $(ENG)/models.c $(ENG)/menu.c
+C_SRCS   = $(ENG)/main.c $(ENG)/render.c $(ENG)/rail.c $(ENG)/shared.c \
+           $(ENG)/hud.c $(ENG)/sound.c $(ENG)/trolley.c $(ENG)/menu.c
+# モジュールのリンク: 0x8000 に先頭(modhead)、変数は 0xBC00-0xBFFF。常駐部のシンボルは ressyms(engine.noi から生成)で渡す
+MODFLAGS = -mz80 --no-std-crt0 --data-loc 0xBC00 -Wl-j -Wl-m
 
 # crt0 は必ず先頭にリンクする
 RELS = $(BUILD)/crt0.rel \
@@ -74,9 +79,6 @@ $(BUILD)/gen_data.c: $(TOOLS)/gen_data.py | $(BUILD)
 $(BUILD)/gen_data.rel: $(BUILD)/gen_data.c $(HDRS) Makefile
 	$(CC) $(CFLAGS) $(P0FLAGS) -c -o $@ $<
 
-$(BUILD)/models.rel: $(ENG)/models.c $(HDRS) Makefile | $(BUILD)
-	$(CC) $(CFLAGS) $(P0FLAGS) -c -o $@ $<
-
 $(BUILD)/menu.rel: $(ENG)/menu.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) $(P0FLAGS) --codeseg PAGE0 -c -o $@ $<
 
@@ -94,10 +96,21 @@ $(BUILD)/bench_s.rel: $(ENG)/bench.s Makefile | $(BUILD)
 $(BUILD)/engine.ihx: $(RELS)
 	$(CC) $(LDFLAGS) -o $@ $(RELS)
 
-# ステージ: 読み込み先(0xB400)に合わせて単独でリンクし、ROM のバンクに置く(tools/mkrom.py --stage)
+# 常駐部のシンボル(モジュールのリンク用)
+$(BUILD)/ressyms.s: $(BUILD)/engine.ihx $(TOOLS)/ressyms.py
+	$(PYTHON) $(TOOLS)/ressyms.py $(BUILD)/engine.noi $@
+
+$(BUILD)/ressyms.rel: $(BUILD)/ressyms.s
+	$(AS) -o $@ $<
+
+# 地形モジュール(マッパーのセグメント 5 に置く)
+$(BUILD)/envmod.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env.rel $(BUILD)/ressyms.rel
+	$(CC) $(MODFLAGS) --code-loc 0x8006 -o $@ $^
+
+# ステージごとのゲームモジュール(ページ2 = セグメント 1 に、ステージの始めに読み込む)
 STG     = src/stage
-$(BUILD)/stagehead.rel: $(STG)/stagehead.s Makefile | $(BUILD)
-	$(AS) -g -o $@ $<
+$(BUILD)/game%.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models.rel $(BUILD)/stage%.rel $(BUILD)/ressyms.rel
+	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
 
 $(BUILD)/stage1.rel: $(STG)/stage1_cave.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -114,21 +127,18 @@ $(BUILD)/stage4.rel: $(STG)/stage4_town.c $(HDRS) Makefile | $(BUILD)
 $(BUILD)/stage5.rel: $(STG)/stage5_home.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-$(BUILD)/stage%.ihx: $(BUILD)/stagehead.rel $(BUILD)/stage%.rel
-	$(CC) -mz80 --no-std-crt0 --code-loc 0xB402 --data-loc 0xC000 -o $@ $^
-
 $(BUILD)/boot.rel: $(BOOT)/boot.s Makefile | $(BUILD)
 	$(AS) -g -o $@ $<
 
 $(BUILD)/boot.ihx: $(BUILD)/boot.rel
 	$(CC) -mz80 --no-std-crt0 --code-loc 0x4000 --data-loc 0xC000 -o $@ $<
 
-STAGES = $(BUILD)/stage1.ihx $(BUILD)/stage2.ihx $(BUILD)/stage3.ihx $(BUILD)/stage4.ihx $(BUILD)/stage5.ihx
+GAMES = $(foreach n,1 2 3 4 5,$(BUILD)/game$(n).ihx)
 
-$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(STAGES) $(TOOLS)/mkrom.py
+$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/envmod.ihx $(GAMES) $(TOOLS)/mkrom.py
 	$(PYTHON) $(TOOLS)/mkrom.py $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/engine.noi $@ \
-	  --stage 6 $(BUILD)/stage1.ihx --stage 8 $(BUILD)/stage2.ihx --stage 10 $(BUILD)/stage3.ihx \
-	  --stage 12 $(BUILD)/stage4.ihx --stage 14 $(BUILD)/stage5.ihx
+	  $(BUILD)/envmod.ihx $(BUILD)/envmod.noi \
+	  $(foreach n,1 2 3 4 5,$(BUILD)/game$(n).ihx $(BUILD)/game$(n).noi)
 	cp $@ "$(BUILD)/$(ROMNAME) [ASCII8].rom"
 
 # 計測用 ROM(fps 表示、タイトルに CPU の状態)。オブジェクトが混ざらないよう build/fps に分けてビルドする

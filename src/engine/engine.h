@@ -52,7 +52,8 @@ u16  timer_read(void);
 u8   sys_cpu_status(void);          /* S1990 レジスタ 6(bit5 = 0 で R800、bit6 = 0 で DRAM モード) */
 void sys_install_loader(void);
 void sys_page0_ram(void);           /* ページ0を自前の RAM に(0x0038 に割り込み処理) */
-void rom_load(u8 bank, void *dst);   /* ROM の bank, bank+1 から 3KB を dst へ(ページ2・3 のみ) */
+void mod_load(u8 bank);             /* ROM の bank, bank+1(16KB)をページ2(いまのセグメント)の 0x8000- へ写す */
+void sys_seg2(u8 seg);              /* ページ2のマッパーのセグメントを切り替える */
 void sys_page0_data(void);          /* ページ0の表とコード(エリア _PAGE0 = 0x2C80-)を ROM のバンク 1 から読み込む */
 void bios_font(u8 *dst);            /* BIOS のフォント 2KB を dst へ(ページ2・3) */
 

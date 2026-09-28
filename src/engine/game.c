@@ -82,30 +82,16 @@ typedef struct {
 static Enemy en[MAX_EN];
 static u8 draw_order[MAX_EN];
 
-/* 当たり判定用: 直前に描いた矩形(ブロック座標) */
-typedef struct { u8 x0, y0, x1, y1; i16 z; u8 id; } HitRect;
-#define MAX_HIT 48
-HitRect hits[MAX_HIT];            /* geom.s の draw_model が足す */
-u8 n_hits;
-
-u16 cam_s;
 static u8  cam_sub;
-u16 cam_v;
 static u8  hold;                 /* 1 = トロッコ停止(発進前) */
 static u16 look;                 /* 視線の相対ヨー(0 前 / 0x8000 後ろ) */
-u8  facing;               /* 0 前 / 1 後ろ */
 static u8  turning;              /* 振り向きの残りフレーム */
-u16 aim_x, aim_y;                /* 照準(ピクセル)。テストの自動操作が書き換える */
 static u8  aim_hold;
 static u8  in_prev;
 static u8  fire_cd;
 static u8  hitmark;
-u8  life;
-u8  attack_dir;
-u8  boss_alive;
 static u8  blink;
 static u8  shake;                /* 被弾でトロッコを揺らす残りフレーム */
-u16 sc_tick;
 static const Event *sc_ev;
 static u8  sc_end;
 static u8  ctrl;                 /* 1 = 操作できる(オープニングの演出中は 0) */
@@ -116,10 +102,7 @@ static i8  pitch_cur;            /* カメラのピッチ(坂に合わせて少�
 static u16 fps_t0;               /* 計測用: 1 秒(60 ティック)の区切り */
 static u8  fps_n, fps_show;      /* その間の表示の切替回数と、表示する値 */
 static const Stage *stage;
-u8  route;                       /* 分岐で選ばれている側(0 左 / 1 右) */
 static u8  branch_open;          /* 1 = まだ選べる(分岐点の手前) */
-u16 g_score;
-u16 g_perf_logic[4];
 
 /* ---------------------------------------------------------------------------
  * 敵
@@ -815,7 +798,7 @@ static void render(void)
         }
     }
     render_set_camera(p.x, p.y, p.z, yaw + look, (i8)fmul(pitch_cur, COS((u8)(look >> 8))));
-    env_draw(cam_s, (u8)(look >> 8));
+    env_draw(cam_s, look >> 8);
     g_perf_env = timer_read() - t0;
     draw_enemies();
     /* トロッコの縁。振り向き中は横へ滑らせて一度画面外へ出し、反対側から戻す */
@@ -848,7 +831,18 @@ u8 game_run(const Stage *st, u8 first)
         rail_add(st->tail);
         branch_open = !g_cfg.route;
     }
-    env_build(st->seed, st->zones);
+    {   /* 地形の区間と乱数の種を常駐部へ写してから、地形モジュールで作る(モジュールからはこのステージのデータが見えない) */
+        const u8 *z = st->zones;
+        u8 i = 1;
+        g_env_zones[0] = *z++;
+        do {
+            g_env_zones[i++] = z[0];
+            g_env_zones[i++] = z[1];
+            z += 2;
+        } while (z[-2] != 0xFF && i < ENV_ZONES_MAX - 1);
+        g_env_seed = st->seed;
+    }
+    env_build();
     set_stage_palette(st->palette);
     for (i = 0; i < MAX_EN; i++) en[i].type = ET_NONE;
     n_hits = 0;

@@ -63,11 +63,12 @@ void hex_fast(u8 r);
 i16 qmul(i16 v, u16 q);
 /* geom.s: リングの頂点(断面は g_rm_prof) */
 extern const i16 *g_rm_prof;
-V3  ring_v[NR + 1][6];
-i16 ring_s[NR + 1][12];          /* 投影済みの画面座標 (x, y) × 6 */
-i16 ring_c[NR + 1][3];           /* 中心の投影 (x, y) と q = 2^23/z(手前でなければ q = 0) */
-u8  ring_front[NR + 1];          /* bit k = 頂点 k が z >= NEAR_Z */
-u8  ring_ok[NR + 1];
+/* リングの頂点・投影(実体は常駐部の shared.c。geom.s の ring_make が書く) */
+extern V3  ring_v[NR + 1][6];
+extern i16 ring_s[NR + 1][12];   /* 投影済みの画面座標 (x, y) × 6 */
+extern i16 ring_c[NR + 1][3];    /* 中心の投影 (x, y) と q = 2^23/z(手前でなければ q = 0) */
+extern u8  ring_front[NR + 1];   /* bit k = 頂点 k が z >= NEAR_Z */
+extern u8  ring_ok[NR + 1];
 void ring_make(u8 idx, const RailPt *p);
 static u16 ring_m0;
 static u8  ring_no[NR + 1];      /* リングの通し番号(断面・色・飾りの表を引く) */
@@ -209,12 +210,13 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
     KIND[r] = kind;
 }
 
-/* zones: 先頭 = 屋外のレールの色、以降 (この番号のリングまで, 地形の種類) の組。0xFF まで */
-void env_build(u16 seed, const u8 *zones)
+/* g_env_zones: 先頭 = 屋外のレールの色、以降 (この番号のリングまで, 地形の種類) の組。0xFF まで */
+void envm_build(void)
 {
     u8 r, n, kind;
     i16 w = 256, h = 256;
-    rng = seed;
+    const u8 *zones = g_env_zones;
+    rng = g_env_seed;
     rail_col = *zones++;
     hs_st[0] = hs_st[1] = 0;
     hs_cnt[0] = hs_cnt[1] = 0;
@@ -535,8 +537,9 @@ static void sky_draw(u8 far)
     buf_fill_rows(far == K_FOREST ? C_DIRT0 : C_ROCK1, BUF + (u16)row * BUF_W);
 }
 
-void env_draw(u16 s, u8 look)
+void envm_draw(u16 s, u16 look16)
 {
+    u8 look = (u8)look16;
     /* look: 視線の相対ヨー(0 = 前、128 = 後ろ) */
     u8 fwd = !(look > 80 && look < 176);
     u8 back = (look > 48 && look < 208);

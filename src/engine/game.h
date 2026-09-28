@@ -85,17 +85,38 @@ typedef struct {
     u8  gentle;
 } Stage;
 
-/* ステージデータの読み込み先(ROM バンクから写す。先頭 2 バイトが Stage へのポインタ) */
-#define STAGE_BUF    0xB400
-#define STAGE1_BANK  6
-#define STAGE_COUNT  5        /* バンク 6, 8, 10, 12, 14 */
+/* モジュール(仕様書 7.3 のオーバーレイ)。ROM の 2 バンク(16KB)ずつ
+ *   地形モジュール: バンク 4〜5 → マッパーのセグメント 5(起動時に 1 回)
+ *   ゲームモジュール: ステージ n(1〜)はバンク 4 + 2n〜 → ページ2(セグメント 1)。ステージの始めに読み込む。
+ *     0x8000 = jp game_run、0x8003 = そのステージの Stage へのポインタ */
+#define ENV_BANK     4
+#define GAME_BANK(n) (4 + 2 * (n))
+#define STAGE_COUNT  5
+#define SEG_GAME     1
+#define SEG_ENV      5
+#define MOD_STAGE    (*(const Stage * const *)0x8003)
+typedef u8 (*GameRunFn)(const Stage *st, u8 first);
+#define MOD_GAME_RUN ((GameRunFn)0x8000)
 
-/* ステージを 1 つ遊ぶ。first = 1 ならライフとスコアを初期化する。
+/* ステージを 1 つ遊ぶ(ゲームモジュールの中)。first = 1 ならライフとスコアを初期化する。
  * 戻り値 0 = ゲームオーバー、1 = クリア */
 u8 game_run(const Stage *st, u8 first);
 extern u16 g_score;          /* スコア / 10 */
 extern u8  life;
 extern u8  g_stage;
+
+/* ゲームの状態のうち、常駐部(描画・テスト・メイン)からも見るもの。実体は shared.c(常駐) */
+typedef struct { u8 x0, y0, x1, y1; i16 z; u8 id; } HitRect;   /* 当たり判定: 直前に描いた矩形(ブロック座標) */
+#define MAX_HIT 48
+extern HitRect hits[MAX_HIT];     /* geom.s の draw_model が足す */
+extern u8  n_hits;
+extern u16 cam_s, cam_v;          /* カメラのレール位置(1/64m)と速さ */
+extern u8  facing;                /* 0 前 / 1 後ろ */
+extern u16 aim_x, aim_y;          /* 照準(ピクセル)。テストの自動操作が書き換える */
+extern u8  attack_dir, boss_alive;
+extern u16 sc_tick;               /* スクリプトの時刻 */
+extern u8  route;                 /* 分岐で選ばれている側(0 左 / 1 右) */
+extern u16 g_perf_logic[4];
 
 /* 隠しコンフィグ(menu.c。タイトルでコナミコマンド)。並びは menu.c の項目と同じ */
 typedef struct {

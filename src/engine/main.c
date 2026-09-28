@@ -179,11 +179,12 @@ static void ending_run(const Stage *st)
 void bench_run(void);
 #endif
 
-/* ステージデータを ROM バンクから読み込む(仕様書 7.3) */
-static const Stage *stage_load(u8 bank)
+/* ステージ n(1〜)のゲームモジュールを ROM から読み込み、その Stage を返す(仕様書 7.3 のオーバーレイ) */
+static const Stage *stage_load(u8 n)
 {
-    rom_load(bank, (void *)STAGE_BUF);
-    return *(const Stage * const *)STAGE_BUF;
+    sys_seg2(SEG_GAME);
+    mod_load(GAME_BANK(n));
+    return MOD_STAGE;
 }
 
 /* ステージの始めに名前を出す(約 1.5 秒) */
@@ -207,10 +208,10 @@ static void play(void)
     u8 n, n0 = g_cfg.stage - 1;         /* 隠しコンフィグのステージセレクト */
     const Stage *st = 0;
     for (n = n0; n < STAGE_COUNT; n++) {
-        st = stage_load(STAGE1_BANK + n * 2);
+        st = stage_load(n + 1);
         g_stage = n + 1;
         stage_card(st);
-        if (!game_run(st, n == n0)) return;
+        if (!MOD_GAME_RUN(st, n == n0)) return;
     }
     g_score += (u16)life * 100;          /* 残りライフ × 1000 点(仕様書 5.2) */
     g_scene = 3;
@@ -225,6 +226,9 @@ void main(void)
     sys_page0_ram();
     sys_page0_data();                /* 表(sin・逆数・フォント・敵の絵など)とタイトル・コンフィグをページ0へ */
     cfg_defaults();
+    sys_seg2(SEG_ENV);               /* 地形モジュールをセグメント 5 へ(以後ページ2はふだんゲームのセグメント) */
+    mod_load(ENV_BANK);
+    sys_seg2(SEG_GAME);
 #ifdef BENCH
     bench_run();
 #endif

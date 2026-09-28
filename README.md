@@ -94,7 +94,7 @@ make flow RUNDIR=/path/to/scratch GOD=1
 
 ```
 src/boot/boot.s       ROM bank0: 起動・スロット検出・CPU 切替・ローダー
-src/engine/           RAM 実行部(0x4000-0xBFFF)
+src/engine/           エンジン。常駐部(RAM 0x4000-0x7FFF)とモジュール(ページ2 0x8000-: 地形 = env.c、ステージごとのゲーム = game.c・models.c・ステージのデータ)
   crt0.s              エンジンの入口
   sys.s               H.TIMI 割り込み・入力・PSG・タイマ
   vdp.s               SCREEN 3 の転送(パック変換つき)
@@ -102,7 +102,9 @@ src/engine/           RAM 実行部(0x4000-0xBFFF)
   gfx.s math.s        バッファ塗り・矩形、固定小数点演算(MULUW)
   render.c env.c      カメラ・ニアクリップ、トンネル
   rail.c              レール表
-  game.c              プレイヤー・敵・当たり判定・スクリプト
+  game.c              プレイヤー・敵・当たり判定・スクリプト(ゲームモジュール。敵の動きは表 edef)
+  shared.c            常駐部に置くゲームの状態(asm・テストが番地で触るもの)
+  modhead_*.s         モジュールの先頭(0x8000 の入口)
   menu.c              タイトルと隠しコンフィグ(ページ0の RAM に置く)
   models.c            敵モデル(gen_data の表と同じくページ0の RAM 0x2C80- に置く。ROM のバンク 1 から起動時に読み込む)
   trolley.c hud.c     トロッコの縁、文字・ゲージ
@@ -115,6 +117,7 @@ src/stage/            ステージデータ(ROM バンク 6 / 8 / 10。RAM 0xB40
   stage5_home.c       ステージ 5: 自宅前とエンディングの文・BGM
 tools/gen_data.py     sin 表・フォント・スプライト・逆数表・トロッコの絵
 tools/mkrom.py        ROM の組み立て(配置の検査つき)
+tools/ressyms.py      常駐部のシンボルをモジュールのリンク用の表にする
 tools/test_game.tcl   openMSX の自動テスト
 tools/openmsx/        開発用機種定義
 ```

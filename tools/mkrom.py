@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """ASCII8 メガロム(128KB = 8KB × 16 バンク)を組み立てる。配置は src/boot/boot.s の冒頭を参照。
 
-  mkrom.py boot.ihx engine.ihx engine.noi out.rom [--stage バンク stage.ihx ...]
+  mkrom.py boot.ihx engine.ihx engine.noi out.rom env.ihx env.noi game1.ihx game1.noi ... game5.ihx game5.noi
 
 - bank0     : ローダー(0x4000-0x5FFF)
 - bank1     : ページ0に置く表とコード(エリア _PAGE0 = RAM 0x2C80-0x3FFF。起動時に sys_page0_data が読み込む)
-- bank2-5   : エンジン(RAM 0x4000-0xBFFF へ写される)
-- bank6-15  : ステージデータ(--stage。1 ステージ 2 バンク。0xB400-0xBFFF の 3KB を常駐ローダーが RAM へ写す)
+- bank2-3   : エンジンの常駐部(RAM ページ1 0x4000-0x7FFF へローダーが写す)
+- bank4-5   : 地形モジュール(0x8000 にリンク。起動時にマッパーのセグメント 5 へ読み込む)
+- bank6-15  : ステージ 1〜5 のゲームモジュール(0x8000 にリンク。ステージの始めにページ2 = セグメント 1 へ読み込む)
 
-変数(DATA/BSS)が 0xCC00-0xDFFF に収まっているかも検査する。
+モジュール(オーバーレイ、仕様書 7.3)はどれも 0x8000-0xBBFF にコードと定数、0xBC00-0xBFFF に変数(読み込み後に 0 で埋める。
+初期値つきの変数は置けない)。常駐部の変数(DATA/BSS)が 0xCC00-0xDDFF に収まっているかも検査する。
 """
 import re
 import sys
@@ -16,7 +18,10 @@ import sys
 BANK = 0x2000
 ROM_BANKS = 16
 DATA_BASE, DATA_LIMIT = 0xCC00, 0xDE00   # 0xDE00-0xDFFF は行の左右端(raster.s span_a/span_b)
-CODE_LIMIT = 0xB400   # 0xB400-0xBFFF はステージデータの読み込み先(塗りの展開ブロックと辺キャッシュはページ0)
+CODE_LIMIT = 0x8000   # 常駐部はページ1だけ(ページ2はモジュール)
+MOD_BASE, MOD_BSS, MOD_END = 0x8000, 0xBC00, 0xC000
+ENV_BANK = 4
+def GAME_BANK(n): return 4 + 2 * n
 P0D_BASE, P0D_LIMIT = 0x2C80, 0x4000   # ページ0の表とコード(0x1A00-0x2C7F は地形の表。読み込みは 0xB400-0xCBFF 経由)
 
 
@@ -49,10 +54,24 @@ def read_noi(path):
     return syms
 
 
-STAGE_BASE, STAGE_SIZE = 0xB400, 0x0C00
 
 
-def main(boot_ihx, eng_ihx, eng_noi, out_path, *stage_args):
+def check_module(name, ihx, noi):
+    """モジュールのイメージ(16KB)を作る。コードと定数は 0x8000-0xBBFF、変数は 0xBC00-0xBFFF、初期値つきの変数は無いこと"""
+    img = read_ihx(ihx)
+    syms = read_noi(noi)
+    lo, hi = min(img), max(img)
+    if lo != MOD_BASE or hi >= MOD_BSS:
+        sys.exit(f'mkrom: {name} のコードが 0x{MOD_BASE:04X}-0x{MOD_BSS - 1:04X} に収まっていない (0x{lo:04X}-0x{hi:04X})')
+    dstart, heap = syms.get('s__DATA', 0), syms.get('s__HEAP', 0)
+    if dstart < MOD_BSS or heap > MOD_END:
+        sys.exit(f'mkrom: {name} の変数 0x{dstart:04X}-0x{heap:04X} が 0x{MOD_BSS:04X}-0x{MOD_END - 1:04X} に収まっていない')
+    if syms.get('l__INITIALIZER', 0) or syms.get('l__GSINIT', 0):
+        sys.exit(f'mkrom: {name} に初期値つきの変数がある(モジュールでは 0 で始まる変数しか使えない)')
+    return bytes(img.get(MOD_BASE + i, 0xFF) for i in range(0x4000)), f'{name}={hi - MOD_BASE + 1}B+{heap - dstart}B'
+
+
+def main(boot_ihx, eng_ihx, eng_noi, out_path, env_ihx, env_noi, *game_args):
     boot = read_ihx(boot_ihx)
     if min(boot) < 0x4000 or max(boot) >= 0x6000:
         sys.exit('mkrom: ローダーが bank0(0x4000-0x5FFF)に収まっていない')
@@ -68,8 +87,8 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path, *stage_args):
         sys.exit(f'mkrom: ページ0の表が 0x{P0D_BASE:04X}-0x{P0D_LIMIT - 1:04X} に収まっていない '
                  f'(0x{min(p0d):04X}-0x{max(p0d):04X})')
     if max(code) >= CODE_LIMIT:
-        sys.exit(f'mkrom: エンジンが 0x{CODE_LIMIT:04X} を超えた: 0x{max(code):04X}')
-    image = bytes(eng.get(0x4000 + i, 0xFF) for i in range(0x8000))
+        sys.exit(f'mkrom: エンジンの常駐部が 0x{CODE_LIMIT:04X} を超えた: 0x{max(code):04X}')
+    image = bytes(eng.get(0x4000 + i, 0xFF) for i in range(0x4000))
 
     syms = read_noi(eng_noi)
     heap = syms.get('s__HEAP', 0)
@@ -84,31 +103,27 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path, *stage_args):
     rom = bytearray(bank0 + bank1 + image)
     rom += b'\xFF' * (ROM_BANKS * BANK - len(rom))
 
-    # ステージ: 読み込み先 0xB400-0xBFFF に収まっていること、先頭 2 バイトが Stage へのポインタ
-    stages = []
-    args = list(stage_args)
-    while args:
-        if args[0] != '--stage' or len(args) < 3:
-            sys.exit('mkrom: 引数は --stage バンク stage.ihx')
-        bank, path = int(args[1]), args[2]
-        args = args[3:]
-        st = read_ihx(path)
-        lo, hi = min(st), max(st)
-        if lo != STAGE_BASE or hi >= STAGE_BASE + STAGE_SIZE:
-            sys.exit(f'mkrom: {path} が 0x{STAGE_BASE:04X}-0x{STAGE_BASE + STAGE_SIZE - 1:04X} に収まっていない '
-                     f'(0x{lo:04X}-0x{hi:04X}。変数は置けない)')
-        if bank < 6 or bank + 1 >= ROM_BANKS:
-            sys.exit(f'mkrom: ステージのバンク {bank} が範囲外')
-        data = bytes(st.get(STAGE_BASE + i, 0xFF) for i in range(STAGE_SIZE))
-        rom[bank * BANK:bank * BANK + STAGE_SIZE] = data
-        stages.append(f'bank{bank}={hi - STAGE_BASE + 1}B')
+    mods = []
+    envimg, info = check_module('env', env_ihx, env_noi)
+    rom[ENV_BANK * BANK:(ENV_BANK + 2) * BANK] = envimg
+    mods.append(info)
+    if len(game_args) % 2:
+        sys.exit('mkrom: ゲームモジュールは (ihx, noi) の組で渡す')
+    for k in range(len(game_args) // 2):
+        n = k + 1
+        bank = GAME_BANK(n)
+        if bank + 1 >= ROM_BANKS:
+            sys.exit(f'mkrom: ステージ {n} のバンク {bank} が範囲外')
+        img, info = check_module(f'stage{n}', game_args[k * 2], game_args[k * 2 + 1])
+        rom[bank * BANK:(bank + 2) * BANK] = img
+        mods.append(info)
     with open(out_path, 'wb') as f:
         f.write(rom)
     print(f'mkrom: {out_path} {len(rom)} B (ASCII8) '
-          f'loader {max(boot) - 0x4000 + 1} B, engine code {max(code) - 0x4000 + 1} B / {CODE_LIMIT - 0x4000}, '
-          f'page0 tables {p0d_len} B / {P0D_LIMIT - P0D_BASE}, '
+          f'loader {max(boot) - 0x4000 + 1} B, resident {max(code) - 0x4000 + 1} B / {CODE_LIMIT - 0x4000}, '
+          f'page0 {p0d_len} B / {P0D_LIMIT - P0D_BASE}, '
           f'vars 0x{dstart:04X}-0x{heap:04X} ({heap - dstart} B / {DATA_LIMIT - DATA_BASE}), '
-          f'stages {" ".join(stages) or "-"} (各 {STAGE_SIZE} B まで)')
+          f'modules {" ".join(mods)} (各 {MOD_BSS - MOD_BASE} B + {MOD_END - MOD_BSS} B まで)')
 
 
 if __name__ == '__main__':
