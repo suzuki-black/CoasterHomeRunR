@@ -19,6 +19,8 @@ enum { ET_NONE, ET_E01, ET_E02, ET_E03, ET_E04, ET_E05, ET_B01, ET_TREASURE, ET_
        ET_B02,       /* 森の番人(ステージ 3 のボス。巨大コウモリ人) */
        ET_B03,       /* 祭りの山車(町。獣人たちが引いて後ろから追ってくる。花火を撃ち、ときどきぶつかってくる) */
        ET_B04,       /* 亜人の王(自宅前のラスボス。キリン人系) */
+       ET_SIGNL,     /* 分岐の合図: お腹に L と書かれた獣人(攻撃しない。撃つと左へ。L・R とも消える) */
+       ET_SIGNR,     /* 同じく R(右へ) */
        ET_COUNT };
 #define IS_BOSS(t) ((t) == ET_B01 || (t) == ET_BOSS1 || (t) == ET_BOSS2 || (t) == ET_B02 || \
                     (t) == ET_B03 || (t) == ET_B04)
@@ -41,6 +43,10 @@ enum {
 };
 /* cmd にこの印を付けると、tick は時刻ではなくレール上の位置[m](カメラがそこを過ぎたら実行) */
 #define EV_AT 0x80
+/* 分岐のどちらかを通ったときだけ実行する(通らなかった側の命令は待たずに飛ばす) */
+#define EV_ONLY_L 0x40
+#define EV_ONLY_R 0x20
+#define EV_CMD(c) ((c) & 0x1F)
 enum { DIR_NONE, DIR_FRONT, DIR_BACK };
 typedef struct {
     u16 tick;
@@ -70,6 +76,11 @@ typedef struct {
     const u8 *ending;         /* (行, 桁, 文字コード…, 0) の並び、0xFF で終わり。行の bit7 = 宝の量で選ぶ行(main.c) */
     const u8 *end_melody;
     const u8 *end_bass;
+    /* 分岐(無ければ 0): track は分岐点まで、branch[0/1] = 左 / 右(同じ長さで同じ合流点に戻る形にする)、tail = 合流後。
+     * 分岐点より前で L・R の獣人のどちらかを撃つとそちらへ。撃たなければ branch_def の側 */
+    const RailSeg *branch[2];
+    const RailSeg *tail;
+    u8  branch_def;           /* 0 = 左、1 = 右 */
 } Stage;
 
 /* ステージデータの読み込み先(ROM バンクから写す。先頭 2 バイトが Stage へのポインタ) */

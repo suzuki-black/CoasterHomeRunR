@@ -1,6 +1,6 @@
 /* models.c — 敵モデル(仕様書 4 章、7.4)。単位 1/16m、y は足元から上
  *
- * 定数の表はコード領域(0x4000-0xB3FF)を空けるため、ページ0の RAM(エリア _PAGE0 = 0x2800-)に置く。
+ * 定数の表はコード領域(0x4000-0xB3FF)を空けるため、ページ0の RAM(エリア _PAGE0 = 0x2E00-)に置く。
  * Makefile で --constseg PAGE0 を付けてコンパイルし、起動時に sys_page0_data が ROM のバンク 1 から読み込む。
  */
 #include "game.h"
@@ -116,12 +116,18 @@ static const MRect m_b04[] = {          /* 亜人の王(キリン人系)・黄+�
     { 10,  4, 11, 54, C_BLACK, 0 },   {  9, 54, 12, 60, C_WHITE, 0 },
     { -14, 26, -10, 30, C_CYAN, 0 },
 };
+static const MRect m_sign[] = {         /* 分岐の合図の獣人(茶の猿人、お腹が白。文字 L / R は game.c が上に描く) */
+    { -5,  0, -2, 10, C_BROWN, 2 },   {  2,  0,  5, 10, C_BROWN, 2 },
+    { -8, 10,  8, 26, C_BROWN, 0 },   { -6, 12,  6, 24, C_WHITE, 0 },
+    { -4, 26,  4, 33, C_BROWN, 1 },   { -2, 29,  2, 30, C_BLACK, 1 },
+    { -12, 20, -8, 30, C_BROWN, 0 },  {  8, 20, 12, 30, C_BROWN, 0 },   /* 両手を上げている */
+};
 #define MODEL(a) { a, sizeof(a) / sizeof(a[0]) }
 const Model models[] = {
     { 0, 0 }, MODEL(m_e01), MODEL(m_e02a), MODEL(m_e03), MODEL(m_e04), MODEL(m_e05),
     MODEL(m_b01), MODEL(m_treasure), MODEL(m_medkit), MODEL(m_boss1), MODEL(m_rock),
     MODEL(m_arrow), MODEL(m_magic), MODEL(m_crate), MODEL(m_boss2), MODEL(m_b02),
-    MODEL(m_b03), MODEL(m_b04),
+    MODEL(m_b03), MODEL(m_b04), MODEL(m_sign), MODEL(m_sign),
 };
 const Model model_e02b = MODEL(m_e02b);
 

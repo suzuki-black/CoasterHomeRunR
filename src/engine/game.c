@@ -18,7 +18,8 @@
 #define FLY_Y   F88(-0.3)                       /* コウモリ人の飛ぶ高さ */
 
 /* 敵種ごとの定数 */
-static const u8 et_hp[ET_COUNT] = { 0, 1, 2, 3, 2, 3, 30, 0, 1, 60, 1, 1, 2, 1, 40, 60, 60, 100 };
+static const u8 et_hp[ET_COUNT] = { 0, 1, 2, 3, 2, 3, 30, 0, 1, 60, 1, 1, 2, 1, 40, 60, 60, 100, 1, 1 };
+#define IS_SIGN(t) ((t) == ET_SIGNL || (t) == ET_SIGNR)
 /* 敵弾の速さ(カメラに対して、m/秒) */
 #define SHOT_V(t) ((t) == ET_ARROW ? MPS(8) : (t) == ET_MAGIC ? MPS(3) : MPS(5))
 
@@ -78,6 +79,8 @@ static u16 fps_t0;               /* 計測用: 1 秒(60 ティック)の区切�
 static u8  fps_n, fps_show;      /* その間の表示の切替回数と、表示する値 */
 #endif
 static const Stage *stage;
+u8  route;                       /* 分岐で選ばれている側(0 左 / 1 右) */
+static u8  branch_open;          /* 1 = まだ選べる(分岐点の手前) */
 u16 g_score;
 u16 g_perf_logic[4];
 
@@ -389,9 +392,29 @@ static void update_enemy(Enemy *e)
     if (d > (i16)M(60) || d < -(i16)M(40)) e->type = ET_NONE;
 }
 
+/* 分岐の側を決める(分岐点の手前でだけ。違う側ならレールを分岐点から作り直す)。L・R の獣人は両方消える */
+static void branch_pick(u8 dir)
+{
+    u8 i;
+    if (branch_open) {
+        branch_open = 0;
+        if (dir != route) {
+            route = dir;
+            rail_refork(stage->branch[dir], stage->tail);
+        }
+    }
+    for (i = 0; i < MAX_EN; i++)
+        if (IS_SIGN(en[i].type)) en[i].type = ET_NONE;
+}
+
 static void kill_enemy(Enemy *e)
 {
     u8 t = e->type;
+    if (IS_SIGN(t)) {                        /* 先に撃った側へ */
+        se_play(SE_KILL);
+        branch_pick(t == ET_SIGNR);
+        return;
+    }
     if (t == ET_MEDKIT || t == ET_CRATE) {
         life += 2;
         if (life > 8) life = 8;
@@ -454,13 +477,18 @@ static void script_update(void)
     sc_tick += 2;
     while (!sc_end) {
         const Event *ev = sc_ev;
+        /* 通らなかった分岐の側の命令は、待たずに飛ばす */
+        if ((ev->cmd & EV_ONLY_L && route != 0) || (ev->cmd & EV_ONLY_R && route != 1)) {
+            sc_ev++;
+            continue;
+        }
         if (ev->cmd & EV_AT) {
             if ((cam_s >> 6) < ev->tick) break;
         } else if (ev->tick > sc_tick) {
             break;
         }
         sc_ev++;
-        switch (ev->cmd & 0x7F) {
+        switch (EV_CMD(ev->cmd)) {
         case EV_SPAWN: spawn(ev->a, ev->b, ev->c); break;
         case EV_DIR:   attack_dir = ev->a; break;
         case EV_GO:    hold = ev->a; break;
@@ -542,7 +570,7 @@ static void player_update(void)
 
 static void trolley_update(void)
 {
-    u16 target = hold ? 0 : (u16)(spd_over ? spd_over : rail_spd[cam_s >> 6]) * 137;
+    u16 target = hold ? 0 : (u16)(spd_over ? spd_over : rail_spd[cam_s >> 7]) * 137;
     u16 t;
     if (cam_v < target) {
         cam_v += 48;
@@ -554,6 +582,8 @@ static void trolley_update(void)
     cam_sub = (u8)t;
     cam_s += (cam_v >> 8) + (t >> 8);
     if (cam_s >= rail_s_max()) { cam_s = rail_s_max(); cam_v = 0; }
+    /* 分岐点の 2m 手前まで来たら、選ばれている側(撃たなければ規定の側)で確定する */
+    if (branch_open && cam_s + M(2) >= rail_fork_m() * 64) branch_pick(route);
 }
 
 /* ---------------------------------------------------------------------------
@@ -575,7 +605,27 @@ static void draw_enemy(u8 id)
     g_dm_flash = e->flash ? C_WHITE : 0;
     g_dm_id = id;
     g_dm_hit = e->type != ET_TREASURE && e->state != ST_DEAD;
-    draw_model(&e->c);
+    {
+        u8 h0 = n_hits;
+        draw_model(&e->c);
+        if (IS_SIGN(e->type) && n_hits > h0) {
+            /* お腹の文字 L / R: 絵の外接矩形から位置を出し、白地に黒で大きめに描く(遠くても読めるように) */
+            u8 k, x0 = 255, y0 = 255, x1 = 0, y1 = 0;
+            for (k = h0; k < n_hits; k++) {
+                if (hits[k].x0 < x0) x0 = hits[k].x0;
+                if (hits[k].y0 < y0) y0 = hits[k].y0;
+                if (hits[k].x1 > x1) x1 = hits[k].x1;
+                if (hits[k].y1 > y1) y1 = hits[k].y1;
+            }
+            x0 = (u8)((x0 + x1) >> 1);
+            y0 = (u8)(y0 + (u8)(((u16)(y1 - y0) * 115) >> 8));
+            if (x0 >= 2 && x0 <= 61 && y0 >= 3 && y0 + 4 <= GAME_ROWS) {
+                g_rx = x0 - 2; g_ry = y0 - 3; g_rw = 5; g_rh = 7; g_color = C_WHITE;
+                rect_fill();
+                text_draw((i8)x0 - 1, (i8)y0 - 2, e->type == ET_SIGNL ? "L" : "R", C_BLACK, 1);
+            }
+        }
+    }
 }
 
 static void draw_enemies(void)
@@ -657,11 +707,11 @@ static void render(void)
     /* 坂: レールの傾きからピッチの目標(≒ atan、256 分割)を出し、1 フレーム 1 ずつ追う。
      * 後ろを向いているときは向きが逆、振り向き中はその間を cos で補間する */
     {
-        u16 i = cam_s >> 6;
+        u16 i = cam_s >> 7;
         i16 dy;
         i8 tgt;
-        if (i + 1 >= rail_len) i = rail_len - 2;
-        dy = rail[i + 1].y - rail[i].y;          /* 1m あたりの高さ変化(8.8) */
+        if (i + 1 >= rail_len / RAIL_STEP) i = rail_len / RAIL_STEP - 2;
+        dy = (rail[i + 1].y - rail[i].y) >> 1;   /* 1m あたりの高さ変化(8.8)。点は 2m ごと */
         /* atan(x) ≒ x / (1 + 0.28x²)(急な坂でも破綻しない)。1 フレームで差の 1/4 ずつ追う */
         tgt = (i8)(((i32)dy * 41) / (256 + (((i32)dy * dy * 72) >> 16)));
         {
@@ -694,7 +744,16 @@ static void render(void)
 u8 game_run(const Stage *st, u8 first)
 {
     u8 i, over = 0;
-    rail_build(st->track);
+    rail_begin();
+    rail_add(st->track);
+    route = st->branch_def;
+    branch_open = 0;
+    if (st->branch[0]) {                 /* 分岐: まず規定の側で作っておく */
+        rail_fork();
+        rail_add(st->branch[route]);
+        rail_add(st->tail);
+        branch_open = 1;
+    }
     env_build(st->seed, st->zones);
     set_stage_palette(st->palette);
     for (i = 0; i < MAX_EN; i++) en[i].type = ET_NONE;
@@ -703,7 +762,7 @@ u8 game_run(const Stage *st, u8 first)
     cam_s = M(st->start_m); cam_sub = 0; cam_v = 0; hold = 1;
     if (!st->skip_tick) {                /* 演出の無いステージは走っている状態から始まる */
         hold = 0;
-        cam_v = (u16)rail_spd[st->start_m] * 137;
+        cam_v = (u16)rail_spd[st->start_m >> 1] * 137;
     }
     facing = st->start_back; look = facing ? 0x8000 : 0; turning = 0;
     ctrl = 1; spd_over = 0; cap_id = 0; cap_time = 0; warn_prev = 0; warn_time = 0; pitch_cur = 0;
