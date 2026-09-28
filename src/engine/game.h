@@ -97,6 +97,21 @@ extern u16 g_score;          /* スコア / 10 */
 extern u8  life;
 extern u8  g_stage;
 
+/* 隠しコンフィグ(menu.c。タイトルでコナミコマンド)。並びは menu.c の項目と同じ */
+typedef struct {
+    u8 damage;      /* 1 回の被弾で減る宝(1〜8) */
+    u8 god;         /* 1 = 被弾しても宝が減らない */
+    u8 stage;       /* 始めるステージ(1〜) */
+    u8 life;        /* 始めの宝(1〜8) */
+    u8 oneshot;     /* 1 = どの敵も 1 発で倒せる */
+    u8 route;       /* 分岐: 0 = 撃って選ぶ、1 = 左に固定、2 = 右に固定 */
+    u8 easy;        /* やさしい進行: 0 = ステージの指定どおり、1 = 常に、2 = しない */
+    u8 fps;         /* 1 = 左上に fps とティック数 */
+} Config;
+extern Config g_cfg;
+void cfg_defaults(void);
+void title(void);
+
 /* 表示(main.c) */
 extern u8 g_spr_attr[17];
 extern const u8 pal_fixed[];  /* 0-8 */

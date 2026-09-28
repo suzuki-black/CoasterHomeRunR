@@ -1,6 +1,6 @@
 /* models.c — 敵モデル(仕様書 4 章、7.4)。単位 1/16m、y は足元から上
  *
- * 定数の表はコード領域(0x4000-0xB3FF)を空けるため、ページ0の RAM(エリア _PAGE0 = 0x2E00-)に置く。
+ * 定数の表はコード領域(0x4000-0xB3FF)を空けるため、ページ0の RAM(エリア _PAGE0 = 0x2C80-)に置く。
  * Makefile で --constseg PAGE0 を付けてコンパイルし、起動時に sys_page0_data が ROM のバンク 1 から読み込む。
  */
 #include "game.h"

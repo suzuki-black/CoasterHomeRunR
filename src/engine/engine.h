@@ -36,6 +36,8 @@ extern u8 g_buf_hi;                 /* 描画バッファの上位バイト(gfx.
 #define IN_RIGHT 0x08
 #define IN_A     0x10
 #define IN_B     0x20
+#define IN_KEY_A 0x40               /* キーボードの A キー(隠しコマンド用) */
+#define IN_KEY_B 0x80               /* キーボードの B キー(IN_B も立つ) */
 
 /* ---- sys.s ---- */
 extern volatile u16 g_tick;
@@ -51,7 +53,7 @@ u8   sys_cpu_status(void);          /* S1990 レジスタ 6(bit5 = 0 で R800、
 void sys_install_loader(void);
 void sys_page0_ram(void);           /* ページ0を自前の RAM に(0x0038 に割り込み処理) */
 void rom_load(u8 bank, void *dst);   /* ROM の bank, bank+1 から 3KB を dst へ(ページ2・3 のみ) */
-void sys_page0_data(void);          /* ページ0の表(エリア _PAGE0 = 0x2E00-)を ROM のバンク 1 から読み込む */
+void sys_page0_data(void);          /* ページ0の表とコード(エリア _PAGE0 = 0x2C80-)を ROM のバンク 1 から読み込む */
 void bios_font(u8 *dst);            /* BIOS のフォント 2KB を dst へ(ページ2・3) */
 
 /* ---- vdp.s ---- */
@@ -79,7 +81,7 @@ i16 fmul(i16 a, i16 b);
 i16 muldiv(i16 a, i16 b, i16 c);
 u32 div_slope(u16 n, u16 d);
 
-/* ---- gen_data.c(tools/gen_data.py が生成)。ページ0の RAM(0x2E00-)に置く(sys_page0_data) ---- */
+/* ---- gen_data.c(tools/gen_data.py が生成)。ページ0の RAM(0x2C80-)に置く(sys_page0_data) ---- */
 extern const i16 sin_tab[320];      /* 8.8。cos は sin_tab[a + 64] */
 #define SIN(a) (sin_tab[(u8)(a)])
 #define COS(a) (sin_tab[(u8)(a) + 64])

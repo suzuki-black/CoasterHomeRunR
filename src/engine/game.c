@@ -73,10 +73,8 @@ static u8  spd_over;             /* 0 以外: トロッコの速度(m/秒 × 4)�
 static u8  cap_id, cap_time;     /* 字幕の番号と残りフレーム */
 static u8  warn_prev, warn_time; /* 警告の出始めと繰り返しで警告音を鳴らす */
 static i8  pitch_cur;            /* カメラのピッチ(坂に合わせて少しずつ追う) */
-#ifdef DEBUG_FPS
 static u16 fps_t0;               /* 計測用: 1 秒(60 ティック)の区切り */
 static u8  fps_n, fps_show;      /* その間の表示の切替回数と、表示する値 */
-#endif
 static const Stage *stage;
 u8  route;                       /* 分岐で選ばれている側(0 左 / 1 右) */
 static u8  branch_open;          /* 1 = まだ選べる(分岐点の手前) */
@@ -193,13 +191,15 @@ static u8  coin_t;
 
 static void damage_player(void)
 {
-    u8 i, r;
+    u8 i, r, dmg;
     if (!life) return;
-    life--;
     shake = 4;
     flash_palette();
     se_play(SE_DAMAGE);
-    popup(POP_LOSS, 1);                      /* 宝が 1 つ減った */
+    if (g_cfg.god) return;                   /* 隠しコンフィグ: 被弾しても宝が減らない */
+    dmg = (g_cfg.damage < life) ? g_cfg.damage : life;
+    life -= dmg;
+    popup(POP_LOSS, dmg);                    /* 宝がいくつ減ったか */
     r = (u8)g_tick;
     for (i = 0; i < N_COIN; i++) {
         r = r * 5 + 7;
@@ -507,6 +507,7 @@ static void fire(void)
         Enemy *e = &en[best];
         if (e->type == ET_NONE || e->state == ST_DEAD) return;
         hitmark = 4;
+        if (g_cfg.oneshot) e->hp = 1;        /* 隠しコンフィグ: 1 発で倒せる */
         if (e->hp) e->hp--;
         if (!e->hp) {
             kill_enemy(e);
@@ -561,7 +562,7 @@ static void script_update(void)
         } else if (ev->tick > sc_tick) {
             break;
         }
-        if (stage->gentle) {
+        if (g_cfg.easy == 1 || (g_cfg.easy == 0 && stage->gentle)) {
             /* やさしい進行: 反対側に敵が残っていれば、全滅するまで待つ */
             i8 sd = ev_side(ev), fs = foe_side();
             if (sd && fs && sd != fs) { held = 1; break; }
@@ -767,15 +768,15 @@ static void draw_hud(void)
         if (!--cap_time) cap_id = 0;
     }
 
-#ifdef DEBUG_FPS
-    /* 計測用: 左上に fps(直近 1 秒の表示の切替回数)と、直前のフレームのティック数 */
-    fps_n++;
-    if ((u16)(g_tick - fps_t0) >= 60) { fps_show = fps_n; fps_n = 0; fps_t0 = g_tick; }
-    text_draw(1, 8, "FPS", C_YELLOW, 1);
-    num_draw(15, 8, fps_show, 2, C_YELLOW);
-    text_draw(1, 14, "T", C_YELLOW, 1);
-    num_draw(7, 14, g_perf_ticks, 2, C_YELLOW);
-#endif
+    if (g_cfg.fps) {
+        /* 計測用(隠しコンフィグの FPS、計測用 ROM では最初から): 左上に fps(直近 1 秒の表示の切替回数)と直前のフレームのティック数 */
+        fps_n++;
+        if ((u16)(g_tick - fps_t0) >= 60) { fps_show = fps_n; fps_n = 0; fps_t0 = g_tick; }
+        text_draw(1, 8, "FPS", C_YELLOW, 1);
+        num_draw(15, 8, fps_show, 2, C_YELLOW);
+        text_draw(1, 14, "T", C_YELLOW, 1);
+        num_draw(7, 14, g_perf_ticks, 2, C_YELLOW);
+    }
     if (!ctrl) { g_spr_attr[0] = 209; g_spr_attr[4] = 209; return; }
     set_sprite(0, (i16)aim_x - 16, (i16)aim_y - 16, 0, C_WHITE);
     if (hitmark) set_sprite(1, (i16)aim_x - 16, (i16)aim_y - 16, 4, C_YELLOW);
@@ -832,13 +833,13 @@ u8 game_run(const Stage *st, u8 first)
     u8 i, over = 0;
     rail_begin();
     rail_add(st->track);
-    route = st->branch_def;
+    route = g_cfg.route ? g_cfg.route - 1 : st->branch_def;
     branch_open = 0;
-    if (st->branch[0]) {                 /* 分岐: まず規定の側で作っておく */
+    if (st->branch[0]) {                 /* 分岐: まず規定の側(隠しコンフィグで固定なら、その側)で作っておく */
         rail_fork();
         rail_add(st->branch[route]);
         rail_add(st->tail);
-        branch_open = 1;
+        branch_open = !g_cfg.route;
     }
     env_build(st->seed, st->zones);
     set_stage_palette(st->palette);
@@ -855,7 +856,7 @@ u8 game_run(const Stage *st, u8 first)
     aim_x = 128; aim_y = 92; aim_hold = 0;
     in_prev = 0xFF;                      /* タイトルで押したボタンを射撃と見なさない */
     fire_cd = 0; hitmark = 0;
-    if (first) { life = 8; g_score = 0; }
+    if (first) { life = g_cfg.life; g_score = 0; }
     attack_dir = DIR_NONE;
     boss_alive = 0;
     blink = 0;

@@ -37,7 +37,7 @@ static const u8 pal_red[14] = {
     0x71, 1, 0x60, 0, 0x71, 1, 0x60, 0, 0x71, 1, 0x60, 0, 0x71, 1 };
 
 /* タイトル用の 9-15 */
-static const u8 pal_title[14] = {
+const u8 pal_title[14] = {
     0x31, 2, 0x22, 2, 0x33, 3, 0x23, 2, 0x12, 1, 0x31, 2, 0x21, 1 };
 
 void set_stage_palette(const u8 *pal)
@@ -175,37 +175,6 @@ static void ending_run(const Stage *st)
     vdp_init();
 }
 
-static void title(void)
-{
-    u16 t = 0;
-    u8 prev = 0xFF, in;
-    g_scene = 0;
-    set_stage_palette(pal_title);
-    g_spr_attr[0] = 209;
-    g_spr_attr[4] = 209;
-    for (;;) {
-        buf_fill(C_BLACK, BUF);
-        g_rx = 0; g_ry = 30; g_rw = 64; g_rh = 1; g_color = 9; rect_fill();
-        text_center(6, "TROLLEY", C_YELLOW, 2);
-        text_center(18, "HOME RUN", C_ORANGE, 2);
-        if (t & 32) text_center(34, "PUSH SPACE", C_WHITE, 1);
-#ifdef DEBUG_FPS
-        {   /* 計測用: CPU の状態(実機・WebMSX で R800 DRAM モードに入っているかの確認) */
-            u8 c = sys_cpu_status();
-            text_center(41, (c & 0x20) ? "CPU:Z80" : (c & 0x40) ? "CPU:R800 ROM" : "CPU:R800 DRAM",
-                        (c & 0x60) ? C_RED : C_CYAN, 1);
-        }
-#else
-        text_center(41, "A:FIRE  B:TURN", C_CYAN, 1);
-#endif
-        present();
-        t++;
-        in = input_raw();
-        if ((in & IN_A) && !(prev & IN_A)) break;
-        prev = in;
-    }
-}
-
 #ifdef BENCH
 void bench_run(void);
 #endif
@@ -235,13 +204,13 @@ static void stage_card(const Stage *st)
 /* ステージ 1 から順に遊ぶ。ライフとスコアはステージをまたいで持ち越す */
 static void play(void)
 {
-    u8 n;
+    u8 n, n0 = g_cfg.stage - 1;         /* 隠しコンフィグのステージセレクト */
     const Stage *st = 0;
-    for (n = 0; n < STAGE_COUNT; n++) {
+    for (n = n0; n < STAGE_COUNT; n++) {
         st = stage_load(STAGE1_BANK + n * 2);
         g_stage = n + 1;
         stage_card(st);
-        if (!game_run(st, n == 0)) return;
+        if (!game_run(st, n == n0)) return;
     }
     g_score += (u16)life * 100;          /* 残りライフ × 1000 点(仕様書 5.2) */
     g_scene = 3;
@@ -254,7 +223,8 @@ void main(void)
     sys_install_loader();
     sys_install_isr();
     sys_page0_ram();
-    sys_page0_data();                /* 表(sin・逆数・フォント・敵の絵など)をページ0へ */
+    sys_page0_data();                /* 表(sin・逆数・フォント・敵の絵など)とタイトル・コンフィグをページ0へ */
+    cfg_defaults();
 #ifdef BENCH
     bench_run();
 #endif

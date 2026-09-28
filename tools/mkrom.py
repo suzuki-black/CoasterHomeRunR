@@ -4,7 +4,7 @@
   mkrom.py boot.ihx engine.ihx engine.noi out.rom [--stage バンク stage.ihx ...]
 
 - bank0     : ローダー(0x4000-0x5FFF)
-- bank1     : ページ0に置く表(エリア _PAGE0 = RAM 0x2E00-0x3FFF。起動時に sys_page0_data が読み込む)
+- bank1     : ページ0に置く表とコード(エリア _PAGE0 = RAM 0x2C80-0x3FFF。起動時に sys_page0_data が読み込む)
 - bank2-5   : エンジン(RAM 0x4000-0xBFFF へ写される)
 - bank6-15  : ステージデータ(--stage。1 ステージ 2 バンク。0xB400-0xBFFF の 3KB を常駐ローダーが RAM へ写す)
 
@@ -17,7 +17,7 @@ BANK = 0x2000
 ROM_BANKS = 16
 DATA_BASE, DATA_LIMIT = 0xCC00, 0xDE00   # 0xDE00-0xDFFF は行の左右端(raster.s span_a/span_b)
 CODE_LIMIT = 0xB400   # 0xB400-0xBFFF はステージデータの読み込み先(塗りの展開ブロックと辺キャッシュはページ0)
-P0D_BASE, P0D_LIMIT = 0x2E00, 0x4000   # ページ0の表(0x1A00-0x2DFF は地形の表。読み込みは 0xB400-0xCBFF 経由)
+P0D_BASE, P0D_LIMIT = 0x2C80, 0x4000   # ページ0の表とコード(0x1A00-0x2C7F は地形の表。読み込みは 0xB400-0xCBFF 経由)
 
 
 def read_ihx(path):

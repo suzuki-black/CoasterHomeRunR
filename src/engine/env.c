@@ -26,11 +26,11 @@
 #define VR_D  38           /* 仮リングまでの距離(1/64m) */
 
 /* ステージ開始時に作る表(ページ0の RAM の空き。sys.s の sys_page0_ram 参照) */
-#define MAX_RINGS 160              /* 640m */
-#define PROF   ((i16 *)0x1A00)    /* [リング][6 頂点][u, v] = 3840 B */
-#define TONE   ((u8 *)0x2900)     /* [リング][6 面] の基本の色(0 = 塗らない) = 960 B */
-#define DECO   ((u8 *)0x2CC0)     /* [リング] 飾りの印 */
-#define KIND   ((u8 *)0x2D60)     /* [リング] 地形の種類(〜0x2DFF。0x2E00 からはページ0の表 = _PAGE0) */
+#define MAX_RINGS 148              /* 592m */
+#define PROF   ((i16 *)0x1A00)    /* [リング][6 頂点][u, v] = 3552 B */
+#define TONE   ((u8 *)0x27E0)     /* [リング][6 面] の基本の色(0 = 塗らない) = 888 B */
+#define DECO   ((u8 *)0x2B58)     /* [リング] 飾りの印 */
+#define KIND   ((u8 *)0x2BEC)     /* [リング] 地形の種類(〜0x2C7F。0x2C80 からはページ0の表とコード = _PAGE0) */
 /* 飾りの印。LAMP / TIMBER は森では木の幹 / 葉の塊。
  * 町では LAMP_L / LAMP_R = 左 / 右の家の始まり(手前の妻壁)、ROCK_L / ROCK_R = 家の終わり、TIMBER = 自宅の正面 */
 enum { D_LAMP_L = 1, D_ROCK_L = 2, D_ROCK_R = 4, D_TIMBER = 8, D_LAMP_R = 16,
