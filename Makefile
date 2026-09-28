@@ -51,8 +51,10 @@ RELS = $(BUILD)/crt0.rel \
 
 ifdef BENCH
   C_SRCS += $(ENG)/bench.c
+  RELS   += $(BUILD)/bench_s.rel
   CFLAGS += -DBENCH
 endif
+
 
 HDRS = $(wildcard $(ENG)/*.h)
 
@@ -79,6 +81,10 @@ $(BUILD)/%.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BUILD)/%.rel: $(ENG)/%.s $(ENG)/r800.inc Makefile | $(BUILD)
+	$(AS) -g -l -I$(ENG) -o $@ $<
+
+# 計測用(BENCH=1)の asm。gfx.s から分けて、通常のビルドのコード領域を使わない
+$(BUILD)/bench_s.rel: $(ENG)/bench.s Makefile | $(BUILD)
 	$(AS) -g -l -I$(ENG) -o $@ $<
 
 $(BUILD)/engine.ihx: $(RELS)

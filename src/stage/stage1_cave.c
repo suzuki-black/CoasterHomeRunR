@@ -234,4 +234,5 @@ const Stage stage_data = {
     0, 0, 0,
     { cave_left, cave_right }, cave_tail,
     1,          /* 撃たなければ右(敵ばかり) */
+    1,          /* やさしい進行 */
 };

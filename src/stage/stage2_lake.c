@@ -128,4 +128,7 @@ const Stage stage_data = {
     bgm_melody, bgm_bass,
     lake_zones, 0x2B1D,
     "STAGE 2", "THE LAKE",
+    0, 0, 0,
+    { 0, 0 }, 0, 0,
+    1,          /* やさしい進行 */
 };

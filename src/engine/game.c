@@ -65,7 +65,6 @@ u8  attack_dir;
 u8  boss_alive;
 static u8  blink;
 static u8  shake;                /* 被弾でトロッコを揺らす残りフレーム */
-static u8  whiteout;             /* 画面を白くする残りフレーム(着水など) */
 u16 sc_tick;
 static const Event *sc_ev;
 static u8  sc_end;
@@ -132,6 +131,61 @@ static Enemy *spawn(u8 type, i8 dist, i8 lat8)
     return e;
 }
 
+/* 数字の表示(ルール: 色・形・場所・動きで 3 種類を分ける)
+ *   得点        白  数字だけ「100」            倒した敵の位置    上へ流れる
+ *   宝が増えた  黄  金貨の印 +「+2」(満杯 FULL)  宝の山の上        上へ流れる
+ *   宝が減った  赤  金貨の印 +「-1」             宝の山の上        その場で点滅 */
+enum { POP_SCORE, POP_GAIN, POP_LOSS };
+#define N_POP 4
+static u8  pop_x[N_POP], pop_y[N_POP], pop_t[N_POP], pop_k[N_POP];
+static u16 pop_v[N_POP];
+static u8  pop_hx, pop_hy;       /* 撃った敵の画面上の位置(fire が決める) */
+#define PILE_POP_Y (TROLLEY_Y - 6)
+
+static void popup(u8 kind, u16 v)
+{
+    u8 i, k = 0;
+    for (i = 1; i < N_POP; i++) if (pop_t[i] < pop_t[k]) k = i;
+    pop_k[k] = kind; pop_v[k] = v; pop_t[k] = 16;
+    pop_x[k] = (kind == POP_SCORE) ? pop_hx : 32;
+    pop_y[k] = (kind == POP_SCORE) ? pop_hy : PILE_POP_Y;
+}
+
+static void popups_draw(void)
+{
+    u8 i, j, k, c;
+    char s[7];
+    for (i = 0; i < N_POP; i++) {
+        u16 v;
+        if (!pop_t[i]) continue;
+        pop_t[i]--;
+        k = pop_k[i];
+        if (k == POP_LOSS) {
+            if (pop_t[i] & 2) continue;              /* 点滅 */
+        } else if ((pop_t[i] & 1) && pop_y[i] > 1) {
+            pop_y[i]--;
+        }
+        v = pop_v[i];
+        j = 6; s[6] = 0;
+        do { s[--j] = (char)('0' + v % 10); v /= 10; } while (v);
+        c = C_WHITE;
+        if (k != POP_SCORE) {
+            c = (k == POP_GAIN) ? C_YELLOW : C_RED;
+            s[--j] = (k == POP_GAIN) ? '+' : '-';
+            if (k == POP_GAIN && !pop_v[i]) j = 6;       /* 満杯で増えなかった */
+        }
+        {
+            i8 x = (i8)pop_x[i] - (i8)((6 - j) * 2), y = (i8)pop_y[i];
+            if (k != POP_SCORE) {
+                /* 金貨の印(黄の 2×2)を数字の左に */
+                x += 2;
+                if (x >= 3 && y >= 0) { g_rx = (u8)x - 3; g_ry = (u8)y + 1; g_rw = 2; g_rh = 2; g_color = C_YELLOW; rect_fill(); }
+            }
+            text_draw(x, y, (j == 6) ? "FULL" : &s[j], c, 1);
+        }
+    }
+}
+
 /* 被弾で宝の山から飛び散る金貨(画面座標 8.8 ブロック) */
 #define N_COIN 6
 static i16 coin_x[N_COIN], coin_y[N_COIN], coin_vx[N_COIN], coin_vy[N_COIN];
@@ -145,6 +199,7 @@ static void damage_player(void)
     shake = 4;
     flash_palette();
     se_play(SE_DAMAGE);
+    popup(POP_LOSS, 1);                      /* 宝が 1 つ減った */
     r = (u8)g_tick;
     for (i = 0; i < N_COIN; i++) {
         r = r * 5 + 7;
@@ -401,19 +456,26 @@ static void kill_enemy(Enemy *e)
         return;
     }
     if (t == ET_MEDKIT || t == ET_CRATE) {
+        u8 l0 = life;
         life += 2;
         if (life > 8) life = 8;
+        popup(POP_GAIN, life - l0);
         e->type = ET_NONE;
         se_play(SE_HEAL);
         return;
     }
     if (IS_SHOT(t)) {                        /* 敵弾の撃墜: 50 点 */
         g_score += 5;
+        popup(POP_SCORE, 50);
         e->type = ET_NONE;
         se_play(SE_HIT);
         return;
     }
-    g_score += IS_BOSS(t) ? et_hp[t] * 20 : et_hp[t] * 10;
+    {
+        u16 pt = IS_BOSS(t) ? et_hp[t] * 20 : et_hp[t] * 10;
+        g_score += pt;
+        popup(POP_SCORE, pt * 10);
+    }
     e->state = ST_DEAD;
     e->timer = 0;
     e->flash = 12;
@@ -436,6 +498,8 @@ static void fire(void)
         if (bx >= h->x0 && bx < h->x1 && by >= h->y0 && by < h->y1 && h->z < bz) {
             bz = h->z;
             best = h->id;
+            pop_hx = (u8)((h->x0 + h->x1) >> 1);
+            pop_hy = (h->y0 > 6) ? h->y0 - 6 : 0;
         }
     }
     if (best >= MAX_EN) return;
@@ -456,10 +520,35 @@ static void fire(void)
 /* ---------------------------------------------------------------------------
  * スクリプト
  * --------------------------------------------------------------------------- */
+/* 攻撃してくるもの(敵・ボス・敵弾)か */
+#define IS_FOE(t) ((t) != ET_NONE && (t) != ET_TREASURE && (t) != ET_MEDKIT && (t) != ET_CRATE && !IS_SIGN(t))
+
+/* 命令が敵を呼ぶ・警告を出す向き(1 前 / -1 後ろ / 0 なし) */
+static i8 ev_side(const Event *ev)
+{
+    u8 c = EV_CMD(ev->cmd);
+    if (c == EV_SPAWN || c == EV_BOSS) return IS_FOE(ev->a) ? (ev->b < 0 ? -1 : 1) : 0;
+    if (c == EV_DIR) return ev->a == DIR_FRONT ? 1 : ev->a == DIR_BACK ? -1 : 0;
+    return 0;
+}
+
+/* いま残っている敵の向き(1 前 / -1 後ろ / 0 いない) */
+static i8 foe_side(void)
+{
+    u8 i;
+    for (i = 0; i < MAX_EN; i++) {
+        Enemy *e = &en[i];
+        if (IS_FOE(e->type) && e->state != ST_DEAD) return ((i16)(e->s - cam_s) < 0) ? -1 : 1;
+    }
+    return 0;
+}
+
 static void script_update(void)
 {
+    static u8 held;
     if (boss_alive) return;              /* ボス戦中は進行を止める */
-    sc_tick += 2;
+    if (!held) sc_tick += 2;             /* 反対側の敵を待たせている間は時刻も止める */
+    held = 0;
     while (!sc_end) {
         const Event *ev = sc_ev;
         /* 通らなかった分岐の側の命令は、待たずに飛ばす */
@@ -471,6 +560,11 @@ static void script_update(void)
             if ((cam_s >> 6) < ev->tick) break;
         } else if (ev->tick > sc_tick) {
             break;
+        }
+        if (stage->gentle) {
+            /* やさしい進行: 反対側に敵が残っていれば、全滅するまで待つ */
+            i8 sd = ev_side(ev), fs = foe_side();
+            if (sd && fs && sd != fs) { held = 1; break; }
         }
         sc_ev++;
         switch (EV_CMD(ev->cmd)) {
@@ -488,11 +582,6 @@ static void script_update(void)
         case EV_BGM:
             if (ev->a) bgm_play(stage->bgm_melody, stage->bgm_bass);
             else bgm_stop();
-            break;
-        case EV_FX:
-            if (ev->a) se_play(ev->a);
-            shake = (u8)ev->b;
-            whiteout = (u8)ev->c;
             break;
         case EV_GRAB: {
             u8 i;
@@ -576,7 +665,7 @@ static void trolley_update(void)
  * --------------------------------------------------------------------------- */
 /* 敵モデルを描く(本体は geom.s の draw_model) */
 extern const MRect *g_dm_rects;
-extern u8 g_dm_n, g_dm_flash, g_dm_id, g_dm_hit;
+extern u8 g_dm_n, g_dm_flash, g_dm_id, g_dm_hit, g_dm_grow;
 void draw_model(const V3 *c);
 
 static void draw_enemy(u8 id)
@@ -587,6 +676,14 @@ static void draw_enemy(u8 id)
     md = (e->type == ET_E02 && (e->anim & 4)) ? &model_e02b : &models[e->type];
     g_dm_rects = md->r;
     g_dm_n = md->n;
+    /* 縁取りのルール: 敵・敵弾は白、金貨袋は黄。宝箱と分岐の獣人(文字で示す)は縁取りしない */
+    if (!e->flash && e->type != ET_TREASURE && !IS_SIGN(e->type)) {
+        g_dm_flash = (e->type == ET_MEDKIT || e->type == ET_CRATE) ? C_YELLOW : C_WHITE;
+        g_dm_hit = 0;
+        g_dm_grow = 1;
+        draw_model(&e->c);
+        g_dm_grow = 0;
+    }
     g_dm_flash = e->flash ? C_WHITE : 0;
     g_dm_id = id;
     g_dm_hit = e->type != ET_TREASURE && e->state != ST_DEAD;
@@ -713,7 +810,6 @@ static void render(void)
     env_draw(cam_s, (u8)(look >> 8));
     g_perf_env = timer_read() - t0;
     draw_enemies();
-    if (whiteout) { whiteout--; buf_fill(C_WHITE, BUF); }
     /* トロッコの縁。振り向き中は横へ滑らせて一度画面外へ出し、反対側から戻す */
     trolley_set_life(life);
     {
@@ -722,6 +818,7 @@ static void render(void)
         trolley_draw((i8)slide, (shake & 2) ? 1 : 0);
     }
     coins_draw();
+    popups_draw();
     if (shake) shake--;
     draw_hud();
     g_perf_render = timer_read() - t0;
@@ -762,7 +859,8 @@ u8 game_run(const Stage *st, u8 first)
     attack_dir = DIR_NONE;
     boss_alive = 0;
     blink = 0;
-    shake = 0; whiteout = 0; coin_t = 0;
+    shake = 0; coin_t = 0;
+    pop_t[0] = pop_t[1] = pop_t[2] = pop_t[3] = 0;
     sc_tick = 0; sc_ev = st->events; sc_end = 0;
     g_scene = 1;
 

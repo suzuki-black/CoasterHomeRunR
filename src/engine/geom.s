@@ -373,6 +373,8 @@ _ring_make::
 ;   (x0, y0, x1, y1: 1/16m、色、部位)を、足元を投影した位置から z に反比例した大きさで塗る。
 ;   g_dm_flash が 0 以外ならその色で塗る(被弾・予備動作の点滅)。
 ;   g_dm_hit が 0 以外なら、塗った矩形を当たり判定の表 hits(game.c)に g_dm_id として足す。
+;   g_dm_grow が 0 以外なら、各矩形を上下左右に 1 ブロック広げて塗る(縁取り: 先に g_dm_flash = 縁の色で広げて塗り、
+;   その上に普通に塗ると、絵の外周だけが縁の色で残る)。
 ;   1/16m あたりの画面量 k = 2^21 / z は、投影で求めた p_q(= 2^23 / z)を 4 で割るだけ(割り算なし)。
 ; ---------------------------------------------------------------------------
 	.globl	_project2, _rect_fill, _p_q
@@ -387,6 +389,7 @@ _g_dm_n::	.ds	1
 _g_dm_flash::	.ds	1
 _g_dm_id::	.ds	1
 _g_dm_hit::	.ds	1
+_g_dm_grow::	.ds	1
 dm_c:		.ds	2
 dm_sx:		.ds	2
 dm_sy:		.ds	2
@@ -507,8 +510,8 @@ _draw_model::
 	ld	c, a
 	ld	a, (dm_x1)
 	sub	a, c
-	jr	z, 8$
-	jr	c, 8$
+	jp	z, 8$
+	jp	c, 8$
 	ld	(_g_rw), a
 	ld	a, c
 	ld	(_g_rx), a
@@ -516,11 +519,23 @@ _draw_model::
 	ld	c, a
 	ld	a, (dm_y1)
 	sub	a, c
-	jr	z, 8$
-	jr	c, 8$
+	jp	z, 8$
+	jp	c, 8$
 	ld	(_g_rh), a
 	ld	a, c
 	ld	(_g_ry), a
+	ld	a, (_g_dm_grow)
+	or	a, a
+	jr	z, 30$
+	ld	hl, #_g_rx
+	ld	de, #_g_rw
+	ld	c, #64
+	call	dm_grow1
+	ld	hl, #_g_ry
+	ld	de, #_g_rh
+	ld	c, #46
+	call	dm_grow1
+30$:
 	ld	a, (_g_dm_flash)
 	or	a, a
 	jr	nz, 2$
@@ -582,5 +597,23 @@ _draw_model::
 	dec	b
 	jp	nz, 1$
 	pop	ix
+	ret
+
+; dm_grow1: HL = 位置、DE = 長さ、C = 画面の端 → 両側に 1 ブロックずつ広げる(画面の外へは出さない)
+dm_grow1:
+	ld	a, (hl)
+	or	a, a
+	jr	z, 1$
+	dec	(hl)
+	ex	de, hl
+	inc	(hl)
+	ex	de, hl
+1$:
+	ld	a, (de)
+	add	a, (hl)
+	cp	a, c
+	ret	nc
+	ex	de, hl
+	inc	(hl)
 	ret
 

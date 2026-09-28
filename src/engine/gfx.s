@@ -116,39 +116,6 @@ _blit_trans::
 	ret
 
 ; ---------------------------------------------------------------------------
-; void bench_fill64(void) — 計測用(make BENCH=1): 64 バイトの展開した塗り
-; void bench_nop64(void)  — 計測用: 64 個の nop
-; ---------------------------------------------------------------------------
-_bench_fill64::
-	ld	hl, #0xC000
-	ld	a, #1
-	.rept	64
-	ld	(hl), a
-	inc	l
-	.endm
-	ret
-_bench_nop64::
-	.rept	64
-	nop
-	.endm
-	ret
-; void bench_push64(void) — 計測用: push で 64 バイト塗る
-	.area	_DATA
-bp_sp:	.ds	2
-	.area	_CODE
-_bench_push64::
-	di
-	ld	(bp_sp), sp
-	ld	sp, #0xC040
-	ld	bc, #0x0101
-	.rept	32
-	push	bc
-	.endm
-	ld	sp, (bp_sp)
-	ei
-	ret
-
-; ---------------------------------------------------------------------------
 ; void runs_draw(const u8 *tbl, u8 *base)   HL=表、DE=描き先の先頭行
 ;   表: (行, 列, 長さ, 元のアドレス 2 バイト) × n、行 = 0xFF で終わり。行 >= g_rh は描かない
 ;   トロッコの縁の不透明な部分を、連続区間ごとに LDIR で写す(透過判定を 1 バイトずつしない)
