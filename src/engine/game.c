@@ -170,21 +170,6 @@ static void coins_draw(void)
     }
 }
 
-/* 振り向きの合図: 画面の左右に、赤い下向きの矢印(いま見ている向きの反対側から敵が来る) */
-static void turn_arrows(void)
-{
-    u8 k;
-    for (k = 0; k < 2; k++) {
-        i16 x0 = k ? 54 : 2;
-        g_rx = (u8)x0 + 2; g_ry = 14; g_rw = 4; g_rh = 6; g_color = C_RED;
-        rect_fill();
-        scr[0] = x0 << 4;       scr[1] = 20 << 4;
-        scr[2] = (x0 + 8) << 4; scr[3] = 20 << 4;
-        scr[4] = (x0 + 4) << 4; scr[5] = 26 << 4;
-        raster(3, C_RED);
-    }
-}
-
 static void move_enemy(Enemy *e)
 {
     i16 v = e->v;
@@ -671,9 +656,13 @@ static void draw_hud(void)
     if (warn && (warn != warn_prev || !warn_time)) { se_play(SE_ALARM); warn_time = 40; }
     if (warn_time) warn_time--;
     warn_prev = warn;
-    if (warn && blink < 8) turn_arrows();
-    num_draw(40, 1, g_score, 5, C_WHITE);
-    if (g_score) text_draw(60, 1, "0", C_WHITE, 1);
+    /* 振り向きの警告は文字で(矢印はルート選択の表示に使うので使わない) */
+    if (warn) {
+        if (blink < 8) text_center(1, warn == 1 ? "ENEMY BEHIND!" : "ENEMY AHEAD!", C_RED, 1);
+    } else {
+        num_draw(40, 1, g_score, 5, C_WHITE);
+        if (g_score) text_draw(60, 1, "0", C_WHITE, 1);
+    }
     if (++blink >= 16) blink = 0;       /* 約 15 ティック点灯 / 15 ティック消灯 */
     if (cap_id) {
         const Caption *c = &stage->captions[cap_id - 1];
