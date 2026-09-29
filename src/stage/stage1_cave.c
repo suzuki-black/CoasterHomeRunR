@@ -258,7 +258,7 @@ const Stage stage_data = {
     S(18.5),    /* A でオープニングを飛ばす先(着地した後) */
     bgm_melody, bgm_bass,
     cave_zones, 0x5EED,
-    "STAGE 1", "THE CAVE",
+    "STAGE 1", "THE ESCAPE",
     0, 0, 0,
     { cave_left, cave_right }, cave_tail,
     1,          /* 撃たなければ右(敵ばかり) */
