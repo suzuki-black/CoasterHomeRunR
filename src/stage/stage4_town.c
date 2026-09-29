@@ -64,6 +64,9 @@ static const Event town_events[] = {
     { S(0),    EV_BGM,   1,           0,   0 },
     { S(2),    EV_TEXT,  T_WHY,       0,   0 },
     /* ---- 前から混成(弓兵は屋根の上) ---- */
+    { S(2.5),   EV_DIR,   DIR_FRONT,   0,   0 },
+    { S(2.5),   EV_SPAWN, ET_E01,      22,  10 },
+    { S(3),     EV_SPAWN, ET_E01,      24, -10 },
     { S(5),    EV_DIR,   DIR_FRONT,   0,   0 },
     { S(5),    EV_SPAWN, ET_E01,      22,  10 },
     { S(5),    EV_SPAWN, ET_E03,      24, -10 },
@@ -76,13 +79,16 @@ static const Event town_events[] = {
     { S(13),   EV_SPAWN, ET_E04,      24, -22 },
     { S(13),   EV_SPAWN, ET_E04,      26,  22 },
     /* ---- 後ろから: コウモリ人・魔法使い・追ってくる猿人 ---- */
+    { S(14.5),  EV_SPAWN, ET_E03,      22,  10 },
     { S(16),   EV_DIR,   DIR_BACK,    0,   0 },
     { S(16.5), EV_SPAWN, ET_E02,     -14,   6 },
     { S(16.5), EV_SPAWN, ET_E05,     -12,  -6 },
     { S(18),   EV_SPAWN, ET_E01,     -10,   8 },
+    { S(19),    EV_SPAWN, ET_E05,     -12,   6 },
     { S(20),   EV_SPAWN, ET_E02,     -14,  -6 },
     { S(22),   EV_SPAWN, ET_E02,     -16,   6 },
     /* ---- 祭りの山車(後ろから。撃破までスクリプトは止まる) ---- */
+    { S(23.5),  EV_SPAWN, ET_E01,     -10,  -8 },
     { S(25),   EV_DIR,   DIR_BACK,    0,   0 },
     { S(25),   EV_TEXT,  T_FLOAT,     0,   0 },
     { S(25),   EV_SPEED, 14,          0,   0 },

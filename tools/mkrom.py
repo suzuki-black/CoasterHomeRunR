@@ -22,9 +22,9 @@ CODE_LIMIT = 0x8000   # 常駐部はページ1だけ(ページ2はモジュー�
 MOD_BASE, MOD_BSS, MOD_END = 0x8000, 0xBC00, 0xC000
 ENV_BANK = 4
 def GAME_BANK(n): return 4 + 2 * n
-P0D_BASE, P0D_LIMIT = 0x1A00, 0x4000   # ページ0の表とコード(0x0200-0x19FF は辺キャッシュ)
+P0D_BASE, P0D_LIMIT = 0x1A00, 0x2E00   # ページ0の表とコード(0x0200-0x19FF は辺キャッシュ、0x2E00-0x3FFF は地形の断面の表)
 P0D_STAGE = 0x1800                      # 読み込みは 0xB400-0xCBFF 経由なので 6KB まで
-ENV_CODE_LIMIT = 0xA400                 # 地形モジュールのコード(0xA400-0xBBFF は地形の表)
+ENV_CODE_LIMIT = 0xB600                 # 地形モジュールのコード(0xB600-0xBBFF は地形の色・飾り・種類の表)
 
 
 def read_ihx(path):

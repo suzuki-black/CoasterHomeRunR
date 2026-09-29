@@ -10,6 +10,7 @@
 #include "hud.h"
 #include "sound.h"
 #include "trolley.h"
+#include "fx.h"
 
 #define M(x)    ((u16)((x) * 64))               /* m → s 単位 */
 #define MPS(x)  ((i16)((x) * 546))              /* m/秒 → v 単位(30fps) */
@@ -81,7 +82,7 @@ typedef struct {
 } Enemy;
 
 #define MAX_EN 14
-static Enemy en[MAX_EN];
+Enemy en[MAX_EN];                /* テスト(openMSX)が build/game*.noi から番地を引いて読む */
 static u8 draw_order[MAX_EN];
 
 static u8  cam_sub;
@@ -104,6 +105,7 @@ static i8  pitch_cur;            /* カメラのピッチ(坂に合わせて少�
 static u16 fps_t0;               /* 計測用: 1 秒(60 ティック)の区切り */
 static u8  fps_n, fps_show;      /* その間の表示の切替回数と、表示する値 */
 static const Stage *stage;
+
 static u8  branch_open;          /* 1 = まだ選べる(分岐点の手前) */
 
 /* ---------------------------------------------------------------------------
@@ -156,69 +158,9 @@ static Enemy *spawn(u8 type, i8 dist, i8 lat8)
     return e;
 }
 
-/* 数字の表示(ルール: 色・形・場所・動きで 3 種類を分ける)
- *   得点        白  数字だけ「100」            倒した敵の位置    上へ流れる
- *   宝が増えた  黄  金貨の印 +「+2」(満杯 FULL)  宝の山の上        上へ流れる
- *   宝が減った  赤  金貨の印 +「-1」             宝の山の上        その場で点滅 */
-enum { POP_SCORE, POP_GAIN, POP_LOSS };
-#define N_POP 4
-static u8  pop_x[N_POP], pop_y[N_POP], pop_t[N_POP], pop_k[N_POP];
-static u16 pop_v[N_POP];
-static u8  pop_hx, pop_hy;       /* 撃った敵の画面上の位置(fire が決める) */
-#define PILE_POP_Y (TROLLEY_Y - 6)
-
-static void popup(u8 kind, u16 v)
-{
-    u8 i, k = 0;
-    for (i = 1; i < N_POP; i++) if (pop_t[i] < pop_t[k]) k = i;
-    pop_k[k] = kind; pop_v[k] = v; pop_t[k] = 16;
-    pop_x[k] = (kind == POP_SCORE) ? pop_hx : 32;
-    pop_y[k] = (kind == POP_SCORE) ? pop_hy : PILE_POP_Y;
-}
-
-static void popups_draw(void)
-{
-    u8 i, j, k, c;
-    char s[7];
-    for (i = 0; i < N_POP; i++) {
-        u16 v;
-        if (!pop_t[i]) continue;
-        pop_t[i]--;
-        k = pop_k[i];
-        if (k == POP_LOSS) {
-            if (pop_t[i] & 2) continue;              /* 点滅 */
-        } else if ((pop_t[i] & 1) && pop_y[i] > 1) {
-            pop_y[i]--;
-        }
-        v = pop_v[i];
-        j = 6; s[6] = 0;
-        do { s[--j] = (char)('0' + v % 10); v /= 10; } while (v);
-        c = C_WHITE;
-        if (k != POP_SCORE) {
-            c = (k == POP_GAIN) ? C_YELLOW : C_RED;
-            s[--j] = (k == POP_GAIN) ? '+' : '-';
-            if (k == POP_GAIN && !pop_v[i]) j = 6;       /* 満杯で増えなかった */
-        }
-        {
-            i8 x = (i8)pop_x[i] - (i8)((6 - j) * 2), y = (i8)pop_y[i];
-            if (k != POP_SCORE) {
-                /* 金貨の印(黄の 2×2)を数字の左に */
-                x += 2;
-                if (x >= 3 && y >= 0) { g_rx = (u8)x - 3; g_ry = (u8)y + 1; g_rw = 2; g_rh = 2; g_color = C_YELLOW; rect_fill(); }
-            }
-            text_draw(x, y, (j == 6) ? "FULL" : &s[j], c, 1);
-        }
-    }
-}
-
-/* 被弾で宝の山から飛び散る金貨(画面座標 8.8 ブロック) */
-#define N_COIN 6
-static i16 coin_x[N_COIN], coin_y[N_COIN], coin_vx[N_COIN], coin_vy[N_COIN];
-static u8  coin_t;
-
 static void damage_player(void)
 {
-    u8 i, r, dmg;
+    u8 dmg;
     if (!life) return;
     shake = 4;
     flash_palette();
@@ -227,30 +169,9 @@ static void damage_player(void)
     dmg = (g_cfg.damage < life) ? g_cfg.damage : life;
     life -= dmg;
     popup(POP_LOSS, dmg);                    /* 宝がいくつ減ったか */
-    r = (u8)g_tick;
-    for (i = 0; i < N_COIN; i++) {
-        r = r * 5 + 7;
-        coin_x[i] = F88(32) + ((i16)(r & 31) - 16) * 64;
-        coin_y[i] = F88(TROLLEY_Y + 2);
-        coin_vx[i] = ((i16)(r & 63) - 32) * 12;
-        coin_vy[i] = -F88(1.2) - (i16)(r & 7) * 24;
-    }
-    coin_t = 14;
+    coins_start();                           /* 宝の山から金貨が飛び散る */
 }
 
-static void coins_draw(void)
-{
-    u8 i;
-    if (!coin_t) return;
-    coin_t--;
-    for (i = 0; i < N_COIN; i++) {
-        i16 x = coin_x[i] >> 8, y = coin_y[i] >> 8;
-        coin_x[i] += coin_vx[i];
-        coin_y[i] += coin_vy[i];
-        coin_vy[i] += 64;
-        if (x >= 0 && x < 64 && y >= 0 && y < GAME_ROWS) BUF[(u8)y * 64 + (u8)x] = (i & 1) ? C_YELLOW : C_WHITE;
-    }
-}
 
 static void move_enemy(Enemy *e)
 {
@@ -435,6 +356,7 @@ static void branch_pick(u8 dir)
         if (dir != route) {
             route = dir;
             rail_refork(stage->branch[dir], stage->tail);
+            g_alt_n = rail_sample(stage->branch[dir ^ 1], g_alt, ALT_N);
         }
     }
     for (i = 0; i < MAX_EN; i++)
@@ -492,8 +414,8 @@ static void fire(void)
         if (bx >= h->x0 && bx < h->x1 && by >= h->y0 && by < h->y1 && h->z < bz) {
             bz = h->z;
             best = h->id;
-            pop_hx = (u8)((h->x0 + h->x1) >> 1);
-            pop_hy = (h->y0 > 6) ? h->y0 - 6 : 0;
+            g_pop_hx = (u8)((h->x0 + h->x1) >> 1);
+            g_pop_hy = (h->y0 > 6) ? h->y0 - 6 : 0;
         }
     }
     if (best >= MAX_EN) return;
@@ -566,7 +488,12 @@ static void script_update(void)
         case EV_SPAWN: spawn(ev->a, ev->b, ev->c); break;
         case EV_DIR:   attack_dir = ev->a; break;
         case EV_GO:    hold = ev->a; break;
-        case EV_BOSS:  spawn(ev->a, ev->b, 0); break;
+        case EV_BOSS:
+            /* ボスを出したら、倒すまで次の命令へ進まない(同じフレームで続きの「クリア」などを実行しない)。
+             * 警告の向きはボスの出る側にする(ステージのスクリプトが向きを出し忘れても、後ろのボスに気づけるように) */
+            spawn(ev->a, ev->b, 0);
+            attack_dir = (ev->b < 0) ? DIR_BACK : DIR_FRONT;
+            return;
         case EV_END:   sc_end = 1; break;
         case EV_TEXT:  cap_id = ev->a; cap_time = 40; break;
         case EV_SPEED: spd_over = ev->a; break;
@@ -814,6 +741,7 @@ static void render(void)
     render_set_camera(p.x, p.y - EYE_DROP, p.z, yaw + look, (i8)fmul(pitch_cur, COS((u8)(look >> 8))));
     env_draw(cam_s, look >> 8);
     g_perf_env = timer_read() - t0;
+    alt_draw();
     draw_enemies();
     /* トロッコの縁。振り向き中は横へ滑らせて一度画面外へ出し、反対側から戻す */
     trolley_set_life(life);
@@ -835,6 +763,7 @@ static void render(void)
 u8 game_run(const Stage *st, u8 first)
 {
     u8 i, over = 0;
+    fx_reset();                          /* 演出と、分岐の選ばれていない側の線路を消す(この後の分岐の準備で入れ直す) */
     rail_begin();
     rail_add(st->track);
     route = g_cfg.route ? g_cfg.route - 1 : st->branch_def;
@@ -844,6 +773,7 @@ u8 game_run(const Stage *st, u8 first)
         rail_add(st->branch[route]);
         rail_add(st->tail);
         branch_open = !g_cfg.route;
+        g_alt_n = rail_sample(st->branch[route ^ 1], g_alt, ALT_N);
     }
     {   /* 地形の区間と乱数の種を常駐部へ写してから、地形モジュールで作る(モジュールからはこのステージのデータが見えない) */
         const u8 *z = st->zones;
@@ -875,8 +805,7 @@ u8 game_run(const Stage *st, u8 first)
     attack_dir = DIR_NONE;
     boss_alive = 0;
     blink = 0;
-    shake = 0; coin_t = 0;
-    pop_t[0] = pop_t[1] = pop_t[2] = pop_t[3] = 0;
+    shake = 0;
     sc_tick = 0; sc_ev = st->events; sc_end = 0;
     g_scene = 1;
 

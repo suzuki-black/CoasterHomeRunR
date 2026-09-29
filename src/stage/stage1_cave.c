@@ -1,11 +1,10 @@
-/* stage1_cave.c — ステージ 1: 遊園地からの脱出(オープニング)と坑道(仕様書 5 章)
+/* stage1_cave.c — ステージ 1「THE ESCAPE」: 遊園地からの脱出(仕様書 5 章)
  *
  * 流れ: オープニング(獣人の窃盗団が営む遊園地で村の宝を取り返し、コースターで逃げる。出入り口は囲まれているので、
- *       レールの切れ目からジャンプして柵の外の丘のレールに着地)→ 獣人が気づいて後ろから追ってくる → 丘を下って坑道へ
- *       → 雑魚(前・後ろ) → 中ボス(大猿人の親方) → 分岐(左 = 金貨袋ばかり / 右 = 敵ばかり、約 1 分)
- *       → 合流して雑魚 → 大ボス(洞窟の主) → ステージ 2(地底湖)
- * オープニングは位置で進める(EV_AT)。A で飛ばすと着地した先(skip_m)へ進む。
- * 外(遊園地・丘)は park_pal、坑道に入ったら cave_pal へ切り替える(EV_PAL)。
+ *       レールの切れ目からジャンプして柵の外の丘のレールに着地)→ 獣人が気づいて後ろから追ってくる
+ *       → 遊園地の柵沿い・丘を走る(雑魚が前後から)→ 中ボス(大猿人の親方)→ 分岐(左 = 金貨袋が多い / 右 = 敵ばかり)
+ *       → 合流して柵沿いへ → 大ボス(遊園地の用心棒)→ 坑道の入口へ飛び込んでステージ 2(地底湖)
+ * 面全体が遊園地とその周り(夕暮れ)。着地の後はすべて位置で進める(EV_AT)。A でオープニングを飛ばすと着地した先(skip_m)へ。
  * ステージデータは定数だけで書き、ゲームモジュールとして 0x8000 にリンクする(仕様書 7.3)。初期値つきの変数は置けない。
  */
 #include "game.h"
@@ -14,8 +13,8 @@
 
 #define S(sec) ((u16)((sec) * 60))
 
-/* 線形: 遊園地のコースター → 巻き上げ → 落下 → レールの切れ目からジャンプ → 丘に着地して下る → 坑道。
- * 坑道は左右に折れ曲がり(S 字を含む)、急な上り下り(3/16 ≒ 19%)もある。
+/* 線形: 遊園地のコースター → 巻き上げ → 落下 → レールの切れ目からジャンプ → 丘に着地 → 柵沿い・丘。
+ * 左右に折れ曲がり(S 字を含む)、急な上り下り(3/16 ≒ 19%)もある(上り坂でもなぜか止まらない)。
  * (長さ[m](偶数), ヨー角の変化(65536 = 1 周、正 = 右), 1m あたりの高さ変化(1/16m), 速度(m/秒 × 4))
  * 326m に分岐点: 左(金貨袋ばかり)と右(敵ばかり)。どちらも同じ長さ 228m のひし形で、554m で元の一本道に戻る */
 static const RailSeg cave_rail[] = {
@@ -29,7 +28,7 @@ static const RailSeg cave_rail[] = {
     {   8,       0,-14, 24 },
     {  36,       0, -3, 20 },   /*  78〜130m 柵の外の丘に着地して下る */
     {  16,  0x1400, -2, 18 },
-    {  18,       0,  0, 16 },   /* 130m〜 坑道の入口 */
+    {  18,       0,  0, 16 },   /* 130m〜 遊園地の柵沿い */
     {  20,       0,  0, 12 },
     {  16,  0x2000,  0, 14 },   /* 右へ 45 度 */
     {  12,       0,  0, 14 },
@@ -63,7 +62,7 @@ static const RailSeg cave_tail[] = {       /* 424m〜 合流後 */
     {  16,  0x1800,  2, 16 },   /* 上りながら右へ */
     {  20, -0x1800,  0, 16 },   /* S 字 */
     {  30,       0, -2, 18 },   /* 下り */
-    {  80,       0,  0, 12 },   /* 大ボスの広い坑道 → 出口(〜570m) */
+    {  80,       0,  0, 12 },   /* 大ボス(柵沿い)→ 坑道の入口(〜700m) */
     {   0,       0,  0,  0 },
 };
 
@@ -73,10 +72,6 @@ static const RailSeg cave_tail[] = {       /* 424m〜 合流後 */
 static const u8 park_pal[14] = {
     0x41, 2,  0x12, 1,  0x42, 2,  0x11, 3,  0x61, 1,  0x71, 6,  0x64, 3,
 };
-/* 坑道 */
-static const u8 cave_pal[14] = {
-    0x41, 2,  0x12, 1,  0x22, 2,  0x33, 3,  0x20, 1,  0x31, 2,  0x55, 5,
-};
 
 enum { T_NONE, T_GOTBACK, T_GATE, T_GRRR, T_HANG, T_WARNING, T_CLEAR, T_PICK, T_LROAD, T_RROAD, T_BACK, T_JUMP, T_OUT };
 static const Caption cave_captions[] = {
@@ -85,7 +80,7 @@ static const Caption cave_captions[] = {
     { "GRRR!",     C_RED,    2 },
     { "HANG ON!",  C_WHITE,  2 },
     { "WARNING!",  C_RED,    2 },
-    { "CAVE CLEAR!", C_YELLOW, 1 },
+    { "STAGE CLEAR!", C_YELLOW, 1 },
     { "SHOOT L OR R!", C_WHITE, 1 },
     { "TREASURE ROAD", C_YELLOW, 1 },
     { "BEAST ROAD!",   C_RED,    1 },
@@ -132,123 +127,179 @@ static const Event cave_events[] = {
     { AT(56, EV_FX),     SE_TRAIN,    4,   0 },     /* レールを壊して飛び出す */
     { AT(79, EV_FX),     SE_TRAIN,    8,   0 },     /* 着地 */
     { AT(79, EV_TEXT),   T_OUT,       0,   0 },
-    /* 獣人が気づいて後ろから追ってくる。ここから操作できる(オープニングを飛ばすとここへ) */
-    { AT(86, EV_TEXT),   T_GRRR,      0,   0 },
-    { AT(86, EV_SPAWN),  ET_E01,     -11,  -8 },
-    { AT(86, EV_SPAWN),  ET_E01,     -12,   8 },
-    { AT(86, EV_SPAWN),  ET_E01,     -14,   0 },
-    { AT(86, EV_CTRL),   1,           0,   0 },
-    { AT(86, EV_DIR),    DIR_BACK,    0,   0 },
-    { AT(86, EV_BGM),    1,           0,   0 },
-    /* ---- 雑魚: 前から猿人 ---- */
-    { S(22.6),   EV_DIR,   DIR_FRONT,   0,   0 },
-    { S(22.6),   EV_SPAWN, ET_E01,      22,  10 },
-    { S(24.1), EV_SPAWN, ET_E01,      22, -10 },
-    { S(25.6),   EV_SPAWN, ET_E01,      22,  10 },
-    { S(25.6),   EV_SPAWN, ET_E01,      26, -10 },
-    { S(27.6),   EV_SPAWN, ET_E01,      22, -10 },
-    { S(29.1), EV_SPAWN, ET_E01,      24,  10 },
-    { S(30.1), EV_SPAWN, ET_E01,      22, -10 },
-    { S(31.6),   EV_SPAWN, ET_E01,      22,  10 },
-    { S(31.6),   EV_SPAWN, ET_E01,      25, -10 },
-    /* ---- 雑魚: 後ろからコウモリ人 ---- */
-    { S(34.6),   EV_DIR,   DIR_BACK,    0,   0 },
-    { AT(150, EV_PAL),   1,           0,   0 },     /* 坑道に入ったら坑道の色(時刻の並びでここ ≒ 150m) */
-    { S(35.6),   EV_SPAWN, ET_E02,     -14,   6 },
-    { S(37.6),   EV_SPAWN, ET_E02,     -14,  -6 },
-    { S(39.6),   EV_SPAWN, ET_E02,     -16,   6 },
-    { S(40.6),   EV_SPAWN, ET_E02,     -18,  -6 },
-    { S(43.6),   EV_SPAWN, ET_E02,     -14,   6 },
+    /* ---- 獣人が気づいて後ろから追ってくる。ここから操作できる(オープニングを飛ばすとここへ) ---- */
+    { AT(86, EV_TEXT),                  T_GRRR, 0, 0 },
+    { AT(86, EV_SPAWN),                 ET_E01, -11, -8 },
+    { AT(86, EV_SPAWN),                 ET_E01, -12, 8 },
+    { AT(86, EV_SPAWN),                 ET_E01, -14, 0 },
+    { AT(86, EV_CTRL),                  1, 0, 0 },
+    { AT(86, EV_DIR),                   DIR_BACK, 0, 0 },
+    { AT(86, EV_BGM),                   1, 0, 0 },
+    /* ---- 柵沿い: 前から猿人、柵の上から弓兵 ---- */
+    { AT(108, EV_DIR),                  DIR_FRONT, 0, 0 },
+    { AT(108, EV_SPAWN),                ET_E01, 22, 10 },
+    { AT(108, EV_SPAWN),                ET_E01, 24, -10 },
+    { AT(124, EV_SPAWN),                ET_E01, 22, -10 },
+    { AT(124, EV_SPAWN),                ET_E01, 22, 10 },
+    { AT(140, EV_SPAWN),                ET_E04, 24, -18 },
+    { AT(140, EV_SPAWN),                ET_E01, 22, 10 },
+    { AT(154, EV_SPAWN),                ET_E01, 22, -10 },
+    { AT(154, EV_SPAWN),                ET_E01, 25, 10 },
+    { AT(154, EV_SPAWN),                ET_E01, 27, 0 },
+    /* ---- 後ろからコウモリ人と、走って追ってくる猿人 ---- */
+    { AT(164, EV_SPAWN),                ET_E01, 22, 10 },
+    { AT(170, EV_DIR),                  DIR_BACK, 0, 0 },
+    { AT(172, EV_SPAWN),                ET_E02, -14, 6 },
+    { AT(172, EV_SPAWN),                ET_E02, -16, -6 },
+    { AT(186, EV_SPAWN),                ET_E01, -11, 8 },
+    { AT(186, EV_SPAWN),                ET_E02, -14, -6 },
+    { AT(198, EV_SPAWN),                ET_E02, -14, 6 },
+    { AT(198, EV_SPAWN),                ET_E02, -16, -6 },
+    { AT(212, EV_DIR),                  DIR_FRONT, 0, 0 },
+    { AT(212, EV_SPAWN),                ET_E01, 22, 10 },
+    { AT(212, EV_SPAWN),                ET_E04, 24, -18 },
+    { AT(222, EV_SPAWN),                ET_MEDKIT, 18, -10 },
+    { AT(222, EV_SPAWN),                ET_E01, 24, 10 },
+    { AT(232, EV_SPAWN),                ET_E01, 22, -10 },
+    { AT(232, EV_SPAWN),                ET_E01, 24, 10 },
     /* ---- 中ボス: 大猿人の親方(撃破までスクリプトは止まる) ---- */
-    { S(47.6),   EV_DIR,   DIR_FRONT,   0,   0 },
-    { S(47.6),   EV_TEXT,  T_WARNING,   0,   0 },
-    { S(47.6),   EV_SPEED, 6,           0,   0 },
-    { S(48.6),   EV_BOSS,  ET_B01,      16,  0 },
-    { S(48.7), EV_SPEED, 0,           0,   0 },
-    /* ---- 分岐: お腹に L / R と書かれた獣人(攻撃しない)。先に撃った側へ。撃たなければ右(規定) ----
-     * ここから先は位置で進める(中ボス戦の長さでずれないように)。EV_ONLY_L / R = その側を通ったときだけ */
+    { AT(242, EV_TEXT),                 T_WARNING, 0, 0 },
+    { AT(242, EV_SPEED),                6, 0, 0 },
+    { AT(246, EV_BOSS),                 ET_B01, 16, 0 },
+    { AT(246, EV_SPEED),                0, 0, 0 },
+    { AT(246, EV_DIR),                  DIR_BACK, 0, 0 },
+    { AT(256, EV_SPAWN),                ET_E02, -14, 6 },
+    { AT(256, EV_SPAWN),                ET_E01, -11, -8 },
+    { AT(270, EV_DIR),                  DIR_FRONT, 0, 0 },
+    { AT(270, EV_SPAWN),                ET_E01, 22, 10 },
+    { AT(270, EV_SPAWN),                ET_E01, 24, -10 },
+    { AT(280, EV_DIR),                  DIR_BACK, 0, 0 },
+    { AT(280, EV_SPAWN),                ET_E02, -14, 6 },
+    { AT(280, EV_SPAWN),                ET_E02, -16, -6 },
+    /* ---- 分岐: 線路が Y 字に分かれる手前、左の線路の脇に L、右の脇に R(攻撃しない)。先に倒した側へ。倒さなければ右(規定) ---- */
+    { AT(288, EV_DIR),                  DIR_NONE, 0, 0 },
     { AT(288, EV_TEXT),                 T_PICK, 0, 0 },
-    { AT(296, EV_SPAWN),                ET_SIGNL, 26, -10 },
-    { AT(296, EV_SPAWN),                ET_SIGNR, 26, 10 },
-    /* ---- 左: 金貨袋ばかり / 右: 敵ばかり ---- */
+    { AT(290, EV_DIR),                  DIR_FRONT, 0, 0 },
+    { AT(290, EV_SPAWN),                ET_E01, 22, 0 },
+    { AT(298, EV_SPAWN),                ET_SIGNL, 24, -20 },
+    { AT(298, EV_SPAWN),                ET_SIGNR, 24, 20 },
+    /* ---- 左: 金貨袋が多い(敵は少なめ) / 右: 敵ばかり ---- */
+    { AT(302, EV_DIR),                  DIR_FRONT, 0, 0 },
+    { AT(302, EV_SPAWN),                ET_E01, 24, 2 },
+    { AT(314, EV_SPAWN),                ET_E01, 20, -2 },
+    { AT(324, EV_SPAWN),                ET_E01, 20, 0 },
     { AT(328, EV_TEXT | EV_ONLY_L),     T_LROAD, 0, 0 },
     { AT(328, EV_TEXT | EV_ONLY_R),     T_RROAD, 0, 0 },
     { AT(328, EV_DIR | EV_ONLY_R),      DIR_FRONT, 0, 0 },
     { AT(330, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, 10 },
     { AT(330, EV_SPAWN | EV_ONLY_R),    ET_E01, 24, -10 },
     { AT(334, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, 10 },
-    { AT(345, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, -10 },
-    { AT(345, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, 10 },
-    { AT(345, EV_SPAWN | EV_ONLY_R),    ET_E01, 26, 0 },
-    { AT(354, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, -10 },
-    { AT(362, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, 10 },
-    { AT(362, EV_SPAWN | EV_ONLY_R),    ET_E01, 24, -10 },
-    { AT(374, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, 10 },
-    { AT(378, EV_DIR | EV_ONLY_R),      DIR_BACK, 0, 0 },
-    { AT(380, EV_SPAWN | EV_ONLY_R),    ET_E02, -14, 6 },
-    { AT(380, EV_SPAWN | EV_ONLY_R),    ET_E02, -16, -6 },
-    { AT(392, EV_SPAWN | EV_ONLY_R),    ET_E01, -10, 8 },
-    { AT(392, EV_SPAWN | EV_ONLY_R),    ET_E02, -14, -6 },
-    { AT(394, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, -10 },
-    { AT(410, EV_SPAWN | EV_ONLY_R),    ET_E02, -14, 6 },
-    { AT(410, EV_SPAWN | EV_ONLY_R),    ET_E02, -16, -6 },
-    { AT(414, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, 10 },
-    { AT(428, EV_DIR | EV_ONLY_R),      DIR_FRONT, 0, 0 },
-    { AT(430, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, 10 },
-    { AT(430, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, -10 },
-    { AT(430, EV_SPAWN | EV_ONLY_R),    ET_E01, 25, 0 },
-    { AT(434, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, -10 },
-    { AT(448, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, -10 },
+    { AT(338, EV_DIR | EV_ONLY_L),      DIR_BACK, 0, 0 },
+    { AT(338, EV_SPAWN | EV_ONLY_L),    ET_E02, -14, -6 },
+    { AT(344, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, -10 },
+    { AT(344, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, 10 },
+    { AT(344, EV_SPAWN | EV_ONLY_R),    ET_E01, 26, 0 },
+    { AT(346, EV_DIR | EV_ONLY_L),      DIR_FRONT, 0, 0 },
+    { AT(346, EV_SPAWN | EV_ONLY_L),    ET_E01, 22, -10 },
+    { AT(358, EV_DIR | EV_ONLY_L),      DIR_BACK, 0, 0 },
+    { AT(358, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, -10 },
+    { AT(358, EV_SPAWN | EV_ONLY_L),    ET_E02, -14, 6 },
+    { AT(360, EV_SPAWN | EV_ONLY_R),    ET_E04, 24, -18 },
+    { AT(360, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, 10 },
+    { AT(372, EV_DIR | EV_ONLY_L),      DIR_BACK, 0, 0 },
+    { AT(372, EV_SPAWN | EV_ONLY_L),    ET_E02, -14, 6 },
+    { AT(374, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, -10 },
+    { AT(374, EV_SPAWN | EV_ONLY_R),    ET_E01, 24, 10 },
+    { AT(382, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, 10 },
+    { AT(386, EV_SPAWN | EV_ONLY_L),    ET_E02, -16, -6 },
+    { AT(388, EV_DIR | EV_ONLY_R),      DIR_BACK, 0, 0 },
+    { AT(390, EV_SPAWN | EV_ONLY_R),    ET_E02, -14, 6 },
+    { AT(390, EV_SPAWN | EV_ONLY_R),    ET_E02, -16, -6 },
+    { AT(398, EV_DIR | EV_ONLY_L),      DIR_FRONT, 0, 0 },
+    { AT(398, EV_SPAWN | EV_ONLY_L),    ET_E01, 22, 10 },
+    { AT(398, EV_SPAWN | EV_ONLY_L),    ET_E01, 24, -10 },
+    { AT(404, EV_SPAWN | EV_ONLY_R),    ET_E01, -11, 8 },
+    { AT(404, EV_SPAWN | EV_ONLY_R),    ET_E02, -14, -6 },
+    { AT(406, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, -10 },
+    { AT(414, EV_SPAWN | EV_ONLY_L),    ET_E01, 22, 10 },
+    { AT(418, EV_SPAWN | EV_ONLY_R),    ET_E02, -14, 6 },
+    { AT(418, EV_SPAWN | EV_ONLY_R),    ET_E02, -16, -6 },
+    { AT(430, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, 10 },
+    { AT(430, EV_DIR | EV_ONLY_L),      DIR_BACK, 0, 0 },
+    { AT(430, EV_SPAWN | EV_ONLY_L),    ET_E02, -14, -6 },
+    { AT(432, EV_DIR | EV_ONLY_R),      DIR_FRONT, 0, 0 },
+    { AT(432, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, 10 },
+    { AT(432, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, -10 },
+    { AT(432, EV_SPAWN | EV_ONLY_R),    ET_E01, 25, 0 },
+    { AT(442, EV_SPAWN | EV_ONLY_L),    ET_E02, -14, 6 },
+    { AT(448, EV_SPAWN | EV_ONLY_R),    ET_E04, 24, -18 },
     { AT(448, EV_SPAWN | EV_ONLY_R),    ET_E01, 24, 10 },
-    { AT(454, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, 10 },
-    { AT(465, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, 10 },
-    { AT(465, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, -10 },
-    { AT(465, EV_SPAWN | EV_ONLY_R),    ET_E01, 26, 0 },
-    { AT(474, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, -10 },
+    { AT(454, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, -10 },
+    { AT(456, EV_DIR | EV_ONLY_L),      DIR_FRONT, 0, 0 },
+    { AT(456, EV_SPAWN | EV_ONLY_L),    ET_E01, 22, -10 },
+    { AT(464, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, 10 },
+    { AT(464, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, -10 },
+    { AT(464, EV_SPAWN | EV_ONLY_R),    ET_E01, 26, 0 },
+    { AT(470, EV_SPAWN | EV_ONLY_L),    ET_E01, 22, 10 },
+    { AT(478, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, 10 },
     { AT(480, EV_DIR | EV_ONLY_R),      DIR_BACK, 0, 0 },
     { AT(482, EV_SPAWN | EV_ONLY_R),    ET_E02, -14, 6 },
     { AT(482, EV_SPAWN | EV_ONLY_R),    ET_E02, -16, -6 },
-    { AT(494, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, 10 },
-    { AT(500, EV_SPAWN | EV_ONLY_R),    ET_E01, -10, 8 },
-    { AT(500, EV_SPAWN | EV_ONLY_R),    ET_E01, -12, -8 },
-    { AT(514, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, -10 },
-    { AT(516, EV_DIR | EV_ONLY_R),      DIR_FRONT, 0, 0 },
-    { AT(518, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, 10 },
-    { AT(518, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, -10 },
-    { AT(518, EV_SPAWN | EV_ONLY_R),    ET_E01, 25, 0 },
-    { AT(534, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, 10 },
-    { AT(535, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, -10 },
-    { AT(535, EV_SPAWN | EV_ONLY_R),    ET_E01, 24, 10 },
-    /* ---- 合流: 元の一本道 ---- */
+    { AT(484, EV_DIR | EV_ONLY_L),      DIR_BACK, 0, 0 },
+    { AT(484, EV_SPAWN | EV_ONLY_L),    ET_E02, -14, 6 },
+    { AT(484, EV_SPAWN | EV_ONLY_L),    ET_E02, -16, -6 },
+    { AT(496, EV_SPAWN | EV_ONLY_R),    ET_E01, -11, 8 },
+    { AT(496, EV_SPAWN | EV_ONLY_R),    ET_E01, -13, -8 },
+    { AT(500, EV_DIR | EV_ONLY_L),      DIR_FRONT, 0, 0 },
+    { AT(500, EV_SPAWN | EV_ONLY_L),    ET_E04, 24, -18 },
+    { AT(502, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, -10 },
+    { AT(510, EV_DIR | EV_ONLY_R),      DIR_FRONT, 0, 0 },
+    { AT(512, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, 10 },
+    { AT(512, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, -10 },
+    { AT(512, EV_SPAWN | EV_ONLY_R),    ET_E01, 25, 0 },
+    { AT(514, EV_DIR | EV_ONLY_L),      DIR_FRONT, 0, 0 },
+    { AT(514, EV_SPAWN | EV_ONLY_L),    ET_E01, 22, 10 },
+    { AT(514, EV_SPAWN | EV_ONLY_L),    ET_E01, 24, -10 },
+    { AT(526, EV_SPAWN | EV_ONLY_L),    ET_MEDKIT, 18, 10 },
+    { AT(528, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, -10 },
+    { AT(528, EV_SPAWN | EV_ONLY_R),    ET_E04, 24, -18 },
+    { AT(528, EV_DIR | EV_ONLY_L),      DIR_BACK, 0, 0 },
+    { AT(528, EV_SPAWN | EV_ONLY_L),    ET_E02, -14, 6 },
+    { AT(542, EV_SPAWN | EV_ONLY_R),    ET_E01, 22, 10 },
+    { AT(542, EV_SPAWN | EV_ONLY_R),    ET_E01, 24, -10 },
+    /* ---- 合流: 元の一本道(柵沿い) ---- */
+    { AT(542, EV_DIR | EV_ONLY_L),      DIR_FRONT, 0, 0 },
+    { AT(542, EV_SPAWN | EV_ONLY_L),    ET_E01, 22, -10 },
     { AT(556, EV_DIR),                  DIR_NONE, 0, 0 },
     { AT(556, EV_TEXT),                 T_BACK, 0, 0 },
     { AT(562, EV_DIR),                  DIR_FRONT, 0, 0 },
-    { AT(562, EV_SPAWN),                ET_MEDKIT, 18, 10 },
-    { AT(566, EV_SPAWN),                ET_E01, 22, -10 },
-    { AT(570, EV_SPAWN),                ET_E01, 22, 10 },
-    { AT(574, EV_SPAWN),                ET_E01, 25, -10 },
-    { AT(578, EV_DIR),                  DIR_BACK, 0, 0 },
-    { AT(582, EV_SPAWN),                ET_E02, -14, 6 },
-    { AT(586, EV_SPAWN),                ET_E02, -16, -6 },
-    { AT(596, EV_DIR),                  DIR_FRONT, 0, 0 },
-    { AT(596, EV_SPAWN),                ET_E01, 22, 10 },
-    { AT(600, EV_SPAWN),                ET_E01, 22, -10 },
-    { AT(604, EV_SPAWN),                ET_E01, 24, 10 },
-    { AT(608, EV_SPAWN),                ET_MEDKIT, 18, -10 },
-    /* ---- 大ボス: 洞窟の主。撃破後はクリアして出口へ ---- */
-    { AT(616, EV_TEXT),                 T_WARNING, 0, 0 },
-    { AT(616, EV_SPEED),                6, 0, 0 },
-    { AT(620, EV_BOSS),                 ET_BOSS1, 20, 0 },
-    { AT(620, EV_DIR),                  DIR_NONE, 0, 0 },
-    { AT(620, EV_SPEED),                16, 0, 0 },
-    { AT(620, EV_TEXT),                 T_CLEAR, 0, 0 },
-    { AT(690, EV_END),                  0, 0, 0 },
+    { AT(562, EV_SPAWN),                ET_E01, 22, 10 },
+    { AT(562, EV_SPAWN),                ET_E01, 24, -10 },
+    { AT(574, EV_SPAWN),                ET_E04, 24, -18 },
+    { AT(574, EV_SPAWN),                ET_MEDKIT, 18, 10 },
+    { AT(584, EV_DIR),                  DIR_BACK, 0, 0 },
+    { AT(586, EV_SPAWN),                ET_E02, -14, 6 },
+    { AT(586, EV_SPAWN),                ET_E01, -11, -8 },
+    { AT(598, EV_DIR),                  DIR_FRONT, 0, 0 },
+    { AT(598, EV_SPAWN),                ET_E01, 22, -10 },
+    { AT(598, EV_SPAWN),                ET_E01, 24, 10 },
+    /* ---- 大ボス: 遊園地の用心棒(岩を投げ、ときどき突進)。撃破後はクリアして坑道の入口へ ---- */
+    { AT(610, EV_TEXT),                 T_WARNING, 0, 0 },
+    { AT(610, EV_SPEED),                6, 0, 0 },
+    { AT(614, EV_BOSS),                 ET_BOSS1, 20, 0 },
+    { AT(614, EV_DIR),                  DIR_NONE, 0, 0 },
+    { AT(614, EV_SPEED),                24, 0, 0 },
+    { AT(614, EV_TEXT),                 T_CLEAR, 0, 0 },
+    { AT(674, EV_END),                  0, 0, 0 },
 };
 
-/* 地形: (このリングまで, 種類)。リング = 4m。先頭は外のレールの色(坑道のレールは 15 = 灰) */
+/* 地形: (このリングまで, 種類)。リング = 4m。先頭はレールの色。
+ * 遊園地の高架 → 空中 → 丘 → 柵沿い → 丘(分岐点のまわり。両側が開けているので分かれる線路が見える)→ 柵沿い → 丘
+ * → 柵沿い(大ボス)→ 坑道の入口(ステージ 2 へ) */
 static const u8 cave_zones[] = {
     10,
-    14, K_PARK, 20, K_AIR, 33, K_HILL, 37, K_EXIT, 0xFF, K_CAVE,
+    14, K_PARK, 20, K_AIR, 33, K_HILL, 63, K_PARKSIDE, 91, K_HILL, 131, K_PARKSIDE, 155, K_HILL,
+    167, K_PARKSIDE, 0xFF, K_EXIT,
 };
 
 const Stage stage_data = {
@@ -263,6 +314,6 @@ const Stage stage_data = {
     { cave_left, cave_right }, cave_tail,
     1,          /* 撃たなければ右(敵ばかり) */
     1,          /* やさしい進行 */
-    cave_pal,   /* 坑道に入ったら(EV_PAL 1) */
+    0,          /* パレットは切り替えない(面全体が遊園地のまわりの夕暮れ) */
     84,         /* オープニングを飛ばしたらここ[m]へ */
 };

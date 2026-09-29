@@ -31,6 +31,8 @@ void rail_add(const RailSeg *segs);
 void rail_fork(void);
 u16  rail_fork_m(void);        /* 分岐点の位置[m] */
 void rail_refork(const RailSeg *branch, const RailSeg *tail);
+/* 分岐点から segs をたどった点を out へ最大 max 個(2m ごと)。戻り値は個数 */
+u8   rail_sample(const RailSeg *segs, RailPt *out, u8 max);
 /* 位置 s の点(ワールド)と向き。s は末尾で止める */
 void rail_at(u16 s, V3 *p, u16 *yaw);
 /* 位置 s から右へ lat、上へ up(8.8 m)の点をカメラ空間へ */

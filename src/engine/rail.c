@@ -51,6 +51,28 @@ u16 rail_fork_m(void)
     return fk_n << 1;
 }
 
+/* 分岐点から branch をたどった点を out へ最大 max 個(2m ごと)。選ばれていない側の線路を描くのに使う */
+u8 rail_sample(const RailSeg *segs, RailPt *out, u8 max)
+{
+    u8 i, steps, n = 0;
+    u16 yaw = fk_yaw;
+    i16 x = fk_x, y = fk_y, z = fk_z;
+    for (; segs->len && n < max; segs++) {
+        i16 dyaw;
+        steps = segs->len >> 1;
+        dyaw = segs->dyaw / steps;
+        for (i = 0; i < steps && n < max; i++) {
+            out[n].x = x; out[n].y = y; out[n].z = z; out[n].yaw = yaw;
+            n++;
+            yaw += dyaw;
+            x += SIN(yaw >> 8) << 1;
+            z += COS(yaw >> 8) << 1;
+            y += (i16)segs->dy << 5;
+        }
+    }
+    return n;
+}
+
 void rail_refork(const RailSeg *branch, const RailSeg *tail)
 {
     rb_n = fk_n; rb_yaw = fk_yaw;

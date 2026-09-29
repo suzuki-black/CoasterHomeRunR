@@ -75,6 +75,8 @@ static const Event forest_events[] = {
     { S(1),    EV_TEXT,  T_FOREST,    0,   0 },
     { S(0),    EV_BGM,   1,           0,   0 },
     /* ---- 前からキリン人(槍のリーチが長い)と魔法使い ---- */
+    { S(2.5),   EV_DIR,   DIR_FRONT,   0,   0 },
+    { S(2.5),   EV_SPAWN, ET_E03,      22, -10 },
     { S(5),    EV_DIR,   DIR_FRONT,   0,   0 },
     { S(5),    EV_SPAWN, ET_E03,      22,  10 },
     { S(6.5),  EV_SPAWN, ET_E03,      22, -10 },
@@ -85,6 +87,7 @@ static const Event forest_events[] = {
     { S(13),   EV_SPAWN, ET_E03,      22,  10 },
     { S(13),   EV_SPAWN, ET_E03,      25, -10 },
     /* ---- 後ろからコウモリ人と魔法使い ---- */
+    { S(14.5),  EV_SPAWN, ET_E05,      20,  -8 },
     { S(16),   EV_DIR,   DIR_BACK,    0,   0 },
     { S(16.5), EV_SPAWN, ET_E05,     -12,   6 },
     { S(18),   EV_SPAWN, ET_E02,     -14,  -6 },
@@ -92,6 +95,7 @@ static const Event forest_events[] = {
     { S(21),   EV_SPAWN, ET_E02,     -14,   6 },
     { S(23),   EV_SPAWN, ET_E02,     -16,  -6 },
     /* ---- 前から: キリン人・魔法使い・金貨袋 ---- */
+    { S(24.5),  EV_SPAWN, ET_E05,     -12,   6 },
     { S(26),   EV_DIR,   DIR_FRONT,   0,   0 },
     { S(26),   EV_SPAWN, ET_E03,      22,  10 },
     { S(27),   EV_SPAWN, ET_E05,      20,  -8 },
@@ -102,6 +106,8 @@ static const Event forest_events[] = {
     { S(34),   EV_SPAWN, ET_E03,      22, -10 },
     { S(34),   EV_SPAWN, ET_E03,      25,  10 },
     /* ---- 森の番人(撃破までスクリプトは止まる) ---- */
+    { S(35.5),  EV_SPAWN, ET_E03,      22, -10 },
+    { S(36.5),  EV_SPAWN, ET_E05,      20,   8 },
     { S(38),   EV_TEXT,  T_WARNING,   0,   0 },
     { S(38),   EV_SPEED, 6,           0,   0 },
     { S(39),   EV_BOSS,  ET_B02,      20,  0 },

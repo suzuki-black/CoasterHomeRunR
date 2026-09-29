@@ -3,7 +3,7 @@
  * 流れ: 坑道を抜けると大きな地底湖(A LAKE?!)→ レールが湖で途切れ、なぜかトロッコごと筏に乗って渡る(ON A RAFT?!)
  *       → 岩棚の弓兵(前)と、水に浮いた木箱の金貨袋 → 後ろからコウモリ人 → 湖の主(後ろから追ってくる大ガエル人)
  *       → 弓兵・コウモリ人 → 向こう岸でまたレールに戻り(LAND HO!)、出口へ
- * 湖に入る・岸に着くなど地形に結びついた演出は位置で起こす(EV_AT)。敵は時刻で出す(ボス戦の間は時刻が止まる)。
+ * すべて位置で進める(EV_AT。約 16m ごとに敵が来るように並べる)。
  * ステージデータは定数だけで書き、読み込み先(0xB400)に合わせて単独でリンクする(stage1_cave.c と同じ)。
  */
 #include "game.h"
@@ -75,49 +75,72 @@ static const u8 bgm_bass[] = {                           /* 8 分のオクター
 #define AT(m, cmd) (m), (cmd) | EV_AT
 
 static const Event lake_events[] = {
-    /* ---- 坑道 → 地底湖 → 筏 ---- */
     { S(0),    EV_DIR,   DIR_NONE,    0,   0 },
     { S(0),    EV_BGM,   1,           0,   0 },
-    { AT(20, EV_TEXT),   T_LAKE,      0,   0 },
-    { AT(30, EV_TEXT),   T_RAFT,      0,   0 },
+    /* ---- 坑道: 1 面から追ってきたコウモリ人 ---- */
+    { AT(2, EV_DIR),        DIR_BACK, 0, 0 },
+    { AT(4, EV_SPAWN),      ET_E02, -14, 6 },
+    { AT(4, EV_SPAWN),      ET_E02, -16, -6 },
+    /* ---- 地底湖 → 筏 ---- */
+    { AT(16, EV_SPAWN),     ET_E02, -14, -6 },
+    { AT(20, EV_TEXT),      T_LAKE, 0, 0 },
+    { AT(26, EV_SPAWN),     ET_E02, -15, 6 },
+    { AT(30, EV_TEXT),      T_RAFT, 0, 0 },
     /* ---- 岩棚の弓兵(前)と、水に浮いた木箱の金貨袋 ---- */
-    { S(12),   EV_DIR,   DIR_FRONT,   0,   0 },
-    { S(12),   EV_SPAWN, ET_E04,      24,  36 },
-    { S(13.5), EV_SPAWN, ET_E04,      24, -36 },
-    { S(15),   EV_SPAWN, ET_E04,      26,  36 },
-    { S(15),   EV_SPAWN, ET_CRATE,    22, -10 },
-    { S(17),   EV_SPAWN, ET_E04,      24, -36 },
-    { S(18.5), EV_SPAWN, ET_E04,      24,  36 },
-    { S(18.5), EV_SPAWN, ET_E04,      28, -36 },
+    { AT(40, EV_DIR),       DIR_FRONT, 0, 0 },
+    { AT(40, EV_SPAWN),     ET_E04, 24, 36 },
+    { AT(40, EV_SPAWN),     ET_E04, 26, -36 },
+    { AT(56, EV_SPAWN),     ET_E04, 24, -36 },
+    { AT(56, EV_SPAWN),     ET_CRATE, 22, 10 },
+    { AT(72, EV_SPAWN),     ET_E04, 24, 36 },
+    { AT(72, EV_SPAWN),     ET_E04, 27, -36 },
     /* ---- 後ろからコウモリ人 ---- */
-    { S(22),   EV_DIR,   DIR_BACK,    0,   0 },
-    { S(22.5), EV_SPAWN, ET_E02,     -14,   6 },
-    { S(24),   EV_SPAWN, ET_E02,     -14,  -6 },
-    { S(25.5), EV_SPAWN, ET_E02,     -16,   6 },
-    { S(27),   EV_SPAWN, ET_E02,     -14,  -6 },
-    { S(28),   EV_SPAWN, ET_CRATE,    20,  10 },
+    { AT(88, EV_DIR),       DIR_BACK, 0, 0 },
+    { AT(88, EV_SPAWN),     ET_E02, -14, 6 },
+    { AT(88, EV_SPAWN),     ET_E02, -16, -6 },
+    { AT(104, EV_SPAWN),    ET_E02, -14, -6 },
+    { AT(104, EV_SPAWN),    ET_E02, -16, 6 },
+    { AT(118, EV_DIR),      DIR_FRONT, 0, 0 },
+    { AT(118, EV_SPAWN),    ET_E04, 24, -36 },
+    { AT(118, EV_SPAWN),    ET_E04, 26, 36 },
+    { AT(118, EV_SPAWN),    ET_CRATE, 20, -10 },
+    { AT(134, EV_SPAWN),    ET_E04, 24, 36 },
+    { AT(134, EV_SPAWN),    ET_E04, 27, -36 },
     /* ---- 湖の主: 後ろから追ってくる(撃破までスクリプトは止まる) ---- */
-    { S(31),   EV_TEXT,  T_WARNING,   0,   0 },
-    { S(31),   EV_SPEED, 12,          0,   0 },
-    { S(32),   EV_BOSS,  ET_BOSS2,   -18,  0 },
-    { S(32.1), EV_SPEED, 0,           0,   0 },
-    /* ---- 弓兵・金貨袋・コウモリ人 ---- */
-    { S(33),   EV_DIR,   DIR_FRONT,   0,   0 },
-    { S(33),   EV_SPAWN, ET_CRATE,    22,  10 },
-    { S(34),   EV_SPAWN, ET_E04,      24, -36 },
-    { S(35),   EV_SPAWN, ET_E04,      24,  36 },
-    { S(36),   EV_SPAWN, ET_E04,      27, -36 },
-    { S(37.5), EV_DIR,   DIR_BACK,    0,   0 },
-    { S(38),   EV_SPAWN, ET_E02,     -14,   6 },
-    { S(39),   EV_SPAWN, ET_E02,     -16,  -6 },
-    { S(41.5), EV_DIR,   DIR_FRONT,   0,   0 },
-    { S(41.5), EV_SPAWN, ET_E04,      24,  36 },
-    { S(42.5), EV_SPAWN, ET_E04,      26, -36 },
+    { AT(146, EV_DIR),      DIR_BACK, 0, 0 },     /* 湖の主は後ろから */
+    { AT(146, EV_TEXT),     T_WARNING, 0, 0 },
+    { AT(146, EV_SPEED),    12, 0, 0 },
+    { AT(150, EV_BOSS),     ET_BOSS2, -18, 0 },
+    { AT(150, EV_SPEED),    0, 0, 0 },
+    { AT(150, EV_DIR),      DIR_FRONT, 0, 0 },
+    { AT(176, EV_SPAWN),    ET_E04, 24, -36 },
+    { AT(176, EV_SPAWN),    ET_E04, 26, 36 },
+    { AT(192, EV_SPAWN),    ET_CRATE, 22, 10 },
+    { AT(192, EV_SPAWN),    ET_E04, 24, -36 },
+    { AT(206, EV_DIR),      DIR_BACK, 0, 0 },
+    { AT(206, EV_SPAWN),    ET_E02, -14, 6 },
+    { AT(206, EV_SPAWN),    ET_E02, -16, -6 },
+    { AT(222, EV_SPAWN),    ET_E02, -14, -6 },
+    { AT(222, EV_SPAWN),    ET_E02, -16, 6 },
+    { AT(236, EV_DIR),      DIR_FRONT, 0, 0 },
+    { AT(236, EV_SPAWN),    ET_E04, 24, 36 },
+    { AT(236, EV_SPAWN),    ET_E04, 26, -36 },
+    { AT(252, EV_SPAWN),    ET_E04, 24, -36 },
+    { AT(252, EV_SPAWN),    ET_CRATE, 20, -10 },
+    { AT(266, EV_DIR),      DIR_BACK, 0, 0 },
+    { AT(266, EV_SPAWN),    ET_E02, -14, 6 },
+    { AT(266, EV_SPAWN),    ET_E02, -16, -6 },
+    { AT(280, EV_DIR),      DIR_FRONT, 0, 0 },
+    { AT(280, EV_SPAWN),    ET_E04, 24, 36 },
+    { AT(280, EV_SPAWN),    ET_E04, 26, -36 },
     /* ---- 向こう岸 → 出口 ---- */
-    { AT(294, EV_DIR),   DIR_NONE,    0,   0 },
-    { AT(294, EV_TEXT),  T_LAND,      0,   0 },
-    { AT(318, EV_TEXT),  T_EXIT,      0,   0 },
-    { AT(328, EV_END),   0,           0,   0 },
+    { AT(296, EV_DIR),      DIR_NONE, 0, 0 },
+    { AT(296, EV_TEXT),     T_LAND, 0, 0 },
+    { AT(302, EV_DIR),      DIR_BACK, 0, 0 },
+    { AT(302, EV_SPAWN),    ET_E02, -14, 6 },
+    { AT(312, EV_SPAWN),    ET_E02, -16, -6 },
+    { AT(318, EV_TEXT),     T_EXIT, 0, 0 },
+    { AT(328, EV_END),      0, 0, 0 },
 };
 
 const Stage stage_data = {
