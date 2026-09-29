@@ -85,7 +85,7 @@ void title(void)
     for (;;) {
         buf_fill(C_BLACK, BUF);
         g_rx = 0; g_ry = 30; g_rw = 64; g_rh = 1; g_color = 9; rect_fill();
-        text_center(6, "TROLLEY", C_YELLOW, 2);
+        text_center(6, "COASTER", C_YELLOW, 2);
         text_center(18, "HOME RUN", C_ORANGE, 2);
         if (t & 32) text_center(34, "PUSH SPACE", C_WHITE, 1);
 #ifdef DEBUG_FPS

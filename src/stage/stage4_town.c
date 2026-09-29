@@ -38,7 +38,7 @@ enum { T_NONE, T_WHY, T_FLOAT, T_NEAR };
 static const Caption town_captions[] = {
     { "WHY RAILS HERE?", C_YELLOW, 1 },
     { "FESTIVAL FLOAT!", C_RED,    1 },
-    { "HOME IS NEAR!",   C_YELLOW, 1 },
+    { "VILLAGE IS NEAR", C_YELLOW, 1 },
 };
 
 /* BGM「町」: 150BPM のハ長調(C → Am → F → G)。8 分音符 = 12 ティック。にぎやか */

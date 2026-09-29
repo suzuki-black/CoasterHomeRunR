@@ -4,7 +4,7 @@
   mkrom.py boot.ihx engine.ihx engine.noi out.rom env.ihx env.noi game1.ihx game1.noi ... game5.ihx game5.noi
 
 - bank0     : ローダー(0x4000-0x5FFF)
-- bank1     : ページ0に置く表とコード(エリア _PAGE0 = RAM 0x2C80-0x3FFF。起動時に sys_page0_data が読み込む)
+- bank1     : ページ0に置く表とコード(エリア _PAGE0 = RAM 0x1A00-0x3FFF。起動時に sys_page0_data が読み込む)
 - bank2-3   : エンジンの常駐部(RAM ページ1 0x4000-0x7FFF へローダーが写す)
 - bank4-5   : 地形モジュール(0x8000 にリンク。起動時にマッパーのセグメント 5 へ読み込む)
 - bank6-15  : ステージ 1〜5 のゲームモジュール(0x8000 にリンク。ステージの始めにページ2 = セグメント 1 へ読み込む)
@@ -22,7 +22,9 @@ CODE_LIMIT = 0x8000   # 常駐部はページ1だけ(ページ2はモジュー�
 MOD_BASE, MOD_BSS, MOD_END = 0x8000, 0xBC00, 0xC000
 ENV_BANK = 4
 def GAME_BANK(n): return 4 + 2 * n
-P0D_BASE, P0D_LIMIT = 0x2C80, 0x4000   # ページ0の表とコード(0x1A00-0x2C7F は地形の表。読み込みは 0xB400-0xCBFF 経由)
+P0D_BASE, P0D_LIMIT = 0x1A00, 0x4000   # ページ0の表とコード(0x0200-0x19FF は辺キャッシュ)
+P0D_STAGE = 0x1800                      # 読み込みは 0xB400-0xCBFF 経由なので 6KB まで
+ENV_CODE_LIMIT = 0xA400                 # 地形モジュールのコード(0xA400-0xBBFF は地形の表)
 
 
 def read_ihx(path):
@@ -99,12 +101,17 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path, env_ihx, env_noi, *game_args):
     p0d_len = syms.get('l__PAGE0', 0)
     if p0d and max(p0d) - P0D_BASE + 1 != p0d_len:
         sys.exit('mkrom: ページ0の表の大きさ(l__PAGE0)がイメージと合わない')
+    if p0d_len > P0D_STAGE:
+        sys.exit(f'mkrom: ページ0の表とコードが {P0D_STAGE} B(読み込みの一時置き場)を超えた: {p0d_len} B')
     bank1 = bytes(eng.get(P0D_BASE + i, 0xFF) for i in range(BANK))
     rom = bytearray(bank0 + bank1 + image)
     rom += b'\xFF' * (ROM_BANKS * BANK - len(rom))
 
     mods = []
     envimg, info = check_module('env', env_ihx, env_noi)
+    env_hi = max(a for a in read_ihx(env_ihx))
+    if env_hi >= ENV_CODE_LIMIT:
+        sys.exit(f'mkrom: 地形モジュールのコードが 0x{ENV_CODE_LIMIT:04X}(地形の表)に食い込んだ: 0x{env_hi:04X}')
     rom[ENV_BANK * BANK:(ENV_BANK + 2) * BANK] = envimg
     mods.append(info)
     if len(game_args) % 2:

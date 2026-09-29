@@ -14,8 +14,10 @@
 #define M(x)    ((u16)((x) * 64))               /* m → s 単位 */
 #define MPS(x)  ((i16)((x) * 546))              /* m/秒 → v 単位(30fps) */
 #define F88(x)  ((i16)((x) * 256))
-#define FLOOR_Y F88(-1.3)                       /* 目の高さから見た床 */
+/* 高さの基準はレール上の点(以前のトロッコの目の高さ)。床はその 1.3m 下 */
+#define FLOOR_Y F88(-1.3)                       /* レール上の点から見た床 */
 #define FLY_Y   F88(-0.3)                       /* コウモリ人の飛ぶ高さ */
+#define EYE_DROP F88(0.4)                       /* コースターは座席が低いので、目はレール上の点より 0.4m 下(床から 0.9m) */
 
 /* 敵種ごとの定数 */
 /* 敵の種類ごとの動き(仕様書 4 章)。新しい敵はここに 1 行足す。
@@ -117,8 +119,10 @@ static Enemy *spawn(u8 type, i8 dist, i8 lat8)
         if (e->type == ET_NONE) break;
     }
     if (i == MAX_EN) return 0;
-    s = (i16)cam_s + (i16)dist * 64;
-    if (s < 0) s = 0;
+    /* 位置は 1/64m の u16(512m を超えると i16 では負になる)。後ろへはみ出したら 0 に */
+    s = (i16)dist * 64;
+    if (s < 0 && cam_s < (u16)-s) s = 0;
+    else s = (i16)(cam_s + (u16)s);
     e->type = type;
     e->state = ST_IDLE;
     e->hp = edef[type].hp;
@@ -574,6 +578,13 @@ static void script_update(void)
             if (ev->a) bgm_play(stage->bgm_melody, stage->bgm_bass);
             else bgm_stop();
             break;
+        case EV_FX:
+            if (ev->a) se_play(ev->a);
+            shake = (u8)ev->b;
+            break;
+        case EV_PAL:
+            set_stage_palette(ev->a ? stage->palette2 : stage->palette);
+            break;
         case EV_GRAB: {
             u8 i;
             for (i = 0; i < MAX_EN; i++)
@@ -596,7 +607,10 @@ static void player_update(void)
 
     /* 演出中は操作できない。A で演出を飛ばす */
     if (!ctrl) {
-        if ((edge & IN_A) && stage->skip_tick && sc_tick < stage->skip_tick) sc_tick = stage->skip_tick - 2;
+        if ((edge & IN_A) && stage->skip_tick && sc_tick < stage->skip_tick) {
+            sc_tick = stage->skip_tick - 2;
+            if (cam_s < M(stage->skip_m)) cam_s = M(stage->skip_m);   /* 位置で進む演出も飛ばす */
+        }
         if (turning) {
             look += 0x1000;
             if (--turning == 0) look = facing ? 0x8000 : 0;
@@ -797,7 +811,7 @@ static void render(void)
             pitch_cur += st;
         }
     }
-    render_set_camera(p.x, p.y, p.z, yaw + look, (i8)fmul(pitch_cur, COS((u8)(look >> 8))));
+    render_set_camera(p.x, p.y - EYE_DROP, p.z, yaw + look, (i8)fmul(pitch_cur, COS((u8)(look >> 8))));
     env_draw(cam_s, look >> 8);
     g_perf_env = timer_read() - t0;
     draw_enemies();

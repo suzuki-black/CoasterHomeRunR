@@ -38,9 +38,9 @@ CFLAGS  = -mz80 --std-c11 -I$(ENG) --opt-code-speed --max-allocs-per-node 5000 $
 ROMNAME ?= TrolleyHomeRun
 # 常駐部のコードは RAM ページ1 0x4000-0x7FFF、変数は 0xCC00-0xDFFF(仕様書 7.3)。
 # ページ2(0x8000-0xBFFF)はモジュール(オーバーレイ): 地形(env.c)とステージごとのゲーム(game.c・models.c・ステージのデータ)
-# 定数の表(gen_data.c・models.c)とタイトル・隠しコンフィグ(menu.c)はエリア _PAGE0 としてページ0の RAM 0x2C80- に置く
+# 定数の表(gen_data.c)とタイトル・隠しコンフィグ(menu.c)はエリア _PAGE0 としてページ0の RAM 0x1A00- に置く
 # (ROM のバンク 1 から起動時に読み込む)
-LDFLAGS = -mz80 --no-std-crt0 --code-loc 0x4008 --data-loc 0xCC00 -Wl-b_PAGE0=0x2C80 -Wl-j -Wl-m -Wl-u
+LDFLAGS = -mz80 --no-std-crt0 --code-loc 0x4008 --data-loc 0xCC00 -Wl-b_PAGE0=0x1A00 -Wl-j -Wl-m -Wl-u
 P0FLAGS = --constseg PAGE0
 
 ASM_SRCS = $(ENG)/crt0.s $(ENG)/sys.s $(ENG)/vdp.s $(ENG)/gfx.s $(ENG)/math.s $(ENG)/raster.s $(ENG)/geom.s

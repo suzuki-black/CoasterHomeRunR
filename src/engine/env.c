@@ -5,7 +5,8 @@
  *   洞窟(炭鉱の坑道): ほぼ垂直な壁と平らな天井。手前ほど明るく奥ほど暗い(トロッコのランプ)。
  *   地底湖: 大きな空洞の水面と岩壁の岩棚、垂れ下がる鍾乳石、水面の岩(レールは無い。筏で渡る)。
  *   森: 土の道、両側の下草と茂み、木の幹と葉の塊。
- *   町: 両側の家並み(壁と屋根。家と家の間は空く)。自宅前: 道の突き当たりに自宅。
+ *   町: 両側の家並み(壁と屋根。家と家の間は空く)。村の入り口: 通りの突き当たりに村の門。
+ *   遊園地: コースターの高架(細い軌道と支柱。遠くにテント・観覧車・灯り)。丘: 草の斜面を下る土の道。空中: 何も描かない。
  * 色 0 の面は塗らない(屋外の区間は天井の面が空)。屋外が見えるときは、先に空と地面を
  * 地平線の高さで塗り分け(仕様書 5.1 の 2 色塗り)てから区間を描く。
  * リング面の飾りとレールは、リング中心の投影と 1/z(ring_c)から 2D で求める(投影を増やさない)。
@@ -25,22 +26,25 @@
 #define FAR_K 3            /* この番号から先(12m〜)のリングは「断面 1 枚」で近似する */
 #define VR_D  38           /* 仮リングまでの距離(1/64m) */
 
-/* ステージ開始時に作る表(ページ0の RAM の空き。sys.s の sys_page0_ram 参照) */
-#define MAX_RINGS 148              /* 592m */
-#define PROF   ((i16 *)0x1A00)    /* [リング][6 頂点][u, v] = 3552 B */
-#define TONE   ((u8 *)0x27E0)     /* [リング][6 面] の基本の色(0 = 塗らない) = 888 B */
-#define DECO   ((u8 *)0x2B58)     /* [リング] 飾りの印 */
-#define KIND   ((u8 *)0x2BEC)     /* [リング] 地形の種類(〜0x2C7F。0x2C80 からはページ0の表とコード = _PAGE0) */
+/* ステージ開始時に作る表。地形モジュール(セグメント 5)の中の 0xA400-0xBBFF に置く(地形の処理からしか使わないので、
+ * モジュールが出ている間だけ見えればよい)。モジュールのコードは 0xA400 まで(tools/mkrom.py が検査する) */
+#define MAX_RINGS 192              /* 768m */
+#define PROF   ((i16 *)0xA400)    /* [リング][6 頂点][u, v] = 4608 B */
+#define TONE   ((u8 *)0xB600)     /* [リング][6 面] の基本の色(0 = 塗らない) = 1152 B */
+#define DECO   ((u8 *)0xBA80)     /* [リング] 飾りの印 */
+#define KIND   ((u8 *)0xBB40)     /* [リング] 地形の種類(〜0xBBFF。0xBC00 からはモジュールの変数) */
 /* 飾りの印。LAMP / TIMBER は森では木の幹 / 葉の塊。
  * 町では LAMP_L / LAMP_R = 左 / 右の家の始まり(手前の妻壁)、ROCK_L / ROCK_R = 家の終わり、TIMBER = 自宅の正面 */
 enum { D_LAMP_L = 1, D_ROCK_L = 2, D_ROCK_R = 4, D_TIMBER = 8, D_LAMP_R = 16,
        D_OPEN = 32,      /* 天井が無い(空が見える) */
-       D_NORAIL = 64 };  /* レールを描かない */
+       D_NORAIL = 64,    /* レールを描かない */
+       D_EMPTY = 128 };  /* 面を 1 枚も描かない(空中) */
 
 /* 色(パレット 9-15、stage のパレットで決まる)
  *   洞窟(ステージ 1): 9 = 木、10〜12 = 岩(暗→明)、13〜14 = 土(暗→明)、15 = レール
  *   地底湖(出口の坑道も): 9 = 木、10 = 暗い岩・レール、11 = 岩、12 = 鍾乳石、13 = 水、14 = 明るい水
  *   森: 9 = 幹・落ち葉、10 = 影・レール、11 = 土の道、12 = 下草、13 = 茂み、14 = 葉、15 = 空
+ *   遊園地・丘: 9 = 木・枕木、10 = 暗い骨組み・レール、11 = 土の道、12 = 草、13 = 赤(テント・ゴンドラ)、14 = 灯り、15 = 空
  *   町: 9 = 戸、10 = 窓・レール、11 = 道、12 = 壁、13 = 屋根、14 = 別の色の壁(自宅前では自宅の壁)、15 = 空 */
 #define C_WOOD   9
 #define C_ROCK0 10
@@ -97,7 +101,10 @@ static const i16 base_uv[K_COUNT][12] = {
     /* 地底湖 */{-1300,1400, 1300,1400, 1150,  420, 1000, -380,-1000, -380,-1150,  420 },
     /* 森   */  { -760,1400,  760,1400,  720,  250,  420, -345, -420, -345, -720,  250 },
     /* 町   */  { -950, 900,  950, 900,  650,  520,  650, -345, -650, -345, -650,  520 },
-    /* 自宅 */  { -950, 900,  950, 900,  650,  520,  650, -345, -650, -345, -650,  520 },
+    /* 村   */  { -950, 900,  950, 900,  650,  520,  650, -345, -650, -345, -650,  520 },
+    /* 遊園地 */{ -400, 200,  400, 200,  230, -333,  200, -333, -200, -333, -230, -333 },
+    /* 丘   */  { -900, 400,  900, 400,  900, -250,  380, -345, -380, -345, -900, -250 },
+    /* 空中 */  { -400, 200,  400, 200,  230, -333,  200, -333, -200, -333, -230, -333 },
 };
 #define HOUSE_U0  650      /* 家の壁(道に面した面)の横位置 */
 #define HOUSE_U1 1250      /* 家の奥行きの端 */
@@ -166,6 +173,27 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         if (rnd() < 110) d |= D_LAMP_R;
         if (rnd() < 40) d |= D_ROCK_L;          /* 水面の岩 */
         else if (rnd() < 40) d |= D_ROCK_R;
+        break;
+    case K_PARK:                                /* 高架の軌道: 面は無く、レールと枕木と支柱だけ(下の地面まで見える) */
+        for (k = 0; k < 6; k++) t[k] = 0;
+        d = D_OPEN | D_EMPTY;
+        if (!(r & 3)) d |= (r & 4) ? D_LAMP_L : D_LAMP_R;   /* 遠くのテント */
+        if ((r & 7) == 2) d |= D_TIMBER;                       /* 観覧車 */
+        if (r & 1) d |= D_ROCK_L | D_ROCK_R;                   /* 軌道わきの灯り */
+        break;
+    case K_HILL:                                /* 草の斜面を下る土の道 */
+        t[0] = t[1] = t[5] = 0;
+        t[2] = t[4] = C_GRASS;
+        t[3] = C_ROCK1;
+        d = D_OPEN;
+        if (rnd() < 110) d |= D_LAMP_L;         /* 柵の杭 */
+        if (rnd() < 110) d |= D_LAMP_R;
+        if (rnd() < 60) d |= D_ROCK_L;          /* 茂み */
+        if (rnd() < 60) d |= D_ROCK_R;
+        break;
+    case K_AIR:
+        for (k = 0; k < 6; k++) t[k] = 0;
+        d = D_OPEN | D_NORAIL | D_EMPTY;
         break;
     case K_TOWN:
     case K_HOME: {
@@ -312,7 +340,7 @@ static void rails_draw(u8 a, u8 b)
         rpt(1, a, u1, FLOOR_V);
         rpt(2, b, u1, FLOOR_V);
         rpt(3, b, u0, FLOOR_V);
-        raster(4, rail_col);
+        raster(4, KIND[ring_no[a < b ? a : b]] == K_CAVE ? C_RAIL : rail_col);
     }
 }
 
@@ -340,18 +368,23 @@ static void house_end(u8 idx, i8 sgn, u8 col)
     rquad(idx, 1020 * sgn, 1180 * sgn, 170, 380, C_ROCK0);
 }
 
-/* 自宅の正面(道の突き当たり。ほかの家より大きく、壁は 14 番の色) */
+/* 村の門(道の突き当たり): 太い柱 2 本、冠木と小さな屋根、村の名の札(14 番の色)。門の前で村人が出迎える */
 static void home_draw(u8 idx)
 {
-    rquad(idx, -1000, 1000, FLOOR_V - 12, 620, C_DIRT1);
-    rpt(0, idx, -1150, 620);
-    rpt(1, idx, 1150, 620);
-    rpt(2, idx, 0, 1180);
+    u8 i;
+    rquad(idx, -760, -600, FLOOR_V, 800, C_WOOD);        /* 柱 */
+    rquad(idx, 600, 760, FLOOR_V, 800, C_WOOD);
+    rquad(idx, -900, 900, 700, 800, C_WOOD);             /* 冠木 */
+    rpt(0, idx, -1000, 800);                              /* 屋根 */
+    rpt(1, idx, 1000, 800);
+    rpt(2, idx, 0, 1050);
     raster(3, C_DIRT0);
-    rquad(idx, 520, 660, 850, 1180, C_DIRT0);          /* 煙突 */
-    rquad(idx, -130, 130, FLOOR_V, 170, C_WOOD);        /* 玄関 */
-    rquad(idx, -760, -420, 220, 460, C_ROCK0);
-    rquad(idx, 420, 760, 220, 460, C_ROCK0);
+    rquad(idx, -260, 260, 520, 690, C_DIRT1);            /* 札 */
+    for (i = 0; i < 4; i++) {                             /* 村人(白い服、14 番の顔) */
+        i16 u = (i < 2) ? -560 + i * 150 : 420 + (i - 2) * 150;
+        rquad(idx, u, u + 90, FLOOR_V, FLOOR_V + 230, C_WHITE);
+        rquad(idx, u + 15, u + 75, FLOOR_V + 230, FLOOR_V + 300, C_DIRT1);
+    }
 }
 
 /* リング idx の面の飾り
@@ -400,6 +433,37 @@ static void deco_draw(u8 idx)
         if (d & D_LAMP_R) rquad(idx, 490 - o, 580 - o, FLOOR_V, 940, C_WOOD);
         break;
     }
+    case K_PARK:
+        /* 高架の支柱(軌道の下へ)、遠くのテント(赤い幕と三角の屋根)、観覧車(暗い輪)、軌道わきの灯り */
+        rquad(idx, -215, -185, FLOOR_V - 1300, FLOOR_V, C_ROCK0);
+        rquad(idx, 185, 215, FLOOR_V - 1300, FLOOR_V, C_ROCK0);
+        if (d & (D_LAMP_L | D_LAMP_R)) {
+            i16 u = (d & D_LAMP_L) ? -1500 : 900;
+            rquad(idx, u, u + 600, FLOOR_V - 1300, FLOOR_V - 700, C_DIRT0);
+            rpt(0, idx, u - 80, FLOOR_V - 700); rpt(1, idx, u + 680, FLOOR_V - 700); rpt(2, idx, u + 300, FLOOR_V - 250);
+            raster(3, C_DIRT1);
+        }
+        if ((d & D_TIMBER) && (u16)ring_c[idx][2] < 3000) {   /* 観覧車は遠く(約 11m より先)に見えるときだけ(近いと画面からはみ出す) */
+            u8 j;
+            for (j = 0; j < 2; j++) {                          /* 輪(外の六角形を暗く、内を空の色で抜く) */
+                i16 r = j ? 700 : 900;
+                u8 k;
+                for (k = 0; k < 6; k++) {
+                    rpt(k, idx, 2000 + fmul(r, SIN(k * 43)), 500 + fmul(r, COS(k * 43)));
+                }
+                raster(6, j ? C_SKY : C_ROCK0);
+            }
+            rquad(idx, 1960, 2040, FLOOR_V - 1300, 500, C_ROCK0);   /* 軸の柱 */
+        }
+        if (d & D_ROCK_L) rquad(idx, -260, -230, FLOOR_V, FLOOR_V + 90, C_DIRT1);
+        if (d & D_ROCK_R) rquad(idx, 230, 260, FLOOR_V, FLOOR_V + 90, C_DIRT1);
+        break;
+    case K_HILL:
+        if (d & D_LAMP_L) rquad(idx, -620, -580, FLOOR_V, FLOOR_V + 160, C_WOOD);
+        if (d & D_LAMP_R) rquad(idx, 580, 620, FLOOR_V, FLOOR_V + 160, C_WOOD);
+        if (d & D_ROCK_L) rock_draw(idx, -860, -600, 160, C_ROCK0);
+        if (d & D_ROCK_R) rock_draw(idx, 600, 860, 140, C_ROCK0);
+        break;
     case K_TOWN:
     case K_HOME:
         /* 前を見ているときは家の手前の妻壁、後ろを見ているときは奥の妻壁(見えない側は道側の壁に隠れる) */
@@ -453,6 +517,11 @@ static void band_draw(u8 a, u8 b, u8 dist)
     fb = ring_front[b];
     if (!fa && !fb) return;
     na = ring_no[a < b ? a : b];
+    if (DECO[na] & D_EMPTY) {
+        /* 面の無い区間(遊園地の高架・空中)。高架はレールだけが見えるので遠くまで描く */
+        if (KIND[na] == K_PARK) rails_draw(a, b);
+        return;
+    }
     set_band_col(na, dist);
     if (fa == 0x3F && fb == 0x3F) {
         band_fast(a, b);
@@ -534,7 +603,7 @@ static void sky_draw(u8 far)
     g_rh = row;
     buf_fill_rows(C_SKY, BUF);
     g_rh = 48 - row;
-    buf_fill_rows(far == K_FOREST ? C_DIRT0 : C_ROCK1, BUF + (u16)row * BUF_W);
+    buf_fill_rows(far == K_FOREST ? C_DIRT0 : far >= K_PARK ? C_GRASS : C_ROCK1, BUF + (u16)row * BUF_W);
 }
 
 void envm_draw(u16 s, u16 look16)
