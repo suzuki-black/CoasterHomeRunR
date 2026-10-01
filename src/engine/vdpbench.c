@@ -9,6 +9,10 @@
  *   OFF    画面オフ(R#1 の BL = 0)    同上
  *   V60    60Hz の垂直帰線の長さ(µs)と、その間に書ける見込みのバイト数
  *   V50    50Hz にしたときの同じ値
+ *
+ * 右の列は Z80 モードに切り替えて測った同じ値(S1990 の待ちが R800 だけのものかを見る)。OFF の行の右は
+ * CPU の切り替えの往復(R800 → Z80 → R800)にかかる時間(µs)。ZOUTI は Z80 で OUTI を展開して書いたとき(左 表示中 / 右 帰線中)。切り替えは BIOS の CHGCPU を使うので、
+ * MSXVER < 3(C-BIOS など)では測らない(右の列が出ない)。
  */
 #include "engine.h"
 #include "hud.h"
@@ -16,7 +20,58 @@
 
 #ifdef VDPBENCH
 
-u16 vb_res[8];                    /* 0 DISP 1 VBL 2 OFF 3 V60 の長さ 4 V60 の帰線中 256B 5 V50 の長さ 6 V50 の帰線中 256B(タイマのカウント) */
+u16 vb_res[12];                   /* 0 DISP 1 VBL 2 OFF 3 V60 の長さ 4 V60 の帰線中 256B 5 V50 の長さ 6 V50 の帰線中 256B
+                                     7 Z80 の DISP 8 Z80 の VBL 9 切り替えの往復 10 Z80 の DISP(OUTI の展開) 11 Z80 の VBL(OUTI の展開)
+                                     (タイマのカウント。7-11 は 0 = 測っていない) */
+
+/* BIOS の CHGCPU(0180h)で CPU を切り替える(A = 0x80: Z80 / 0x82: R800 DRAM)。戻り値 0 = BIOS が CHGCPU を持たない。
+ * ページ0は自前の RAM にしているので、呼ぶ間だけ BIOS に戻す(sys.s の P0_TO_BIOS / P0_TO_RAM と同じ手順) */
+static u8 cpu_switch(u8 mode) __naked
+{
+    (void)mode;
+    __asm
+    ld  c, a
+    di
+    in  a, (0xA8)
+    and a, #0xFC
+    ld  b, a
+    ld  a, (0xE0F2)                       ; P0_BIOS
+    or  a, b
+    out (0xA8), a
+    ld  a, (0x002D)                       ; MSXVER
+    cp  a, #3
+    ld  a, #0
+    jr  c, 1$
+    ld  a, c
+    call    0x0180                        ; CHGCPU
+    di
+    ld  a, #1
+1$:
+    ld  c, a
+    in  a, (0xA8)
+    and a, #0xFC
+    ld  b, a
+    ld  a, (0xE0F1)                       ; V_RAM
+    and a, #0x03
+    or  a, b
+    out (0xA8), a
+    ld  a, (0xE0F1)
+    bit 7, a
+    jr  z, 2$
+    rrca
+    rrca
+    and a, #0x03
+    ld  b, a
+    ld  a, (0xFFFF)
+    cpl
+    and a, #0xFC
+    or  a, b
+    ld  (0xFFFF), a
+2$:
+    ld  a, c
+    ret
+    __endasm;
+}
 
 /* S#2 を読む(bit6 = VR: 垂直帰線中) */
 static u8 vdp_s2(void) __naked
@@ -78,6 +133,19 @@ static void otir256(void) __naked
     __endasm;
 }
 
+/* OUTI を 256 個並べたもの(Z80 では OTIR より速い: OUTI 16T + M1 の待ち、OTIR は 21T + M1 の待ち) */
+static void outi256(void) __naked
+{
+    __asm
+    ld  hl, #0xC000
+    ld  c, #0x98
+    .rept 256
+    outi
+    .endm
+    ret
+    __endasm;
+}
+
 static void wait_vr(u8 on)
 {
     if (on) { while (!(vdp_s2() & 0x40)) ; }
@@ -92,6 +160,16 @@ static u16 meas_otir(void)
     timer_reset();
     t0 = timer_read();
     otir256();
+    return timer_read() - t0;
+}
+
+static u16 meas_outi(void)
+{
+    u16 t0;
+    setw_di();
+    timer_reset();
+    t0 = timer_read();
+    outi256();
     return timer_read() - t0;
 }
 
@@ -125,6 +203,26 @@ static void run(void)
     wait_vr(0); wait_vr(1);
     vb_res[6] = meas_otir();
     wreg_di(9, 0x00);
+    /* Z80 モード(計測中は C のうち R800 固有の命令を使わない処理だけを呼ぶ) */
+    {
+        u16 t0;
+        timer_reset();
+        t0 = timer_read();
+        if (cpu_switch(0x80)) {
+            cpu_switch(0x82);
+            vb_res[9] = timer_read() - t0;
+            cpu_switch(0x80);
+            wait_vr(1); wait_vr(0);
+            vb_res[7] = meas_otir();
+            wait_vr(0); wait_vr(1);
+            vb_res[8] = meas_otir();
+            wait_vr(1); wait_vr(0);
+            vb_res[10] = meas_outi();
+            wait_vr(0); wait_vr(1);
+            vb_res[11] = meas_outi();
+            cpu_switch(0x82);
+        }
+    }
     __asm__("ei");
 }
 
@@ -146,14 +244,15 @@ void vdp_bench(void)
     for (;;) {
         if (!(n++ & 63)) run();              /* 約 2 秒ごとに測り直す */
         buf_fill(C_BLACK, BUF);
-        text_draw(1, 1, "VDP OUT  .01US/B", C_ORANGE, 1);
-        line(8,  "DISP", per_byte(vb_res[0]), 0);
-        line(14, "VBL",  per_byte(vb_res[1]), 0);
-        line(20, "OFF",  per_byte(vb_res[2]), 0);
-        text_draw(1, 27, "VBLANK US  BYTES", C_ORANGE, 1);
+        text_draw(1, 1, ".01US/B R800 Z80", C_ORANGE, 1);
+        line(7,  "DISP", per_byte(vb_res[0]), per_byte(vb_res[7]));
+        line(13, "VBL",  per_byte(vb_res[1]), per_byte(vb_res[8]));
+        line(19, "OFF",  per_byte(vb_res[2]), us(vb_res[9]));    /* 右: 切り替えの往復(µs) */
+        line(25, "ZOUTI", per_byte(vb_res[10]), per_byte(vb_res[11]));   /* Z80 の OUTI の展開: 左 表示中 / 右 帰線中 */
+        text_draw(1, 31, "VBLANK US  BYTES", C_ORANGE, 1);
         /* 帰線の長さと、帰線中の 1 バイトの時間から見積もる書けるバイト数 */
-        line(34, "V60", us(vb_res[3]), vb_res[4] ? (u16)((u32)vb_res[3] * 256 / vb_res[4]) : 0);
-        line(40, "V50", us(vb_res[5]), vb_res[6] ? (u16)((u32)vb_res[5] * 256 / vb_res[6]) : 0);
+        line(37, "V60", us(vb_res[3]), vb_res[4] ? (u16)((u32)vb_res[3] * 256 / vb_res[4]) : 0);
+        line(43, "V50", us(vb_res[5]), vb_res[6] ? (u16)((u32)vb_res[5] * 256 / vb_res[6]) : 0);
         present();
     }
 }
