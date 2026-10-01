@@ -82,6 +82,9 @@ openMSX で起動して遊ぶ。
 make test RUNDIR=/path/to/scratch
 ```
 
+実機の BIOS をダンプして作った機種定義があれば、`MACHINE=` で切り替えてテストできる（例: `MACHINE=My_FS-A1ST_512K`）。
+テストはタイトルが出るのを待ってから始めるので、BIOS のロゴが出る実機の BIOS でもそのまま動く。
+
 約 1 分走らせ、タイトル〜ゲームオーバー〜タイトルを判定する（結果と画面は RUNDIR）。
 
 ```bash

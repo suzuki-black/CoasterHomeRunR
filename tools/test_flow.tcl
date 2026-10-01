@@ -113,5 +113,16 @@ proc stage_shots {st} {
     }
 }
 
-after time 5.0 {tap 8 0x01; opening_shots}
-after time 5.0 [list bot]
+# タイトルが出るまでの時間は機種で違う(実機の BIOS はロゴを出す)ので、エンジンが動き出して(g_tick が進んで)から
+# スペースを押し、ゲームが始まるまで 1 秒ごとに押し直す
+proc start_game {} {
+    if {[lsearch $::seen 1] >= 0} return
+    # エンジンが動き出したか: R800 DRAM モードに入り、タイトルで、g_tick が進んでいる(起動直後の RAM の 0xFF を除く)
+    if {[debug read {S1990 regs} 6] == 0 && [peek8 [sym _g_scene]] == 0 && [peek16 [sym _g_tick]] > 60 && [peek16 [sym _g_tick]] < 3600} {
+        tap 8 0x01
+        if {![info exists ::open_shots]} { set ::open_shots 1; opening_shots }
+    }
+    after time 1.0 [list start_game]
+}
+after time 2.0 [list start_game]
+after time 2.0 [list bot]

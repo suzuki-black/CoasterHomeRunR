@@ -119,6 +119,11 @@ proc step_end {} {
     exit
 }
 
-after time 5.0 [list step_title]
+# タイトルが出るまでの時間は機種で違う(実機の BIOS はロゴを出す)ので、エンジンが動き出して(g_tick が進んで)から始める
+proc wait_title {} {
+    # エンジンが動き出したか: R800 DRAM モードに入り、タイトルで、g_tick が進んでいる(起動直後の RAM の 0xFF を除く)
+    if {[debug read {S1990 regs} 6] == 0 && [peek8 [sym _g_scene]] == 0 && [peek16 [sym _g_tick]] > 60 && [peek16 [sym _g_tick]] < 3600} { step_title } else { after time 0.5 [list wait_title] }
+}
+after time 2.0 [list wait_title]
 after time 6.0 [list tick_log]
 after time 6.0 [list watch_over]
