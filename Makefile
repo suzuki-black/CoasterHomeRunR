@@ -4,6 +4,7 @@
 #  make            ASCII8 メガロム build/TrolleyHomeRun.rom を生成(WebMSX 用に "… [ASCII8].rom" も)
 #  make fpsrom     計測用 ROM build/fps/TrolleyHomeRun_FPS [ASCII8].rom(fps 表示、タイトルに CPU の状態)
 #  make vdpbench   VDP への書き込みの速さを測る ROM build/vdpb/TrolleyHomeRun_VDPBENCH [ASCII8].rom
+#  make fillbench  詰めたバッファへの塗りを比べる ROM build/fillb/TrolleyHomeRun_FILLBENCH [ASCII8].rom
 #  make run        openMSX(開発用機種 TH_turboR_dev)で起動して目視
 #  make test       openMSX で起動〜ゲーム進行を判定(tools/test_game.tcl)
 #  make flow       自動で遊んで流れを判定(tools/test_flow.tcl、GOD=1 でライフを減らさない)
@@ -46,7 +47,7 @@ P0FLAGS = --constseg PAGE0
 
 ASM_SRCS = $(ENG)/crt0.s $(ENG)/sys.s $(ENG)/vdp.s $(ENG)/gfx.s $(ENG)/math.s $(ENG)/raster.s $(ENG)/geom.s
 C_SRCS   = $(ENG)/main.c $(ENG)/render.c $(ENG)/rail.c $(ENG)/shared.c \
-           $(ENG)/hud.c $(ENG)/sound.c $(ENG)/trolley.c $(ENG)/menu.c $(ENG)/fx.c $(ENG)/vdpbench.c
+           $(ENG)/hud.c $(ENG)/sound.c $(ENG)/trolley.c $(ENG)/menu.c $(ENG)/fx.c $(ENG)/vdpbench.c $(ENG)/fillbench.c
 # モジュールのリンク: 0x8000 に先頭(modhead)、変数は 0xBC00-0xBFFF。常駐部のシンボルは ressyms(engine.noi から生成)で渡す
 MODFLAGS = -mz80 --no-std-crt0 --data-loc 0xBC00 -Wl-j -Wl-m
 
@@ -67,7 +68,7 @@ HDRS = $(wildcard $(ENG)/*.h)
 
 ROM = $(BUILD)/TrolleyHomeRun.rom
 
-.PHONY: all fpsrom vdpbench run test flow slotcheck perf pcprof machine clean
+.PHONY: all fpsrom vdpbench fillbench run test flow slotcheck perf pcprof machine clean
 
 all: $(ROM)
 
@@ -149,6 +150,10 @@ fpsrom:
 # VDP への書き込みの速さ(表示中・垂直帰線中・画面オフ・50Hz)を測って画面に出す ROM(src/engine/vdpbench.c)
 vdpbench:
 	$(MAKE) BUILD=build/vdpb EXTRA_CFLAGS=-DVDPBENCH ROMNAME=TrolleyHomeRun_VDPBENCH
+
+# 詰めたバッファ(1 バイト = 横 2 ブロック)への塗りを、いまの塗りと比べる ROM(src/engine/fillbench.c。計測スクリプトから動かす)
+fillbench:
+	$(MAKE) BUILD=build/fillb EXTRA_CFLAGS=-DFILLBENCH ROMNAME=TrolleyHomeRun_FILLBENCH
 
 machine:
 	cp $(TOOLS)/openmsx/TH_turboR_dev.xml $(HOME)/.openMSX/share/machines/

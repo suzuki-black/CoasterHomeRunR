@@ -729,6 +729,7 @@ fill_inc:
 fill_cmp:
 	cp	a, #0			; 終わりの行(書き換える)
 	jp	nz, fill_row
+fill_done::				; 計測用(tools/fillbench_log.tcl が塗りの終わりを捕まえる)
 	ret
 
 ; 展開した 64 回の書き込みの元(sys_page0_ram がページ0の FILLBLK = 0x0100 へ写す)。

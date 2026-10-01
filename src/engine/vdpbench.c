@@ -7,8 +7,9 @@
  *   DISP   表示中に 256 バイト        1 バイトの時間(0.01µs 単位)
  *   VBL    垂直帰線中に 256 バイト     同上(帰線の長さより短い間に書き終わるとは限らないので BYTES も見る)
  *   OFF    画面オフ(R#1 の BL = 0)    同上
- *   V60    60Hz の垂直帰線の長さ(µs)と、その間に書ける見込みのバイト数
+ *   V60    60Hz の垂直帰線の長さ(µs)と、その間に書ける見込みのバイト数(左 µs / 右 バイト)
  *   V50    50Hz にしたときの同じ値
+ *   ZERR   Z80 の OUTI の展開で表示中に書いた 256 バイトを読み戻して食い違ったバイトの数(0 なら取りこぼしていない)
  *
  * 右の列は Z80 モードに切り替えて測った同じ値(S1990 の待ちが R800 だけのものかを見る)。OFF の行の右は
  * CPU の切り替えの往復(R800 → Z80 → R800)にかかる時間(µs)。ZOUTI は Z80 で OUTI を展開して書いたとき(左 表示中 / 右 帰線中)。切り替えは BIOS の CHGCPU を使うので、
@@ -20,12 +21,18 @@
 
 #ifdef VDPBENCH
 
-u16 vb_res[12];                   /* 0 DISP 1 VBL 2 OFF 3 V60 の長さ 4 V60 の帰線中 256B 5 V50 の長さ 6 V50 の帰線中 256B
+u16 vb_res[14];                   /* 0 DISP 1 VBL 2 OFF 3 V60 の長さ 4 V60 の帰線中 256B 5 V50 の長さ 6 V50 の帰線中 256B
                                      7 Z80 の DISP 8 Z80 の VBL 9 切り替えの往復 10 Z80 の DISP(OUTI の展開) 11 Z80 の VBL(OUTI の展開)
-                                     (タイマのカウント。7-11 は 0 = 測っていない) */
+                                     (タイマのカウント。7-11 は 0 = 測っていない)
+                                     12 Z80 の OUTI の展開(表示中)で書いた 256 バイトを読み戻して食い違ったバイトの数
+                                     13 CHGCPU から戻った直後に割り込みが許可されていたら 1 */
 
 /* BIOS の CHGCPU(0180h)で CPU を切り替える(A = 0x80: Z80 / 0x82: R800 DRAM)。戻り値 0 = BIOS が CHGCPU を持たない。
  * ページ0は自前の RAM にしているので、呼ぶ間だけ BIOS に戻す(sys.s の P0_TO_BIOS / P0_TO_RAM と同じ手順) */
+u8 vb_iff;                        /* CHGCPU から戻ったとき割り込みが許可されていたら 1 */
+
+u8 vb_rd;
+
 static u8 cpu_switch(u8 mode) __naked
 {
     (void)mode;
@@ -44,8 +51,12 @@ static u8 cpu_switch(u8 mode) __naked
     jr  c, 1$
     ld  a, c
     call    0x0180                        ; CHGCPU
+    ld  a, i                              ; P/V = IFF2(割り込みが許可されていたか)
     di
     ld  a, #1
+    jp  po, 3$
+    ld  (_vb_iff), a
+3$:
 1$:
     ld  c, a
     in  a, (0xA8)
@@ -146,6 +157,30 @@ static void outi256(void) __naked
     __endasm;
 }
 
+/* VRAM 0x3000 から 256 バイト読み戻し、0xC000 と食い違うバイトの数を返す(R800 で読むので取りこぼさない) */
+static u16 verify256(void)
+{
+    u16 i, bad = 0;
+    const u8 *src = (const u8 *)0xC000;
+    wreg_di(14, 0);
+    __asm
+    xor a, a
+    out (0x99), a
+    ld  a, #0x30
+    out (0x99), a                         ; 0x3000 から読み出し
+    __endasm;
+    for (i = 0; i < 256; i++) {
+        u8 v;
+        __asm
+        in  a, (0x98)
+        ld  (_vb_rd), a
+        __endasm;
+        v = vb_rd;
+        if (v != src[i]) bad++;
+    }
+    return bad;
+}
+
 static void wait_vr(u8 on)
 {
     if (on) { while (!(vdp_s2() & 0x40)) ; }
@@ -216,11 +251,13 @@ static void run(void)
             vb_res[7] = meas_otir();
             wait_vr(0); wait_vr(1);
             vb_res[8] = meas_otir();
-            wait_vr(1); wait_vr(0);
-            vb_res[10] = meas_outi();
             wait_vr(0); wait_vr(1);
             vb_res[11] = meas_outi();
+            wait_vr(1); wait_vr(0);
+            vb_res[10] = meas_outi();             /* 表示中に書いたものを、R800 に戻ってから読み戻す */
             cpu_switch(0x82);
+            vb_res[12] = verify256();
+            vb_res[13] = vb_iff;
         }
     }
     __asm__("ei");
@@ -249,7 +286,7 @@ void vdp_bench(void)
         line(13, "VBL",  per_byte(vb_res[1]), per_byte(vb_res[8]));
         line(19, "OFF",  per_byte(vb_res[2]), us(vb_res[9]));    /* 右: 切り替えの往復(µs) */
         line(25, "ZOUTI", per_byte(vb_res[10]), per_byte(vb_res[11]));   /* Z80 の OUTI の展開: 左 表示中 / 右 帰線中 */
-        text_draw(1, 31, "VBLANK US  BYTES", C_ORANGE, 1);
+        if (vb_res[10]) line(31, "ZERR", vb_res[12], 0);   /* Z80 で表示中に書いて読み戻した食い違い(0 であること) */
         /* 帰線の長さと、帰線中の 1 バイトの時間から見積もる書けるバイト数 */
         line(37, "V60", us(vb_res[3]), vb_res[4] ? (u16)((u32)vb_res[3] * 256 / vb_res[4]) : 0);
         line(43, "V50", us(vb_res[5]), vb_res[6] ? (u16)((u32)vb_res[5] * 256 / vb_res[6]) : 0);

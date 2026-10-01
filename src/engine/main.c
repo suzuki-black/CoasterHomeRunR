@@ -234,6 +234,12 @@ void main(void)
 #endif
     sound_init();
     vdp_init();
+#ifdef FILLBENCH
+    {   /* 詰めたバッファへの塗りの計測用 ROM(make fillbench)。計測スクリプトが呼び出しの列を書き込んで動かす */
+        void fill_bench(void);
+        fill_bench();
+    }
+#endif
 #ifdef VDPBENCH
     {   /* VDP への書き込みの速さの計測用 ROM(make vdpbench)。結果を画面に出し続ける */
         void vdp_bench(void);
