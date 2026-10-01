@@ -234,6 +234,12 @@ void main(void)
 #endif
     sound_init();
     vdp_init();
+#ifdef VDPBENCH
+    {   /* VDP への書き込みの速さの計測用 ROM(make vdpbench)。結果を画面に出し続ける */
+        void vdp_bench(void);
+        vdp_bench();
+    }
+#endif
     for (;;) {
         title();
         play();
