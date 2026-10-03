@@ -1129,6 +1129,7 @@ ring_ptr:
 	; リング a の辺 k: a[k] → a[k+1]
 	ld	a, (bf_k)
 	ld	b, a
+	ld	hl, (bf_pa)
 	ld	a, (bf_a)
 	call	band_ring_edge
 	ld	0 (ix), l
@@ -1136,6 +1137,7 @@ ring_ptr:
 	; リング b の辺 k
 	ld	a, (bf_k)
 	ld	b, a
+	ld	hl, (bf_pb)
 	ld	a, (bf_b)
 	call	band_ring_edge
 	ld	12 (ix), l
@@ -1304,7 +1306,8 @@ _band_fast::
 	pop	ix
 	ret
 
-; band_ring_edge: A = リング番号、B = k → HL = リングの辺 k(r[k] → r[k+1])のスロット
+; band_ring_edge: A = リング番号、B = k、HL = リングの頂点の先頭(g_ring_s + リング番号 * 24。band_fast が計算済み)
+;   → HL = リングの辺 k(r[k] → r[k+1])のスロット
 band_ring_edge:
 	ld	c, a
 	add	a, a
@@ -1312,17 +1315,6 @@ band_ring_edge:
 	add	a, a			; r * 6
 	add	a, b
 	push	af			; id
-	ld	a, c
-	call	ring_ptr		; HL = r[0]
-	ld	a, b
-	add	a, a
-	add	a, a
-	ld	e, a
-	ld	d, #0
-	add	hl, de			; r[k]
-	push	hl
-	ld	a, c
-	call	ring_ptr		; HL = r[0]
 	ld	a, b
 	inc	a
 	cp	a, #6
@@ -1333,16 +1325,24 @@ band_ring_edge:
 	add	a, a
 	ld	e, a
 	ld	d, #0
-	add	hl, de
-	ex	de, hl			; DE = r[k+1]
-	pop	hl
-	pop	af
+	push	hl
+	add	hl, de			; r[k+1]
+	ex	(sp), hl		; スタック = r[k+1]、HL = 先頭
+	ld	a, b
+	add	a, a
+	add	a, a
+	ld	e, a
+	add	hl, de			; r[k]
+	pop	de			; DE = r[k+1]
+	pop	af			; A = id
 	jp	slot_ensure
 
 ; void hex_fast(u8 r)   A = リング番号。リングの六角形を g_color で塗る(リングの辺を共有)
 _hex_fast::
 	push	iy			; slot_ensure(edge)が IY を壊す
 	ld	(bf_a), a
+	call	ring_ptr
+	ld	(bf_pa), hl
 	ld	a, #ROWS
 	ld	(sc_r0), a
 	xor	a, a
@@ -1351,6 +1351,7 @@ _hex_fast::
 1$:
 	ld	a, (bf_k)
 	ld	b, a
+	ld	hl, (bf_pa)
 	ld	a, (bf_a)
 	call	band_ring_edge
 	xor	a, a
