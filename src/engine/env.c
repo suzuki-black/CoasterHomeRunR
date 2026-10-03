@@ -66,7 +66,6 @@ extern const i16 *g_ring_s;
 void eslot_clear(void);
 void band_fast(u8 a, u8 b);
 void hex_fast(u8 r);
-i16 qmul(i16 v, u16 q);
 /* geom.s: リングの頂点(断面は g_rm_prof) */
 extern const i16 *g_rm_prof;
 /* リングの頂点・投影(実体は常駐部の shared.c。geom.s の ring_make が書く) */
@@ -318,24 +317,17 @@ static u8 vring_make(u16 sv)
 }
 
 /* ---------------------------------------------------------------------------
- * リング面の 2D の形: 中心 + (u, v) * q
+ * リング面の 2D の形: 中心 + (u, v) * q(raster.s の rpt_a / rquad_a)
+ *   RPT: scr[i] にリング idx の面の点 (u, v)。RQUAD: u0..u1 × v0..v1 の四角形を color で塗る
+ *   (リング面の形は画面上でそのまま縮小されるので軸に沿った長方形になり、多角形の塗りを通さずに長方形で塗る)
+ *   引数はスタックでなく変数で渡す(C の関数呼び出しの準備が重いため)
  * --------------------------------------------------------------------------- */
-static void rpt(u8 i, u8 idx, i16 u, i16 v)
-{
-    const i16 *c = ring_c[idx];
-    scr[i * 2] = c[0] + qmul(u, (u16)c[2]);
-    scr[i * 2 + 1] = c[1] - qmul(v, (u16)c[2]);
-}
-
-/* リング面の四角形(u0..u1 × v0..v1) */
-static void rquad(u8 idx, i16 u0, i16 u1, i16 v0, i16 v1, u8 color)
-{
-    rpt(0, idx, u0, v0);
-    rpt(1, idx, u1, v0);
-    rpt(2, idx, u1, v1);
-    rpt(3, idx, u0, v1);
-    raster(4, color);
-}
+extern i16 g_pu, g_pv, g_qu0, g_qu1, g_qv0, g_qv1;
+void rpt_a(u8 i, u8 idx);
+void rquad_a(u8 idx);
+#define RPT(i, idx, u, v)  do { g_pu = (u); g_pv = (v); rpt_a((i), (idx)); } while (0)
+#define RQUAD(idx, u0, u1, v0, v1, color) \
+    do { g_qu0 = (u0); g_qu1 = (u1); g_qv0 = (v0); g_qv1 = (v1); g_color = (color); rquad_a(idx); } while (0)
 
 #define FLOOR_V (-333)
 
@@ -346,13 +338,13 @@ static void rails_draw(u8 a, u8 b)
     if (!ring_c[a][2] || !ring_c[b][2]) return;
     if (DECO[ring_no[a < b ? a : b]] & D_NORAIL) return;
     /* 枕木(区間の手前のリングの面に、横長の板) */
-    rquad(a, -180, 180, FLOOR_V, FLOOR_V + 14, C_WOOD);
+    RQUAD(a, -180, 180, FLOOR_V, FLOOR_V + 14, C_WOOD);
     for (side = 0; side < 2; side++) {
         i16 u0 = side ? 102 : -128, u1 = side ? 128 : -102;
-        rpt(0, a, u0, FLOOR_V);
-        rpt(1, a, u1, FLOOR_V);
-        rpt(2, b, u1, FLOOR_V);
-        rpt(3, b, u0, FLOOR_V);
+        RPT(0, a, u0, FLOOR_V);
+        RPT(1, a, u1, FLOOR_V);
+        RPT(2, b, u1, FLOOR_V);
+        RPT(3, b, u0, FLOOR_V);
         raster(4, KIND[ring_no[a < b ? a : b]] == K_CAVE ? C_RAIL : rail_col);
     }
 }
@@ -360,9 +352,9 @@ static void rails_draw(u8 a, u8 b)
 /* 床の石(三角形)。u0..u1 の幅、高さ ht */
 static void rock_draw(u8 idx, i16 u0, i16 u1, i16 ht, u8 color)
 {
-    rpt(0, idx, u0, FLOOR_V);
-    rpt(1, idx, u1, FLOOR_V);
-    rpt(2, idx, (u0 + u1) >> 1, FLOOR_V + ht);
+    RPT(0, idx, u0, FLOOR_V);
+    RPT(1, idx, u1, FLOOR_V);
+    RPT(2, idx, (u0 + u1) >> 1, FLOOR_V + ht);
     raster(3, color);
 }
 
@@ -372,31 +364,31 @@ static u8 view_back;              /* 1 = 後ろだけを見ている(家の奥�
 static void house_end(u8 idx, i8 sgn, u8 col)
 {
     i16 u0 = HOUSE_U0 * sgn, u1 = HOUSE_U1 * sgn, ur = RIDGE_U * sgn;
-    rquad(idx, u0, u1, FLOOR_V, EAVE_V, col);
-    rpt(0, idx, u0, EAVE_V);
-    rpt(1, idx, u1, EAVE_V);
-    rpt(2, idx, ur, RIDGE_V);
+    RQUAD(idx, u0, u1, FLOOR_V, EAVE_V, col);
+    RPT(0, idx, u0, EAVE_V);
+    RPT(1, idx, u1, EAVE_V);
+    RPT(2, idx, ur, RIDGE_V);
     raster(3, col);
-    rquad(idx, 720 * sgn, 880 * sgn, 170, 380, C_ROCK0);
-    rquad(idx, 1020 * sgn, 1180 * sgn, 170, 380, C_ROCK0);
+    RQUAD(idx, 720 * sgn, 880 * sgn, 170, 380, C_ROCK0);
+    RQUAD(idx, 1020 * sgn, 1180 * sgn, 170, 380, C_ROCK0);
 }
 
 /* 村の門(道の突き当たり): 太い柱 2 本、冠木と小さな屋根、村の名の札(14 番の色)。門の前で村人が出迎える */
 static void home_draw(u8 idx)
 {
     u8 i;
-    rquad(idx, -760, -600, FLOOR_V, 800, C_WOOD);        /* 柱 */
-    rquad(idx, 600, 760, FLOOR_V, 800, C_WOOD);
-    rquad(idx, -900, 900, 700, 800, C_WOOD);             /* 冠木 */
-    rpt(0, idx, -1000, 800);                              /* 屋根 */
-    rpt(1, idx, 1000, 800);
-    rpt(2, idx, 0, 1050);
+    RQUAD(idx, -760, -600, FLOOR_V, 800, C_WOOD);        /* 柱 */
+    RQUAD(idx, 600, 760, FLOOR_V, 800, C_WOOD);
+    RQUAD(idx, -900, 900, 700, 800, C_WOOD);             /* 冠木 */
+    RPT(0, idx, -1000, 800);                              /* 屋根 */
+    RPT(1, idx, 1000, 800);
+    RPT(2, idx, 0, 1050);
     raster(3, C_DIRT0);
-    rquad(idx, -260, 260, 520, 690, C_DIRT1);            /* 札 */
+    RQUAD(idx, -260, 260, 520, 690, C_DIRT1);            /* 札 */
     for (i = 0; i < 4; i++) {                             /* 村人(白い服、14 番の顔) */
         i16 u = (i < 2) ? -560 + i * 150 : 420 + (i - 2) * 150;
-        rquad(idx, u, u + 90, FLOOR_V, FLOOR_V + 230, C_WHITE);
-        rquad(idx, u + 15, u + 75, FLOOR_V + 230, FLOOR_V + 300, C_DIRT1);
+        RQUAD(idx, u, u + 90, FLOOR_V, FLOOR_V + 230, C_WHITE);
+        RQUAD(idx, u + 15, u + 75, FLOOR_V + 230, FLOOR_V + 300, C_DIRT1);
     }
 }
 
@@ -404,11 +396,11 @@ static void home_draw(u8 idx)
  * (柵より下を描くと、手前の柵の前に出てしまうため) */
 static void park_tent(u8 idx, i16 u, i16 g)
 {
-    rquad(idx, u, u + 600, g, g + 400, C_DIRT0);
-    rpt(0, idx, u - 80, g + 400); rpt(1, idx, u + 680, g + 400); rpt(2, idx, u + 300, g + 850);
+    RQUAD(idx, u, u + 600, g, g + 400, C_DIRT0);
+    RPT(0, idx, u - 80, g + 400); RPT(1, idx, u + 680, g + 400); RPT(2, idx, u + 300, g + 850);
     raster(3, C_DIRT1);
-    rquad(idx, u + 290, u + 310, g + 850, g + 1050, C_ROCK0);        /* 旗竿と三角旗 */
-    rpt(0, idx, u + 310, g + 1050); rpt(1, idx, u + 310, g + 970); rpt(2, idx, u + 450, g + 1010);
+    RQUAD(idx, u + 290, u + 310, g + 850, g + 1050, C_ROCK0);        /* 旗竿と三角旗 */
+    RPT(0, idx, u + 310, g + 1050); RPT(1, idx, u + 310, g + 970); RPT(2, idx, u + 450, g + 1010);
     raster(3, C_WHITE);
 }
 
@@ -418,16 +410,16 @@ static void park_carousel(u8 idx, i16 uc, i16 g, u8 full)
 {
     u8 i;
     if (full) {
-        rquad(idx, uc - 500, uc + 500, g, g + 400, C_WHITE);
+        RQUAD(idx, uc - 500, uc + 500, g, g + 400, C_WHITE);
         for (i = 0; i < 4; i++) {
             i16 u = uc - 420 + i * 280;
-            rquad(idx, u, u + 40, g + 400, g + 650, C_DIRT1);
+            RQUAD(idx, u, u + 40, g + 400, g + 650, C_DIRT1);
         }
     }
-    rpt(0, idx, uc - 650, g + 650); rpt(1, idx, uc + 650, g + 650); rpt(2, idx, uc, g + 1150);
+    RPT(0, idx, uc - 650, g + 650); RPT(1, idx, uc + 650, g + 650); RPT(2, idx, uc, g + 1150);
     raster(3, C_DIRT0);
-    rquad(idx, uc - 450, uc + 450, g + 650, g + 700, C_WHITE);
-    rpt(0, idx, uc, g + 1150); rpt(1, idx, uc, g + 1250); rpt(2, idx, uc + 140, g + 1200);
+    RQUAD(idx, uc - 450, uc + 450, g + 650, g + 700, C_WHITE);
+    RPT(0, idx, uc, g + 1150); RPT(1, idx, uc, g + 1250); RPT(2, idx, uc + 140, g + 1200);
     raster(3, C_DIRT1);
 }
 
@@ -436,39 +428,39 @@ static void park_wheel(u8 idx, i16 uc, i16 g)
 {
     u8 j, k;
     i16 vc = g + 1550;
-    rpt(0, idx, uc - 50, vc); rpt(1, idx, uc + 50, vc);
-    rpt(2, idx, uc + 500, g); rpt(3, idx, uc - 500, g);
+    RPT(0, idx, uc - 50, vc); RPT(1, idx, uc + 50, vc);
+    RPT(2, idx, uc + 500, g); RPT(3, idx, uc - 500, g);
     raster(4, C_ROCK0);
     for (j = 0; j < 2; j++) {
         i16 r = j ? 880 : 1050;
-        for (k = 0; k < 6; k++) rpt(k, idx, uc + fmul(r, SIN(k * 43)), vc + fmul(r, COS(k * 43)));
+        for (k = 0; k < 6; k++) RPT(k, idx, uc + fmul(r, SIN(k * 43)), vc + fmul(r, COS(k * 43)));
         raster(6, j ? C_SKY : C_ROCK0);
     }
     for (k = 0; k < 6; k++) {
         i16 u = uc + fmul(1050, SIN(k * 43)), v = vc + fmul(1050, COS(k * 43));
-        rquad(idx, u - 100, u + 100, v - 200, v - 20, C_DIRT0);
+        RQUAD(idx, u - 100, u + 100, v - 200, v - 20, C_DIRT0);
     }
-    rquad(idx, uc - 40, uc + 40, vc - 40, vc + 40, C_DIRT1);
+    RQUAD(idx, uc - 40, uc + 40, vc - 40, vc + 40, C_DIRT1);
 }
 
 /* 軌道をまたぐ電飾のアーチ: 暗い柱と梁、梁の下に三角旗の列、灯りが点滅する */
 static void park_arch(u8 idx)
 {
     u8 i, on = (u8)(g_tick >> 3) & 1;
-    rquad(idx, -420, -360, FLOOR_V, FLOOR_V + 700, C_ROCK0);
-    rquad(idx, 360, 420, FLOOR_V, FLOOR_V + 700, C_ROCK0);
-    rquad(idx, -420, 420, FLOOR_V + 640, FLOOR_V + 720, C_ROCK0);
+    RQUAD(idx, -420, -360, FLOOR_V, FLOOR_V + 700, C_ROCK0);
+    RQUAD(idx, 360, 420, FLOOR_V, FLOOR_V + 700, C_ROCK0);
+    RQUAD(idx, -420, 420, FLOOR_V + 640, FLOOR_V + 720, C_ROCK0);
     for (i = 0; i < 6; i++) {
         i16 u = -330 + i * 120;
-        rpt(0, idx, u, FLOOR_V + 640); rpt(1, idx, u + 100, FLOOR_V + 640); rpt(2, idx, u + 50, FLOOR_V + 560);
+        RPT(0, idx, u, FLOOR_V + 640); RPT(1, idx, u + 100, FLOOR_V + 640); RPT(2, idx, u + 50, FLOOR_V + 560);
         raster(3, (i & 1) ? C_DIRT0 : C_WHITE);
-        rquad(idx, u + 30, u + 70, FLOOR_V + 680, FLOOR_V + 710, ((i + on) & 1) ? C_DIRT1 : C_ROCK0);
+        RQUAD(idx, u + 30, u + 70, FLOOR_V + 680, FLOOR_V + 710, ((i + on) & 1) ? C_DIRT1 : C_ROCK0);
     }
     for (i = 0; i < 4; i++) {
         i16 v = FLOOR_V + 100 + i * 150;
         u8 c = ((i + on) & 1) ? C_DIRT1 : C_ROCK0;
-        rquad(idx, -405, -375, v, v + 30, c);
-        rquad(idx, 375, 405, v, v + 30, c);
+        RQUAD(idx, -405, -375, v, v + 30, c);
+        RQUAD(idx, 375, 405, v, v + 30, c);
     }
 }
 
@@ -485,23 +477,23 @@ static void deco_draw(u8 idx)
     case K_CAVE:
     case K_EXIT:
         if (d & D_TIMBER) {
-            rquad(idx, -330, -280, FLOOR_V, 300, C_WOOD);   /* 左の柱 */
-            rquad(idx, 280, 330, FLOOR_V, 300, C_WOOD);     /* 右の柱 */
-            rquad(idx, -345, 345, 282, 322, C_WOOD);        /* 梁 */
+            RQUAD(idx, -330, -280, FLOOR_V, 300, C_WOOD);   /* 左の柱 */
+            RQUAD(idx, 280, 330, FLOOR_V, 300, C_WOOD);     /* 右の柱 */
+            RQUAD(idx, -345, 345, 282, 322, C_WOOD);        /* 梁 */
         }
-        if (d & D_LAMP_L) rquad(idx, -275, -240, 120, 170, C_YELLOW);   /* カンテラ */
-        if (d & D_LAMP_R) rquad(idx, 240, 275, 120, 170, C_YELLOW);
+        if (d & D_LAMP_L) RQUAD(idx, -275, -240, 120, 170, C_YELLOW);   /* カンテラ */
+        if (d & D_LAMP_R) RQUAD(idx, 240, 275, 120, 170, C_YELLOW);
         if (d & D_ROCK_L) rock_draw(idx, -275, -170, 70, C_ROCK2);
         if (d & D_ROCK_R) rock_draw(idx, 170, 270, 60, C_ROCK2);
         break;
     case K_LAKE:
         /* 天井から垂れ下がる鍾乳石と、水面から顔を出した岩 */
         if (d & D_LAMP_L) {
-            rpt(0, idx, -900, 1400); rpt(1, idx, -600, 1400); rpt(2, idx, -760, 760);
+            RPT(0, idx, -900, 1400); RPT(1, idx, -600, 1400); RPT(2, idx, -760, 760);
             raster(3, C_ROCK2);
         }
         if (d & D_LAMP_R) {
-            rpt(0, idx, 520, 1400); rpt(1, idx, 820, 1400); rpt(2, idx, 690, 860);
+            RPT(0, idx, 520, 1400); RPT(1, idx, 820, 1400); RPT(2, idx, 690, 860);
             raster(3, C_ROCK2);
         }
         if (d & D_ROCK_L) rock_draw(idx, -760, -500, 150, C_ROCK0);
@@ -510,40 +502,40 @@ static void deco_draw(u8 idx)
     case K_FOREST: {
         i16 o = (no & 1) ? 90 : 0;                        /* 幹の位置をリングごとにずらす */
         if (d & D_TIMBER) {                               /* 頭上の葉の塊 */
-            rquad(idx, -760, -150 - o, 820, 1160, C_DIRT0);
-            rquad(idx, 170 + o, 760, 860, 1200, C_DIRT0);
-            rquad(idx, -520, -260, 1000, 1140, C_DIRT1);
+            RQUAD(idx, -760, -150 - o, 820, 1160, C_DIRT0);
+            RQUAD(idx, 170 + o, 760, 860, 1200, C_DIRT0);
+            RQUAD(idx, -520, -260, 1000, 1140, C_DIRT1);
         }
-        if (d & D_LAMP_L) rquad(idx, -560 + o, -470 + o, FLOOR_V, 900, C_WOOD);
-        if (d & D_LAMP_R) rquad(idx, 490 - o, 580 - o, FLOOR_V, 940, C_WOOD);
+        if (d & D_LAMP_L) RQUAD(idx, -560 + o, -470 + o, FLOOR_V, 900, C_WOOD);
+        if (d & D_LAMP_R) RQUAD(idx, 490 - o, 580 - o, FLOOR_V, 940, C_WOOD);
         break;
     }
     case K_PARK:
         /* 高架の支柱(軌道の下へ)、遠くのテント(赤い幕と三角の屋根)、観覧車(暗い輪)、軌道わきの灯り */
-        rquad(idx, -215, -185, FLOOR_V - 1300, FLOOR_V, C_ROCK0);
-        rquad(idx, 185, 215, FLOOR_V - 1300, FLOOR_V, C_ROCK0);
+        RQUAD(idx, -215, -185, FLOOR_V - 1300, FLOOR_V, C_ROCK0);
+        RQUAD(idx, 185, 215, FLOOR_V - 1300, FLOOR_V, C_ROCK0);
         if (d & (D_LAMP_L | D_LAMP_R)) park_tent(idx, (d & D_LAMP_L) ? -1500 : 900, FLOOR_V - 1300);
         if (no % 8 == 6) park_carousel(idx, -2000, FLOOR_V - 1300, 1);
         if (no % 6 == 3) park_arch(idx);
         /* 観覧車は遠く(約 14m より先)に見えるときだけ(近いと画面からはみ出す) */
         if ((d & D_TIMBER) && (u16)ring_c[idx][2] < 2400) park_wheel(idx, 2600, FLOOR_V - 1300);
-        if (d & D_ROCK_L) rquad(idx, -260, -230, FLOOR_V, FLOOR_V + 90, C_DIRT1);
-        if (d & D_ROCK_R) rquad(idx, 230, 260, FLOOR_V, FLOOR_V + 90, C_DIRT1);
+        if (d & D_ROCK_L) RQUAD(idx, -260, -230, FLOOR_V, FLOOR_V + 90, C_DIRT1);
+        if (d & D_ROCK_R) RQUAD(idx, 230, 260, FLOOR_V, FLOOR_V + 90, C_DIRT1);
         break;
     case K_PARKSIDE: {
         /* 柵の上の灯り(点滅)、柵の上に見える出し物(柵の上端より上だけ)、右の茂みと杭 */
         u8 on = (u8)(g_tick >> 3) & 1;
-        rquad(idx, -545, -505, 520, 580, ((no + on) & 1) ? C_DIRT1 : C_ROCK0);
+        RQUAD(idx, -545, -505, 520, 580, ((no + on) & 1) ? C_DIRT1 : C_ROCK0);
         if (no % 5 == 1) park_tent(idx, -1600, 560);
         if (no % 10 == 4) park_carousel(idx, -2300, 560 - 650, 0);
         if (no % 10 == 8 && (u16)ring_c[idx][2] < 2400) park_wheel(idx, -3000, 560);
-        if (d & D_LAMP_R) rquad(idx, 580, 620, FLOOR_V - 60, FLOOR_V + 120, C_WOOD);
+        if (d & D_LAMP_R) RQUAD(idx, 580, 620, FLOOR_V - 60, FLOOR_V + 120, C_WOOD);
         if (d & D_ROCK_R) rock_draw(idx, 650, 900, 130, C_ROCK0);
         break;
     }
     case K_HILL:
-        if (d & D_LAMP_L) rquad(idx, -620, -580, FLOOR_V, FLOOR_V + 160, C_WOOD);
-        if (d & D_LAMP_R) rquad(idx, 580, 620, FLOOR_V, FLOOR_V + 160, C_WOOD);
+        if (d & D_LAMP_L) RQUAD(idx, -620, -580, FLOOR_V, FLOOR_V + 160, C_WOOD);
+        if (d & D_LAMP_R) RQUAD(idx, 580, 620, FLOOR_V, FLOOR_V + 160, C_WOOD);
         if (d & D_ROCK_L) rock_draw(idx, -860, -600, 160, C_ROCK0);
         if (d & D_ROCK_R) rock_draw(idx, 600, 860, 140, C_ROCK0);
         break;

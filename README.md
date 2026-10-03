@@ -30,7 +30,7 @@ MSX turbo R 専用の 3D レールシューター。SCREEN 3（マルチカラ�
 - 振り向きの警告（ENEMY BEHIND! / ENEMY AHEAD! の点滅と警告音）、字幕、スコア、ステージごとの BGM（PSG ch A/B）、効果音（PSG ch C）
 
 未実装: タイトル・ゲームオーバーの BGM、マウス（TODO）。
-フレームレートは openMSX の実機のファームウェアの機種（Z80 転送）で 遊園地 約 15fps、地底湖 約 18fps、森 約 14fps、町 約 17fps、村の入り口 約 18fps(R800 で送る開発用の機種では約 1fps 低い)（自動プレイの平均。目標 30fps に未達。docs/検証記録.md）。
+フレームレートは openMSX の実機のファームウェアの機種（Z80 転送）で 遊園地 約 17fps、地底湖 約 20fps、森 約 18fps、町 約 20fps、村の入り口 約 22fps(R800 で送る開発用の機種では約 1fps 低い)（自動プレイの平均。目標 30fps に未達。docs/検証記録.md）。
 
 隠しコンフィグ: タイトルでコナミコマンド（上 上 下 下 左 右 左 右 B A。B・A はキーボードの B キー・A キー）。
 被弾で減る宝の数、無敵、ステージセレクト、始めの宝、1 発で倒せる、分岐の固定、やさしい進行、fps 表示、転送のしかた（Z80 / R800）を変えられる（仕様書 3.5.3）。
@@ -45,7 +45,7 @@ MSX turbo R 専用の 3D レールシューター。SCREEN 3（マルチカラ�
 
 ## ビルドと実行
 
-必要なもの: SDCC 4.6（sdcc / sdasz80）、Python 3、openMSX。
+必要なもの: SDCC 4.6（sdcc / sdasz80。C は R800 向けの `-mr800` でコンパイルする）、Python 3、openMSX。
 
 ```bash
 make machine
@@ -59,7 +59,8 @@ C-BIOS を turbo R のハードで動かす機種で、RAM は FS-A1ST と同じ
 make
 ```
 
-`build/TrolleyHomeRun.rom`（ASCII8、128KB）ができる。
+`build/TrolleyHomeRun.rom`（ASCII8、128KB）ができる。レジスタの割り当てを念入りにしているので（`--max-allocs-per-node 100000`）、
+全体のビルドには約 3.5 分かかる（docs/SDCCとR800の調査.md）。
 
 ```bash
 make run

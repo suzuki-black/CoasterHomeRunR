@@ -1403,9 +1403,191 @@ _hex_fast::
 	pop	iy
 	ret
 
-; i16 qmul(i16 v, u16 q)   HL = v(8.8 m)、DE = q(2^23 / z)→ DE = v * q >> 14(画面上の長さ 12.4、±15000 に飽和)
-;   リング面の飾り(env.c)を、リング中心の投影から 2D で求めるのに使う
-_qmul::
-	ld	b, d
-	ld	c, e
-	jp	p_scale
+; ---------------------------------------------------------------------------
+; リング面の飾り(env.c)の点と長方形。点 = リングの中心 + (u, v) * q(ring_c[idx] = 中心の x, y と q)
+;   void rpt_a(u8 i, u8 idx)   A = i、L = idx。scr[i] = (cx + g_pu * q >> 14, cy - g_pv * q >> 14)(p_scale。±15000 に飽和)
+;   void rquad_a(u8 idx)       A = idx。u0..u1 × v0..v1(g_qu0, g_qu1, g_qv0, g_qv1)を g_color で塗る
+; リング面の形は画面上でそのまま縮小されるだけなので、四角形は必ず軸に沿った長方形になる。
+; rquad_a は多角形の塗り(raster)を通さず、raster と同じ丸め(列 = (x + 8) >> 4、行 = (y + 7) >> 4、
+; どちらも画面に収める)で rect_fill に渡す。辺の計算と多角形の準備が要らず、掛け算も 8 回 → 4 回(u・v の 2 通りずつ)
+; ---------------------------------------------------------------------------
+	.globl	_ring_c, _rect_fill, _g_rx, _g_ry, _g_rw, _g_rh
+
+	.area	_DATA
+_g_pu::		.ds	2
+_g_pv::		.ds	2
+_g_qu0::	.ds	2
+_g_qu1::	.ds	2
+_g_qv0::	.ds	2
+_g_qv1::	.ds	2
+rp_cx:		.ds	2
+rp_cy:		.ds	2
+rp_i:		.ds	1
+	.area	_CODE
+
+; L = idx → rp_cx, rp_cy、BC = q
+rp_ring:
+	ld	h, #0
+	ld	e, l
+	ld	d, h
+	add	hl, hl
+	add	hl, de
+	add	hl, hl			; idx * 6
+	ld	de, #_ring_c
+	add	hl, de
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	inc	hl
+	ld	(rp_cx), de
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	inc	hl
+	ld	(rp_cy), de
+	ld	c, (hl)
+	inc	hl
+	ld	b, (hl)
+	ret
+
+_rpt_a::
+	ld	(rp_i), a
+	call	rp_ring
+	ld	hl, (_g_pu)
+	call	p_scale			; BC は保たれる
+	ld	hl, (rp_cx)
+	add	hl, de
+	push	hl			; x
+	ld	hl, (_g_pv)
+	call	p_scale
+	ld	hl, (rp_cy)
+	or	a, a
+	sbc	hl, de
+	ex	de, hl			; DE = y
+	ld	a, (rp_i)
+	add	a, a
+	add	a, a
+	ld	l, a
+	ld	h, #0
+	ld	bc, #_scr
+	add	hl, bc
+	pop	bc
+	ld	(hl), c
+	inc	hl
+	ld	(hl), b
+	inc	hl
+	ld	(hl), e
+	inc	hl
+	ld	(hl), d
+	ret
+
+; HL = x(12.4)→ A = (x + 8) >> 4 を 0..64 に収めた値(raster の辺と同じ丸め)
+rq_xcol:
+	ld	de, #8
+	add	hl, de
+	bit	7, h
+	jr	nz, 2$
+	ld	a, h
+	cp	a, #0x04
+	jr	nc, 1$			; 1024 以上 → 64
+	ld	a, l
+	rrca
+	rrca
+	rrca
+	rrca
+	and	a, #0x0F
+	ld	l, a
+	ld	a, h
+	rlca
+	rlca
+	rlca
+	rlca
+	or	a, l
+	cp	a, #65
+	ret	c
+1$:
+	ld	a, #64
+	ret
+2$:
+	xor	a, a
+	ret
+
+_rquad_a::
+	ld	l, a
+	call	rp_ring			; BC = q
+	ld	hl, (_g_qu0)
+	call	p_scale
+	ld	hl, (rp_cx)
+	add	hl, de
+	push	hl			; x0
+	ld	hl, (_g_qu1)
+	call	p_scale
+	ld	hl, (rp_cx)
+	add	hl, de
+	push	hl			; x1
+	ld	hl, (_g_qv0)
+	call	p_scale
+	ld	hl, (rp_cy)
+	or	a, a
+	sbc	hl, de
+	push	hl			; y0
+	ld	hl, (_g_qv1)
+	call	p_scale
+	ld	hl, (rp_cy)
+	or	a, a
+	sbc	hl, de			; HL = y1
+	pop	de			; DE = y0
+	; 行: 上 = min(y0, y1)、下 = max(y0, y1)
+	push	hl
+	or	a, a
+	sbc	hl, de			; y1 - y0
+	pop	hl
+	jp	p, 1$
+	ex	de, hl
+1$:
+	; DE = 上、HL = 下
+	push	de
+	ROWCLAMP			; A = 下の行(含まない)
+	pop	hl
+	ld	c, a
+	ROWCLAMP			; A = 上の行
+	ld	b, a
+	ld	a, c
+	sub	a, b
+	jr	z, 8$
+	jr	c, 8$
+	ld	(_g_rh), a
+	ld	a, b
+	ld	(_g_ry), a
+	; 列: 左 = min(x0, x1)、右 = max(x0, x1)
+	pop	hl			; x1
+	pop	de			; x0
+	push	hl
+	or	a, a
+	sbc	hl, de			; x1 - x0
+	pop	hl
+	jp	p, 2$
+	ex	de, hl
+2$:
+	; DE = 左、HL = 右
+	push	de
+	call	rq_xcol
+	pop	hl
+	ld	c, a			; C = 右の列(含まない)
+	push	bc
+	call	rq_xcol			; A = 左の列
+	pop	bc
+	ld	b, a
+	ld	a, c
+	sub	a, b
+	ret	z
+	ret	c
+	ld	(_g_rw), a
+	ld	a, b
+	ld	(_g_rx), a
+	jp	_rect_fill
+8$:
+	pop	hl
+	pop	hl
+	ret
+
