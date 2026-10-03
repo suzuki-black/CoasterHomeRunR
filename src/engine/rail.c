@@ -86,21 +86,7 @@ u16 rail_s_max(void)
     return (u16)((rail_len - RAIL_STEP) << 6) - 1;
 }
 
-void rail_at(u16 s, V3 *p, u16 *yaw)
-{
-    u16 i;
-    i16 f;
-    RailPt *a, *b;
-    if (s > rail_s_max()) s = rail_s_max();
-    i = s >> 7;
-    f = (s & 127) << 1;          /* 8.8 の割合 */
-    a = &rail[i];
-    b = a + 1;
-    p->x = a->x + fmul(b->x - a->x, f);
-    p->y = a->y + fmul(b->y - a->y, f);
-    p->z = a->z + fmul(b->z - a->z, f);
-    *yaw = a->yaw + fmul((i16)(b->yaw - a->yaw), f);
-}
+/* rail_at は geom.s(アセンブラ。補間の割合との掛け算をその場で行う) */
 
 void rail_cam(u16 s, i16 lat, i16 up, V3 *o)
 {

@@ -24,22 +24,16 @@ void render_set_camera(i16 x, i16 y, i16 z, u16 yaw, i8 pitch)
     cam_pcos = COS((u8)pitch);
 }
 
-/* ワールド → カメラ。ワールド座標は 16bit で折り返すが、差分(±128m 以内)は正しく出る */
+/* ワールド → カメラ。ワールド座標は 16bit で折り返すが、差分(±128m 以内)は正しく出る。
+ * 計算は geom.s の xform3(xf_core: 定数との掛け算をその場で行う)。式は x' = dx*cos - dz*sin、z' = dx*sin + dz*cos、
+ * ピッチがあれば y' = y*pcos - z*psin、z' = y*psin + z*pcos */
+void xform3(const i16 *w, V3 *o);
+
 void xform(i16 wx, i16 wy, i16 wz, V3 *o)
 {
-    i16 dx = wx - cam_x;
-    i16 dz = wz - cam_z;
-    i16 y, z;
-    o->x = fmul(dx, cam_cos) - fmul(dz, cam_sin);
-    z = fmul(dx, cam_sin) + fmul(dz, cam_cos);
-    y = wy - cam_y;
-    if (cam_pitch) {                       /* 上を向く = 世界を下へ回す */
-        o->y = fmul(y, cam_pcos) - fmul(z, cam_psin);
-        o->z = fmul(y, cam_psin) + fmul(z, cam_pcos);
-    } else {
-        o->y = y;
-        o->z = z;
-    }
+    i16 w[3];
+    w[0] = wx; w[1] = wy; w[2] = wz;
+    xform3(w, o);
 }
 
 u8 project(const V3 *v, i16 *sx, i16 *sy)

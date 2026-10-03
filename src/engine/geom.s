@@ -198,6 +198,116 @@ _xform3::
 	ret
 
 ; ---------------------------------------------------------------------------
+; void rail_at(u16 s, V3 *p, u16 *yaw)   HL = s、DE = p、スタック = yaw(void なので呼ばれた側が片付ける)
+;   位置 s(1/64m)の点と向きを、前後の点(2m ごと、0xE100 から 8 バイトずつ: x, y, z, yaw)から補間する。
+;   s は末尾((rail_len - 2) << 6) - 1 で止める。割合 f = (s & 127) * 2(8.8)。rail.c の C と同じ結果
+; ---------------------------------------------------------------------------
+	.globl	_rail_len
+RAIL_ADDR = 0xE100
+	.area	_DATA
+c_f_a:		.ds	2
+c_f_s:		.ds	1
+ra_s:		.ds	2
+ra_yaw:		.ds	2
+	.area	_CODE
+
+_rail_at::
+	ld	(ra_s), hl
+	pop	bc			; 戻り番地
+	pop	hl
+	ld	(ra_yaw), hl
+	push	bc
+	push	ix
+	push	iy
+	push	de
+	pop	iy			; IY = p
+	; s を末尾で止める
+	ld	hl, (_rail_len)
+	dec	hl
+	dec	hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	dec	hl			; HL = 末尾の s
+	ex	de, hl
+	ld	hl, (ra_s)
+	or	a, a
+	sbc	hl, de
+	jr	c, 1$
+	jr	z, 1$
+	ld	(ra_s), de
+1$:
+	; f = (s & 127) * 2(正なので符号 0)
+	ld	hl, (ra_s)
+	ld	a, l
+	and	a, #0x7F
+	add	a, a
+	ld	(c_f_a), a
+	xor	a, a
+	ld	(c_f_a + 1), a
+	ld	(c_f_s), a
+	; IX = rail + (s >> 7) * 8 = rail + ((s >> 4) & ~7)
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	ld	a, l
+	and	a, #0xF8
+	ld	l, a
+	ld	de, #RAIL_ADDR
+	add	hl, de
+	push	hl
+	pop	ix
+	; x, y, z: a + fmul(b - a, f)
+	ld	b, #3
+2$:
+	push	bc
+	ld	l, 8 (ix)
+	ld	h, 9 (ix)
+	ld	e, 0 (ix)
+	ld	d, 1 (ix)
+	or	a, a
+	sbc	hl, de			; b - a
+	FMC	c_f
+	ld	l, 0 (ix)
+	ld	h, 1 (ix)
+	add	hl, de
+	ld	0 (iy), l
+	ld	1 (iy), h
+	inc	ix
+	inc	ix
+	inc	iy
+	inc	iy
+	pop	bc
+	djnz	2$
+	; yaw: a + fmul((i16)(b - a), f)
+	ld	l, 8 (ix)
+	ld	h, 9 (ix)
+	ld	e, 0 (ix)
+	ld	d, 1 (ix)
+	or	a, a
+	sbc	hl, de
+	FMC	c_f
+	ld	l, 0 (ix)
+	ld	h, 1 (ix)
+	add	hl, de
+	ex	de, hl
+	ld	hl, (ra_yaw)
+	ld	(hl), e
+	inc	hl
+	ld	(hl), d
+	pop	iy
+	pop	ix
+	ret
+
+; ---------------------------------------------------------------------------
 ; void ring_make(u8 idx, const RailPt *p)   A = リング番号、DE = レール点 (x, y, z, yaw)
 ;   洞窟の断面(g_rm_prof: 6 頂点の (u, v)。u = 右、v = 上、8.8 m、レール=目の位置からの相対)を
 ;   カメラ空間で ring_v[idx] に、手前の頂点は投影して ring_s[idx] に置き、
@@ -437,6 +547,13 @@ dm_x0:		.ds	1
 dm_x1:		.ds	1
 dm_y0:		.ds	1
 dm_y1:		.ds	1
+DM_CMAX = 24			; 座標の表に入る矩形の数(モデルは最大 18)
+dm_mode:	.ds	1	; 0 = 求める、1 = 求めて表に書く(縁取りの回)、2 = 表を使う(縁取りの直後の回)
+dm_cv:		.ds	1	; 1 = 表が直前の縁取りの回のもの
+dm_cc:		.ds	2	; 表を書いたときの足元の点と矩形の列
+dm_cr:		.ds	2
+dm_cp:		.ds	2
+dm_cache:	.ds	DM_CMAX * 4	; 矩形ごとの x0, x1, y0, y1(ブロック、広げる前)
 
 	.area	_CODE
 
@@ -456,6 +573,16 @@ dm_scale:
 	ret
 1$:
 2$:
+	; 拡大率が 256 未満なら 8×8 の MULUB(14 サイクル。MULUW は 36)。積は 16bit に収まり、結果は同じ
+	inc	h
+	dec	h
+	jr	nz, 3$
+	ld	e, l
+	MULUB_A_E			; HL = A * E
+	ld	l, h
+	ld	h, #0
+	ret
+3$:
 	ld	c, a
 	ld	b, #0
 	MULUW_HL_BC			; DE:HL
@@ -497,6 +624,49 @@ dm_blk:
 _draw_model::
 	push	ix
 	ld	(dm_c), hl
+	; 縁取りの回(広げて塗る)と直後の普通の回は、同じ敵の同じ矩形なので、座標を表で使い回す
+	ld	a, (_g_dm_grow)
+	or	a, a
+	jr	z, 40$
+	ld	a, (_g_dm_n)
+	cp	a, #DM_CMAX + 1
+	ld	a, #0
+	jr	nc, 41$
+	ld	(dm_cc), hl
+	ld	hl, (_g_dm_rects)
+	ld	(dm_cr), hl
+	ld	a, #1
+	jr	41$
+40$:
+	ld	a, (dm_cv)
+	or	a, a
+	jr	z, 41$			; A = 0
+	ld	de, (dm_cc)
+	or	a, a
+	sbc	hl, de
+	ld	a, #0
+	jr	nz, 41$
+	ld	hl, (_g_dm_rects)
+	ld	de, (dm_cr)
+	or	a, a
+	sbc	hl, de
+	jr	nz, 41$
+	ld	a, #2
+41$:
+	ld	(dm_mode), a
+	ld	b, a
+	xor	a, a
+	bit	0, b
+	jr	z, 42$
+	inc	a
+42$:
+	ld	(dm_cv), a		; 縁取りの回だけ、次の回のために表を残す
+	ld	hl, #dm_cache
+	ld	(dm_cp), hl
+	ld	a, b
+	cp	a, #2
+	jr	z, 43$			; 中心の投影と拡大率は前の回のまま
+	ld	hl, (dm_c)
 	ld	de, #dm_sx		; dm_sx, dm_sy は連続
 	call	_project2
 	ld	hl, (_p_q)
@@ -505,11 +675,32 @@ _draw_model::
 	srl	h
 	rr	l
 	ld	(dm_k), hl
+43$:
 	ld	ix, (_g_dm_rects)
 	ld	a, (_g_dm_n)
 	ld	b, a
 1$:
 	push	bc
+	ld	a, (dm_mode)
+	cp	a, #2
+	jr	nz, 44$
+	; 表から
+	ld	hl, (dm_cp)
+	ld	a, (hl)
+	ld	(dm_x0), a
+	inc	hl
+	ld	a, (hl)
+	ld	(dm_x1), a
+	inc	hl
+	ld	a, (hl)
+	ld	(dm_y0), a
+	inc	hl
+	ld	a, (hl)
+	ld	(dm_y1), a
+	inc	hl
+	ld	(dm_cp), hl
+	jp	45$
+44$:
 	; 左右 = sx + scale(x0 / x1)
 	ld	a, 0 (ix)
 	call	dm_scale
@@ -544,6 +735,25 @@ _draw_model::
 	ld	c, #46
 	call	dm_blk
 	ld	(dm_y1), a
+	ld	a, (dm_mode)
+	or	a, a
+	jr	z, 45$
+	; 縁取りの回: 表に書く
+	ld	hl, (dm_cp)
+	ld	a, (dm_x0)
+	ld	(hl), a
+	inc	hl
+	ld	a, (dm_x1)
+	ld	(hl), a
+	inc	hl
+	ld	a, (dm_y0)
+	ld	(hl), a
+	inc	hl
+	ld	a, (dm_y1)
+	ld	(hl), a
+	inc	hl
+	ld	(dm_cp), hl
+45$:
 	; 空なら次へ
 	ld	a, (dm_x0)
 	ld	c, a
