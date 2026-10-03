@@ -24,8 +24,6 @@ xf_dx:	.ds	2
 xf_dz:	.ds	2
 rm_idx:	.ds	1
 rm_k:	.ds	1
-rm_p:	.ds	2
-rm_x:	.ds	2
 rm_dy:	.ds	2
 rm_dz:	.ds	2
 rm_fm:	.ds	1
@@ -35,10 +33,89 @@ rm_o:	.ds	2
 	.area	_CODE
 
 ; ---------------------------------------------------------------------------
+; 定数との掛け算(fmul と同じ結果: (a * c) >> 8、符号は a と c の最上位ビットの排他的論理和、大きさは |a|*|c| の 8〜23 ビット)
+;   CPREP: HL = 定数 c → (名前_a) = |c|、(名前_s) = c の最上位ビット(bit7)。リングごと・フレームごとに 1 回
+;   FMC:   HL = a(壊す)→ DE = fmul(a, c)。A・BC・HL・F と裏の AF を壊す(割り込み処理は裏のレジスタを使わない)
+;   fmul を呼ぶより、呼び出しと定数の符号外しの分だけ軽い(R800 のメモリアクセスが少ない)
+; ---------------------------------------------------------------------------
+	.macro	CPREP	nm
+	ld	a, h
+	and	a, #0x80
+	ld	(nm'_s), a
+	bit	7, h
+	jr	z, .+8
+	xor	a, a
+	sub	a, l
+	ld	l, a
+	sbc	a, a
+	sub	a, h
+	ld	h, a
+	ld	(nm'_a), hl
+	.endm
+
+	.macro	FMC	nm, ?l1, ?l2
+	ld	a, (nm'_s)
+	xor	a, h
+	ex	af, af'			; 積の符号(bit7)を裏の A に
+	bit	7, h
+	jr	z, l1
+	xor	a, a
+	sub	a, l
+	ld	l, a
+	sbc	a, a
+	sub	a, h
+	ld	h, a
+l1:
+	ld	bc, (nm'_a)
+	MULUW_HL_BC			; DE:HL = |a| * |c|
+	ld	d, e
+	ld	e, h			; DE = 8〜23 ビット
+	ex	af, af'
+	rla
+	jr	nc, l2
+	xor	a, a
+	sub	a, e
+	ld	e, a
+	sbc	a, a
+	sub	a, d
+	ld	d, a
+l2:
+	.endm
+
+	.area	_DATA
+c_cos_a:	.ds	2	; カメラのヨーの cos・sin、ピッチの cos・sin、断面の向きの cos・sin の絶対値と符号
+c_cos_s:	.ds	1
+c_sin_a:	.ds	2
+c_sin_s:	.ds	1
+c_pc_a:		.ds	2
+c_pc_s:		.ds	1
+c_ps_a:		.ds	2
+c_ps_s:		.ds	1
+c_cs_a:		.ds	2
+c_cs_s:		.ds	1
+c_sn_a:		.ds	2
+c_sn_s:		.ds	1
+	.area	_CODE
+
+; ---------------------------------------------------------------------------
 ; xf_core: HL = ワールドの点 (x, y, z) → gx, gy, gz(カメラ空間)
-;   x' = dx*cos - dz*sin、z' = dx*sin + dz*cos、y' = dy
+;   x' = dx*cos - dz*sin、z' = dx*sin + dz*cos、y' = dy(ピッチがあれば y と z を回す)
 ; ---------------------------------------------------------------------------
 xf_core:
+	push	hl
+	ld	hl, (_cam_cos)
+	CPREP	c_cos
+	ld	hl, (_cam_sin)
+	CPREP	c_sin
+	ld	a, (_cam_pitch)
+	or	a, a
+	jr	z, 1$
+	ld	hl, (_cam_pcos)
+	CPREP	c_pc
+	ld	hl, (_cam_psin)
+	CPREP	c_ps
+1$:
+	pop	hl
 	ld	e, (hl)
 	inc	hl
 	ld	d, (hl)			; DE = wx
@@ -67,23 +144,19 @@ xf_core:
 	or	a, a
 	sbc	hl, de
 	ld	(xf_dx), hl
-	ld	de, (_cam_cos)
-	call	_fmul			; DE = dx*cos
+	FMC	c_cos			; DE = dx*cos
 	push	de
 	ld	hl, (xf_dz)
-	ld	de, (_cam_sin)
-	call	_fmul			; DE = dz*sin
+	FMC	c_sin			; DE = dz*sin
 	pop	hl
 	or	a, a
 	sbc	hl, de
 	ld	(gx), hl
 	ld	hl, (xf_dx)
-	ld	de, (_cam_sin)
-	call	_fmul
+	FMC	c_sin
 	push	de
 	ld	hl, (xf_dz)
-	ld	de, (_cam_cos)
-	call	_fmul
+	FMC	c_cos
 	pop	hl
 	add	hl, de
 	ld	(gz), hl
@@ -92,23 +165,19 @@ xf_core:
 	or	a, a
 	ret	z
 	ld	hl, (gy)
-	ld	de, (_cam_pcos)
-	call	_fmul
+	FMC	c_pc
 	push	de
 	ld	hl, (gz)
-	ld	de, (_cam_psin)
-	call	_fmul
+	FMC	c_ps
 	pop	hl
 	or	a, a
 	sbc	hl, de
 	push	hl			; y'
 	ld	hl, (gy)
-	ld	de, (_cam_psin)
-	call	_fmul
+	FMC	c_ps
 	push	de
 	ld	hl, (gz)
-	ld	de, (_cam_pcos)
-	call	_fmul
+	FMC	c_pc
 	pop	hl
 	add	hl, de
 	ld	(gz), hl
@@ -136,19 +205,20 @@ _xform3::
 ;   断面の中心(レール点)も投影して ring_c[idx] = (x, y, 2^23/z) に置く(z が手前でなければ q = 0)。
 ;   リング面の飾り(レール・枕木・坑道枠・鍾乳石)は、この中心と q から 2D で求める(env.c)。
 ;   断面の右向き = (cos Δ, -sin Δ)(Δ = レールのヨー - カメラのヨー)。
+;   頂点のループは、断面の表を IX、出力(ring_v)を IY で指して回す(変数をメモリに出し入れしない)
 ; ---------------------------------------------------------------------------
 	.globl	_ring_c
 	.area	_DATA
 _g_rm_prof::	.ds	2
-g_cs:		.ds	2
-g_sn:		.ds	2
 	.area	_CODE
 
 _ring_make::
+	push	ix
+	push	iy
 	ld	(rm_idx), a
 	push	de
 	ex	de, hl
-	call	xf_core
+	call	xf_core			; 中心(ピッチの定数もここで用意される)
 	pop	hl
 	ld	de, #7
 	add	hl, de
@@ -163,13 +233,16 @@ _ring_make::
 	ld	e, (hl)
 	inc	hl
 	ld	d, (hl)
-	ld	(g_sn), de
 	ld	bc, #127
 	add	hl, bc
 	ld	c, (hl)
 	inc	hl
-	ld	b, (hl)
-	ld	(g_cs), bc
+	ld	b, (hl)			; BC = cos Δ、DE = sin Δ
+	ex	de, hl
+	push	bc
+	CPREP	c_sn
+	pop	hl
+	CPREP	c_cs
 	; ring_c + idx*6
 	ld	a, (rm_idx)
 	ld	l, a
@@ -229,130 +302,94 @@ _ring_make::
 	add	hl, de			; *36
 	ld	de, #_ring_v
 	add	hl, de
-	ld	(rm_v), hl
+	push	hl
+	pop	iy			; IY = ring_v[idx]
+	ld	ix, (_g_rm_prof)	; IX = 断面 (u, v) × 6
 	xor	a, a
 	ld	(rm_fm), a
-	ld	(rm_k), a
-	ld	hl, (_g_rm_prof)
-	ld	(rm_p), hl
+	ld	a, #1
+	ld	(rm_k), a		; いまの頂点のビット
 3$:
-	; u, v を読む
-	ld	hl, (rm_p)
-	ld	e, (hl)
-	inc	hl
-	ld	d, (hl)
-	inc	hl
-	ld	c, (hl)
-	inc	hl
-	ld	b, (hl)
-	inc	hl
-	ld	(rm_p), hl
-	ld	(rm_dy), bc		; 上下のずれ = v
-	push	de			; u
 	; x = gx + u*cos
-	ex	de, hl
-	ld	de, (g_cs)
-	call	_fmul
+	ld	l, 0 (ix)
+	ld	h, 1 (ix)
+	FMC	c_cs
 	ld	hl, (gx)
 	add	hl, de
-	ld	(rm_x), hl
-	; 奥行きのずれ = -u*sin
-	pop	hl			; u
-	ld	de, (g_sn)
-	call	_fmul
+	ld	0 (iy), l
+	ld	1 (iy), h
+	; 奥行きのずれ dz = -u*sin、上下のずれ dy = v
+	ld	l, 0 (ix)
+	ld	h, 1 (ix)
+	FMC	c_sn
 	xor	a, a
 	sub	a, e
 	ld	e, a
 	sbc	a, a
 	sub	a, d
-	ld	d, a
-	ld	(rm_dz), de
-	; ピッチがあれば(上下, 奥行き)のずれも回す: dy' = dy*cos - dz*sin、dz' = dy*sin + dz*cos
+	ld	d, a			; DE = dz
+	ld	c, 2 (ix)
+	ld	b, 3 (ix)		; BC = dy
 	ld	a, (_cam_pitch)
 	or	a, a
-	jr	z, 6$
-	ld	hl, (rm_dy)
-	ld	de, (_cam_pcos)
-	call	_fmul
+	jp	z, 6$
+	; ピッチがあれば回す: dy' = dy*cos - dz*sin、dz' = dy*sin + dz*cos
+	ld	(rm_dz), de
+	ld	(rm_dy), bc
+	ld	h, b
+	ld	l, c
+	FMC	c_pc
 	push	de
 	ld	hl, (rm_dz)
-	ld	de, (_cam_psin)
-	call	_fmul
+	FMC	c_ps
 	pop	hl
 	or	a, a
 	sbc	hl, de
 	push	hl			; dy'
 	ld	hl, (rm_dy)
-	ld	de, (_cam_psin)
-	call	_fmul
+	FMC	c_ps
 	push	de
 	ld	hl, (rm_dz)
-	ld	de, (_cam_pcos)
-	call	_fmul
+	FMC	c_pc
 	pop	hl
 	add	hl, de
-	ld	(rm_dz), hl
-	pop	hl
-	ld	(rm_dy), hl
+	ex	de, hl			; DE = dz'
+	pop	bc			; BC = dy'
 6$:
-	; 書く: x、y = gy + dy、z = gz + dz
-	ld	hl, (rm_v)
-	ld	de, (rm_x)
-	ld	(hl), e
-	inc	hl
-	ld	(hl), d
-	inc	hl
-	push	hl
+	; y = gy + dy、z = gz + dz
 	ld	hl, (gy)
-	ld	de, (rm_dy)
-	add	hl, de
-	ex	de, hl			; DE = y
-	pop	hl
-	ld	(hl), e
-	inc	hl
-	ld	(hl), d
-	inc	hl
-	push	hl
+	add	hl, bc
+	ld	2 (iy), l
+	ld	3 (iy), h
 	ld	hl, (gz)
-	ld	de, (rm_dz)
 	add	hl, de
-	ex	de, hl			; DE = z
-	pop	hl
-	ld	(hl), e
-	inc	hl
-	ld	(hl), d
+	ld	4 (iy), l
+	ld	5 (iy), h
 	; z >= NEAR_Z なら投影
-	ex	de, hl
 	ld	de, #-NEAR_Z
 	add	hl, de
 	bit	7, h
 	jr	nz, 4$
-	ld	hl, (rm_v)
+	push	iy
+	pop	hl
 	ld	de, (rm_o)
-	call	_project2
+	call	_project2		; IX・IY は保たれる
 	ld	a, (rm_k)
-	ld	b, a
-	inc	b
-	ld	a, #0x80
-5$:
-	rlca
-	djnz	5$			; A = 1 << k
 	ld	hl, #rm_fm
 	or	a, (hl)
 	ld	(hl), a
 4$:
-	ld	hl, (rm_v)
-	ld	de, #6
-	add	hl, de
-	ld	(rm_v), hl
-	ld	hl, (rm_o)
 	ld	de, #4
+	add	ix, de
+	ld	hl, (rm_o)
 	add	hl, de
 	ld	(rm_o), hl
+	ld	de, #6
+	add	iy, de
 	ld	a, (rm_k)
-	inc	a
+	add	a, a
 	ld	(rm_k), a
-	cp	a, #6
+	cp	a, #0x40
 	jp	nz, 3$
 	; ring_front[idx] = fm、ring_ok[idx] = 1
 	ld	a, (rm_idx)
@@ -365,6 +402,8 @@ _ring_make::
 	ld	hl, #_ring_ok
 	add	hl, de
 	ld	(hl), #1
+	pop	iy
+	pop	ix
 	ret
 
 ; ---------------------------------------------------------------------------
