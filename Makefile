@@ -34,21 +34,27 @@ RUNDIR  ?= $(BUILD)/run
 TIMEOUT ?= 120
 MACHINE ?= TH_turboR_dev
 
-CFLAGS  = -mz80 --std-c11 -I$(ENG) --opt-code-speed --max-allocs-per-node 5000 $(EXTRA_CFLAGS)
+# C は R800 向け(-mr800: 掛け算に MULUB / MULUW を使う)。--max-allocs-per-node を上げるとレジスタの割り当てが良くなり、
+# 速く小さくなる(5000 → 100000 で 1 フレーム約 −2ms。全体のビルドは約 3.5 分。docs/SDCCとR800の調査.md)。
+# Z80 で動く C(Z80 転送の間に割り込み処理から呼ぶ音の処理 sound.c)に R800 専用の命令が入らないよう、ビルドで検査する
+# (下の sound.rel。Z80 は MULUB / MULUW を実行できず、黙って結果が壊れる。Z80 向けと R800 向けのオブジェクトは
+# SDCC のリンカが混ぜられないので、Z80 向けにコンパイルする手は取れない)
+CPORT   = -mr800
+CFLAGS  = $(CPORT) --std-c11 -I$(ENG) --opt-code-speed --max-allocs-per-node 100000 $(EXTRA_CFLAGS)
 # WebMSX 用のコピーの名前(マッパーの種類をファイル名で指定する)
 ROMNAME ?= TrolleyHomeRun
 # 常駐部のコードは RAM ページ1 0x4000-0x7FFF、変数は 0xCC00-0xDFFF(仕様書 7.3)。
 # ページ2(0x8000-0xBFFF)はモジュール(オーバーレイ): 地形(env.c)とステージごとのゲーム(game.c・models.c・ステージのデータ)
 # 定数の表(gen_data.c)とタイトル・隠しコンフィグ(menu.c)はエリア _PAGE0 としてページ0の RAM 0x1A00- に置く
 # (ROM のバンク 1 から起動時に読み込む)
-LDFLAGS = -mz80 --no-std-crt0 --code-loc 0x4008 --data-loc 0xCC00 -Wl-b_PAGE0=0x1A00 -Wl-j -Wl-m -Wl-u
+LDFLAGS = -mr800 --no-std-crt0 --code-loc 0x4008 --data-loc 0xCC00 -Wl-b_PAGE0=0x1A00 -Wl-j -Wl-m -Wl-u
 P0FLAGS = --constseg PAGE0
 
 ASM_SRCS = $(ENG)/crt0.s $(ENG)/sys.s $(ENG)/vdp.s $(ENG)/gfx.s $(ENG)/math.s $(ENG)/raster.s $(ENG)/geom.s
 C_SRCS   = $(ENG)/main.c $(ENG)/render.c $(ENG)/rail.c $(ENG)/shared.c \
            $(ENG)/hud.c $(ENG)/sound.c $(ENG)/trolley.c $(ENG)/menu.c $(ENG)/fx.c $(ENG)/vdpbench.c
 # モジュールのリンク: 0x8000 に先頭(modhead)、変数は 0xBC00-0xBFFF。常駐部のシンボルは ressyms(engine.noi から生成)で渡す
-MODFLAGS = -mz80 --no-std-crt0 --data-loc 0xBC00 -Wl-j -Wl-m -Wl-u
+MODFLAGS = -mr800 --no-std-crt0 --data-loc 0xBC00 -Wl-j -Wl-m -Wl-u
 
 # crt0 は必ず先頭にリンクする
 RELS = $(BUILD)/crt0.rel \
@@ -86,6 +92,13 @@ $(BUILD)/menu.rel: $(ENG)/menu.c $(HDRS) Makefile | $(BUILD)
 # ヘッダを変えたら全 C を作り直す(古い構造体レイアウトの混在を防ぐ)
 $(BUILD)/%.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
+
+# Z80 でも動く C: R800 専用の命令(multu / multuw)と、Z80 では非公式の命令(IX・IY の半分のレジスタ)が無いことを確かめる
+Z80_SAFE_C = sound
+$(patsubst %,$(BUILD)/%.rel,$(Z80_SAFE_C)): $(BUILD)/%.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+	@if grep -qiE '\b(multu|multuw|ixh|ixl|iyh|iyl)\b' $(BUILD)/$*.asm; then \
+	  echo "$<: Z80 でも動くコードに R800 専用・非公式の命令が入った(Makefile の Z80_SAFE_C)"; rm -f $@; exit 1; fi
 
 $(BUILD)/%.rel: $(ENG)/%.s $(ENG)/r800.inc Makefile | $(BUILD)
 	$(AS) -g -l -I$(ENG) -o $@ $<

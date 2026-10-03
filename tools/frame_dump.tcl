@@ -4,7 +4,7 @@
 #     openmsx -machine TH_turboR_dev -carta build/TrolleyHomeRun.rom -romtype ASCII8 -script frame_dump.tcl
 #
 # ゲームの進みはフレーム単位で決まっているので、描画の処理だけを変えたなら、同じ番号のフレームの絵は 1 ブロックも違わないはず。
-# タイトルが出たらゲームを始め(ライフは減らさない、撃たない)、転送(vdp_xfer)の直前に、DUMP_EVERY フレームごとに
+# タイトルが出たらゲームを始め(無敵、撃たない)、転送(vdp_xfer)の直前に、DUMP_EVERY フレームごとに
 # 前のフレームが転送した VRAM のパターンジェネレータ(1536 バイト = 実際に表示される中身)と、地形を描き終えた時点の
 # 描画バッファを 16 進にして $TH_OUT/frames.txt へ書く(DUMP_N 枚)。1 行 = フレーム番号 位置 VRAM 地形だけの絵。
 # 描画バッファは 1 ブロック 1 バイト(64×48 = 3072 バイト)の版と、詰めた形(VRAM と同じ並び、1536 バイト。
@@ -38,6 +38,9 @@ proc start_game {} {
     if {[debug read {S1990 regs} 6] == 0 && [peek8 [sym _g_scene]] == 0 && [peek16 [sym _g_tick]] > 60 && [peek16 [sym _g_tick]] < 3600} {
         # 始めるステージ(隠しコンフィグの g_cfg.stage = 3 バイト目)
         if {[info exists ::env(DUMP_STAGE)]} { debug write memory [expr {[sym _g_cfg] + 2}] $::env(DUMP_STAGE) }
+        # 無敵(隠しコンフィグの NO DAMAGE = g_cfg の 2 バイト目)。ライフを戻すやり方だと被弾のたびに宝の山の表を作り直し、
+        # 実際のプレイに無い時間が約 3ms 入っていた(docs/SDCCとR800の調査.md)
+        debug write memory [expr {[sym _g_cfg] + 1}] 1
         tap 8 0x01
     }
     after time 1.0 start_game
@@ -80,8 +83,6 @@ proc on_xfer {} {
         if {$::fr % 300 == 150} { keymatrixdown 4 0x04 }
         if {$::fr % 300 == 153} { keymatrixup 4 0x04 }
     }
-    # ライフは実時間ではなくフレームごとに戻す(戻すフレームがずれると、ライフで変わるコースターの壊れ具合とゲージがずれる)
-    debug write memory [sym _life] 8
     incr ::fr
     if {$::fr % $::every} return
     # 前のフレームが転送したページ = いま転送しようとしているページ(A)の反対

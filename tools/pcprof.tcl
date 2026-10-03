@@ -4,7 +4,7 @@
 #     [PROF_FRAMES="600 1000"] [PROF_DT=0.00002] [PROF_STAGE=1] \
 #     openmsx -machine TH_turboR_dev -carta build/TrolleyHomeRun.rom -romtype ASCII8 -script pcprof.tcl
 #
-# タイトルが出たらゲームを始め(ライフは減らさない、撃たない)、ゲーム開始から PROF_AT 秒(既定 45 と 75)の
+# タイトルが出たらゲームを始め(無敵、撃たない)、ゲーム開始から PROF_AT 秒(既定 45 と 75)の
 # それぞれ PROF_LEN 秒間、エミュレータ時刻で 10µs ごとに PC を読み、直前のシンボルごとに数える。
 # シンボル(PROF_SYMS、make pcprof が tools/prof_syms.py で作る)は領域ごと: R 常駐部、E 地形モジュール、
 # G ゲームモジュール。ページ2の PC は g_seg2(5 = 地形、それ以外 = ゲーム)で引き分ける。
@@ -70,7 +70,6 @@ proc sample {} {
 # フレーム番号で区切る: 場面がゲームになって最初の転送から数える
 proc on_xfer {} {
     if {$::fr == 0 && [peek8 [sym _g_scene]] != 1} return
-    debug write memory [sym _life] 8    ;# ライフはフレームごとに戻す(実時間で戻すと変更の前後で場面がずれる)
     incr ::fr
     if {$::fr == [lindex $::frames 0]} { set ::sampling 1; set ::t0 [machine_info time]; sample }
     if {$::fr == [lindex $::frames 1]} { set ::sampling 0; set ::t1 [machine_info time]; report }
@@ -105,14 +104,16 @@ proc report {} {
 }
 
 proc tap {row mask} { keymatrixdown $row $mask; after time 0.12 [list keymatrixup $row $mask] }
-proc god {} { debug write memory [sym _life] 8; after time 0.5 god }
 proc start_game {} {
     if {[peek8 [sym _g_scene]] == 1} {
-        if {$::frames eq ""} { foreach t $::at { after time $t window }; god }
+        if {$::frames eq ""} { foreach t $::at { after time $t window } }
         return
     }
     if {[debug read {S1990 regs} 6] == 0 && [peek8 [sym _g_scene]] == 0 && [peek16 [sym _g_tick]] > 60 && [peek16 [sym _g_tick]] < 3600} {
         if {[info exists ::env(PROF_STAGE)]} { debug write memory [expr {[sym _g_cfg] + 2}] $::env(PROF_STAGE) }
+        # 無敵(隠しコンフィグの NO DAMAGE = g_cfg の 2 バイト目)。ライフを戻すやり方だと被弾のたびに宝の山の表を作り直し、
+        # 実際のプレイに無い時間が約 3ms 入っていた(docs/SDCCとR800の調査.md)
+        debug write memory [expr {[sym _g_cfg] + 1}] 1
         tap 8 0x01
     }
     after time 1.0 start_game

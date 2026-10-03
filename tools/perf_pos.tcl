@@ -5,7 +5,7 @@
 #
 # 速くすると同じ時刻でも違う場所を描くので、時刻ではなく位置(cam_s)で突き合わせる。
 # (ゲームの進みはフレーム単位で決まっていて、変更の前後で各フレームの位置は一致する)
-# タイトルが出たらゲームを始め(ライフは減らさない、撃たない)、そのステージが終わるか、位置が 10 秒進まなくなる
+# タイトルが出たらゲームを始め(無敵、撃たない)、そのステージが終わるか、位置が 10 秒進まなくなる
 # (撃たないのでボスで止まる)まで、フレームごとに
 #   位置(m) 1 フレームの時間(ms) 地形の描画 env_draw の時間(ms)
 # を $TH_OUT/perf_pos.txt に書く。比べるのは tools/perf_pos_cmp.py。
@@ -24,12 +24,14 @@ set ::f [open [file join $out_dir perf_pos.txt] w]
 set ::on 0
 set ::env_t 0
 proc tap {row mask} { keymatrixdown $row $mask; after time 0.12 [list keymatrixup $row $mask] }
-proc god {} { debug write memory [sym _life] 8; after time 0.5 god }
 proc start_game {} {
-    if {[peek8 [sym _g_scene]] == 1} { set ::on 1; set ::stage [peek8 [sym _g_stage]]; god; return }
+    if {[peek8 [sym _g_scene]] == 1} { set ::on 1; set ::stage [peek8 [sym _g_stage]]; return }
     if {[debug read {S1990 regs} 6] == 0 && [peek8 [sym _g_scene]] == 0 && [peek16 [sym _g_tick]] > 60 && [peek16 [sym _g_tick]] < 3600} {
         # 始めるステージ(隠しコンフィグの g_cfg.stage = 3 バイト目)
         if {[info exists ::env(PERF_STAGE)]} { debug write memory [expr {[sym _g_cfg] + 2}] $::env(PERF_STAGE) }
+        # 無敵(隠しコンフィグの NO DAMAGE = g_cfg の 2 バイト目)。ライフを戻すやり方だと被弾のたびに宝の山の表を作り直し、
+        # 実際のプレイに無い時間が約 3ms 入っていた(docs/SDCCとR800の調査.md)
+        debug write memory [expr {[sym _g_cfg] + 1}] 1
         tap 8 0x01
     }
     after time 1.0 start_game
