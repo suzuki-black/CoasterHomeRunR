@@ -279,7 +279,8 @@ void vdp_bench(void)
 {
     u8 n = 0;
     for (;;) {
-        if (!(n++ & 63)) run();              /* 約 2 秒ごとに測り直す */
+        if (!n) { n = 1; run(); }            /* 起動時に 1 回だけ測る(測るたびに 50Hz・画面オフへ切り替えるので、
+                                                繰り返すとモニタが同期を取り直して画面が乱れる。値は毎回同じ) */
         buf_fill(C_BLACK, BUF);
         text_draw(1, 1, ".01US/B R800 Z80", C_ORANGE, 1);
         line(7,  "DISP", per_byte(vb_res[0]), per_byte(vb_res[7]));

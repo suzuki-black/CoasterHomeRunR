@@ -49,7 +49,7 @@ ASM_SRCS = $(ENG)/crt0.s $(ENG)/sys.s $(ENG)/vdp.s $(ENG)/gfx.s $(ENG)/math.s $(
 C_SRCS   = $(ENG)/main.c $(ENG)/render.c $(ENG)/rail.c $(ENG)/shared.c \
            $(ENG)/hud.c $(ENG)/sound.c $(ENG)/trolley.c $(ENG)/menu.c $(ENG)/fx.c $(ENG)/vdpbench.c $(ENG)/fillbench.c
 # モジュールのリンク: 0x8000 に先頭(modhead)、変数は 0xBC00-0xBFFF。常駐部のシンボルは ressyms(engine.noi から生成)で渡す
-MODFLAGS = -mz80 --no-std-crt0 --data-loc 0xBC00 -Wl-j -Wl-m
+MODFLAGS = -mz80 --no-std-crt0 --data-loc 0xBC00 -Wl-j -Wl-m -Wl-u
 
 # crt0 は必ず先頭にリンクする
 RELS = $(BUILD)/crt0.rel \
@@ -103,7 +103,7 @@ $(BUILD)/ressyms.s: $(BUILD)/engine.ihx $(TOOLS)/ressyms.py
 	$(PYTHON) $(TOOLS)/ressyms.py $(BUILD)/engine.noi $@
 
 $(BUILD)/ressyms.rel: $(BUILD)/ressyms.s
-	$(AS) -o $@ $<
+	$(AS) -l -o $@ $<
 
 # 地形モジュール(マッパーのセグメント 5 に置く)
 $(BUILD)/envmod.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env.rel $(BUILD)/ressyms.rel
@@ -198,7 +198,7 @@ perf: $(ROM)
 # PC のサンプリングによる統計プロファイル(tools/pcprof.tcl)。関数・ローカルラベル単位の比率
 pcprof: $(ROM)
 	@mkdir -p $(RUNDIR)
-	$(PYTHON) $(TOOLS)/prof_syms.py $(BUILD)/engine.noi $(BUILD) $(BUILD)/prof_syms.txt
+	$(PYTHON) $(TOOLS)/prof_syms.py $(BUILD) $(BUILD)/prof_syms.txt
 	cp $(TOOLS)/pcprof.tcl $(RUNDIR)/
 	TH_NOI=$(abspath $(BUILD)/engine.noi) TH_OUT=$(abspath $(RUNDIR)) PROF_SYMS=$(abspath $(BUILD)/prof_syms.txt) \
 	  timeout $(TIMEOUT) $(OPENMSX_ROM) -script $(abspath $(RUNDIR))/pcprof.tcl >/dev/null 2>&1 || true

@@ -1,44 +1,79 @@
 # pcprof.tcl — PC のサンプリングによる統計プロファイラ
 #
-#   TH_NOI=build/engine.noi TH_OUT=<出力ディレクトリ> PROF_SYMS=build/prof_syms.txt \
+#   TH_NOI=build/engine.noi TH_OUT=<出力ディレクトリ> PROF_SYMS=build/prof_syms.txt [PROF_AT="45 75"] [PROF_LEN=2] \
 #     openmsx -machine TH_turboR_dev -carta build/TrolleyHomeRun.rom -romtype ASCII8 -script pcprof.tcl
 #
-# ゲームを始めて何もせず、t=12〜14 の 2 秒間、エミュレータ時刻で 10µs ごとに PC を読み、
-# 直前のシンボル(PROF_SYMS: "アドレス 名前" の行。make pcprof が .noi と .map から作る)ごとに数える。
-# 結果は $TH_OUT/pcprof.txt(多い順)。関数の中の重い場所も、ローカルラベル単位で見える。
+# タイトルが出たらゲームを始め(ライフは減らさない、撃たない)、ゲーム開始から PROF_AT 秒(既定 45 と 75)の
+# それぞれ PROF_LEN 秒間、エミュレータ時刻で 10µs ごとに PC を読み、直前のシンボルごとに数える。
+# シンボル(PROF_SYMS、make pcprof が tools/prof_syms.py で作る)は領域ごと: R 常駐部、E 地形モジュール、
+# G ゲームモジュール。ページ2の PC は g_seg2(5 = 地形、それ以外 = ゲーム)で引き分ける。
+# 結果は $TH_OUT/pcprof.txt: 関数ごと(ローカルラベルをまとめたもの)と、ラベルごとの多い順。
 
 set out_dir $::env(TH_OUT)
 set mute on
-set ::addrs {}
+set throttle off
+array set ::gsyms {}
+set fh [open $::env(TH_NOI) r]
+foreach line [split [read $fh] "\n"] { if {[regexp {^DEF (\S+) 0x([0-9A-Fa-f]+)} $line -> n h]} { set ::gsyms($n) [expr {"0x$h"}] } }
+close $fh
+proc sym {n} { return $::gsyms($n) }
+proc peek8 {a} { debug read memory $a }
+proc peek16 {a} { expr {[peek8 $a] | ([peek8 [expr {$a + 1}]] << 8)} }
+
+array set ::tbl {R {} E {} G {}}
 set fh [open $::env(PROF_SYMS) r]
 foreach line [split [read $fh] "\n"] {
-    if {[regexp {^([0-9A-Fa-f]+) (\S+)} $line -> hex name]} { lappend ::addrs [list [expr {"0x$hex"}] $name] }
+    if {[regexp {^([REG]) ([0-9A-Fa-f]+) (\S+)} $line -> reg hex name]} { lappend ::tbl($reg) [list [expr {"0x$hex"}] $name] }
 }
 close $fh
-set ::addrs [lsort -integer -index 0 $::addrs]
+foreach r {R E G} { set ::tbl($r) [lsort -integer -index 0 $::tbl($r)] }
 
-proc sym_of {pc} {
+proc sym_of {reg pc} {
+    set t $::tbl($reg)
     set lo 0
-    set hi [expr {[llength $::addrs] - 1}]
-    if {$pc < [lindex $::addrs 0 0]} { return [format "(%04X)" $pc] }
+    set hi [expr {[llength $t] - 1}]
+    if {$hi < 0 || $pc < [lindex $t 0 0]} { return [format "(%s %04X)" $reg $pc] }
     while {$lo < $hi} {
         set mid [expr {($lo + $hi + 1) / 2}]
-        if {[lindex $::addrs $mid 0] <= $pc} { set lo $mid } else { set hi [expr {$mid - 1}] }
+        if {[lindex $t $mid 0] <= $pc} { set lo $mid } else { set hi [expr {$mid - 1}] }
     }
-    return [lindex $::addrs $lo 1]
+    return [lindex $t $lo 1]
 }
 
+set ::at [expr {[info exists ::env(PROF_AT)] ? $::env(PROF_AT) : "45 75"}]
+set ::len [expr {[info exists ::env(PROF_LEN)] ? $::env(PROF_LEN) : 2}]
 array set ::hist {}
 set ::n 0
+set ::left 0
+set ::wins 0
 proc sample {} {
     set pc [reg PC]
-    if {$pc < 0x4000} { set s "(BIOS/ISR)" } elseif {$pc >= 0xC000} { set s [format "(page3 %04X)" $pc] } else { set s [sym_of $pc] }
+    if {$pc >= 0xC000} {
+        set s [format "(page3 %04X)" [expr {$pc & 0xFF00}]]
+    } elseif {$pc >= 0x8000} {
+        set s [sym_of [expr {[peek8 [sym _g_seg2]] == 5 ? "E" : "G"}] $pc]
+    } else {
+        set s [sym_of R $pc]
+    }
     if {[info exists ::hist($s)]} { incr ::hist($s) } else { set ::hist($s) 1 }
     incr ::n
-    if {$::n < 200000} { after time 0.00001 sample } else { report }
+    if {[incr ::left -1] > 0} { after time 0.00001 sample } elseif {[incr ::wins] >= [llength $::at]} { report }
 }
+proc window {} { set ::left [expr {int($::len / 0.00001)}]; sample }
 proc report {} {
     set f [open [file join $::out_dir pcprof.txt] w]
+    array set fn {}
+    foreach k [array names ::hist] {
+        regsub {\+.*$} $k {} base
+        if {[info exists fn($base)]} { incr fn($base) $::hist($k) } else { set fn($base) $::hist($k) }
+    }
+    puts $f "== 関数ごと(サンプル $::n、窓 $::at 秒 × $::len 秒)"
+    set l {}
+    foreach k [array names fn] { lappend l [list $k $fn($k)] }
+    foreach e [lsort -integer -decreasing -index 1 $l] {
+        puts $f [format "%6.2f%%  %s" [expr {100.0 * [lindex $e 1] / $::n}] [lindex $e 0]]
+    }
+    puts $f "\n== ラベルごと"
     set l {}
     foreach k [array names ::hist] { lappend l [list $k $::hist($k)] }
     foreach e [lsort -integer -decreasing -index 1 $l] {
@@ -48,6 +83,15 @@ proc report {} {
     exit
 }
 
-after time 5.0 {keymatrixdown 8 1}
-after time 5.3 {keymatrixup 8 1}
-after time 12.0 {sample}
+proc tap {row mask} { keymatrixdown $row $mask; after time 0.12 [list keymatrixup $row $mask] }
+proc god {} { debug write memory [sym _life] 8; after time 0.5 god }
+proc start_game {} {
+    if {[peek8 [sym _g_scene]] == 1} {
+        foreach t $::at { after time $t window }
+        god
+        return
+    }
+    if {[debug read {S1990 regs} 6] == 0 && [peek8 [sym _g_scene]] == 0 && [peek16 [sym _g_tick]] > 60 && [peek16 [sym _g_tick]] < 3600} { tap 8 0x01 }
+    after time 1.0 start_game
+}
+after time 2.0 start_game
