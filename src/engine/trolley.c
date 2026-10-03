@@ -1,13 +1,16 @@
-/* trolley.c — 画面下部のトロッコの縁(自機・手は描かない)と、縁の上に積んだ宝の山
+/* trolley.c — 画面下部のコースターの車両(自機・手は描かない)
  *
- * 絵は tools/gen_data.py の trolley_img(64×13、0 = 透過。上の 4 行は空き)。ライフ = 積んだ宝の量で、
- * trolley_pile の点のうち「見えるのに要るライフ」が今のライフ以下のものだけを重ねる。
- * 被弾するたびに宝の山が外側・上から減っていく(金貨が飛び散る演出は game.c)。
+ * 乗り物はジェットコースターの一人乗りの先頭車両(飛び出したときに後ろの車両との連結が外れた。仕様書 1 章)。
+ * 絵は tools/gen_data.py の coaster_front / coaster_back(64×13、0 = 透過)。前を向いているときは前の絵、
+ * 後ろを向いているときは後ろの絵。ライフ(車両の耐久)が減るほど壊れていく: 壊れ具合の点(coaster_dmg_*。
+ * (x, y, (現れる耐久 << 4) | 色)、0xFF で終わり。色 0 は穴)のうち、耐久が「現れる耐久」より小さいものを重ねる。
  */
 #include "trolley.h"
 
-extern const u8 trolley_img[TROLLEY_W * TROLLEY_H];
-extern const u8 trolley_pile[TROLLEY_W * PILE_H];
+extern const u8 coaster_front[TROLLEY_W * TROLLEY_H];
+extern const u8 coaster_back[TROLLEY_W * TROLLEY_H];
+extern const u8 coaster_dmg_front[];
+extern const u8 coaster_dmg_back[];
 extern const u8 *g_bt_src;
 extern u8 g_bt_x, g_bt_y;
 void blit_trans(u8 count);
@@ -21,19 +24,22 @@ static u8 timg[TROLLEY_W * TROLLEY_H];
 static u8 runs[MAX_RUNS * 5 + 1];
 static u8 pimg[TROLLEY_H * 32];     /* 丸ごと不透明なバイトの詰めた値 */
 static u8 built_life = 0xFF;
+static u8 built_back;
 static i8 last_x;
 static u8 last_y;
 
-void trolley_set_life(u8 life)
+void trolley_set(u8 life, u8 back)
 {
     u16 k;
-    u8 lv = life << 4;
-    if (life == built_life) return;
+    const u8 *src, *d;
+    if (life == built_life && back == built_back) return;
     built_life = life;
-    for (k = 0; k < sizeof(timg); k++) timg[k] = trolley_img[k];
-    for (k = 0; k < TROLLEY_W * PILE_H; k++) {
-        u8 c = trolley_pile[k];
-        if (c && (c & 0xF0) <= lv) timg[k] = c & 0x0F;
+    built_back = back;
+    src = back ? coaster_back : coaster_front;
+    for (k = 0; k < sizeof(timg); k++) timg[k] = src[k];
+    /* 壊れ具合: 耐久が「現れる耐久」より小さい点を重ねる(色 0 は穴) */
+    for (d = back ? coaster_dmg_back : coaster_dmg_front; d[0] != 0xFF; d += 3) {
+        if (life < (d[2] >> 4)) timg[(u16)d[1] * TROLLEY_W + d[0]] = d[2] & 0x0F;
     }
     /* 詰めた形の表を作る */
     {

@@ -1,4 +1,4 @@
-/* fx.c — 画面の演出(常駐部): 数字の表示、飛び散る金貨、分岐の選ばれていない側の線路
+/* fx.c — 画面の演出(常駐部): 数字の表示、飛び散る車体の破片、分岐の選ばれていない側の線路
  *
  * ゲームモジュール(ページ2)の置き場を空けるため、モジュールの状態に触らない演出はここ(常駐部)に置く。
  */
@@ -13,13 +13,13 @@
 
 /* 数字の表示(ルール: 色・形・場所・動きで 3 種類を分ける)
  *   得点        白  数字だけ「100」            倒した敵の位置    上へ流れる
- *   宝が増えた  黄  金貨の印 +「+2」(満杯 FULL)  宝の山の上        上へ流れる
- *   宝が減った  赤  金貨の印 +「-1」             宝の山の上        その場で点滅 */
+ *   耐久が増えた  黄  十字の印 +「+2」(満杯 FULL)  車両の上   上へ流れる
+ *   耐久が減った  赤  十字の印 +「-1」             車両の上   その場で点滅 */
 #define N_POP 4
 static u8  pop_x[N_POP], pop_y[N_POP], pop_t[N_POP], pop_k[N_POP];
 static u16 pop_v[N_POP];
 u8  g_pop_hx, g_pop_hy;          /* 撃った敵の画面上の位置(game.c の fire が決める) */
-#define PILE_POP_Y (TROLLEY_Y - 6)
+#define CAR_POP_Y (TROLLEY_Y - 4)
 
 void popup(u8 kind, u16 v)
 {
@@ -27,7 +27,7 @@ void popup(u8 kind, u16 v)
     for (i = 1; i < N_POP; i++) if (pop_t[i] < pop_t[k]) k = i;
     pop_k[k] = kind; pop_v[k] = v; pop_t[k] = 16;
     pop_x[k] = (kind == POP_SCORE) ? g_pop_hx : 32;
-    pop_y[k] = (kind == POP_SCORE) ? g_pop_hy : PILE_POP_Y;
+    pop_y[k] = (kind == POP_SCORE) ? g_pop_hy : CAR_POP_Y;
 }
 
 void popups_draw(void)
@@ -56,45 +56,50 @@ void popups_draw(void)
         {
             i8 x = (i8)pop_x[i] - (i8)((6 - j) * 2), y = (i8)pop_y[i];
             if (k != POP_SCORE) {
-                /* 金貨の印(黄の 2×2)を数字の左に */
+                /* 十字の印(白地に赤い十字の 3×3。救急箱の印)を数字の左に */
                 x += 2;
-                if (x >= 3 && y >= 0) { g_rx = (u8)x - 3; g_ry = (u8)y + 1; g_rw = 2; g_rh = 2; g_color = C_YELLOW; rect_fill(); }
+                if (x >= 4 && y >= 0) {
+                    g_rx = (u8)x - 4; g_ry = (u8)y + 1; g_rw = 3; g_rh = 3; g_color = C_WHITE; rect_fill();
+                    g_rx = (u8)x - 3; g_rw = 1; g_color = C_RED; rect_fill();
+                    g_rx = (u8)x - 4; g_ry = (u8)y + 2; g_rw = 3; g_rh = 1; rect_fill();
+                }
             }
             text_draw(x, y, (j == 6) ? "FULL" : &s[j], c, 1);
         }
     }
 }
 
-/* 被弾で宝の山から飛び散る金貨(画面座標 8.8 ブロック) */
-#define N_COIN 6
-static i16 coin_x[N_COIN], coin_y[N_COIN], coin_vx[N_COIN], coin_vy[N_COIN];
-static u8  coin_t;
+/* 被弾で車両から飛び散る破片(画面座標 8.8 ブロック)。車体の赤・メッキの白・黒の 3 色 */
+#define N_DEBRIS 6
+static i16 deb_x[N_DEBRIS], deb_y[N_DEBRIS], deb_vx[N_DEBRIS], deb_vy[N_DEBRIS];
+static u8  deb_t;
+static const u8 deb_col[3] = { C_RED, C_WHITE, C_BLACK };
 
-void coins_start(void)
+void debris_start(void)
 {
     u8 i, r = (u8)g_tick;
-    for (i = 0; i < N_COIN; i++) {
+    for (i = 0; i < N_DEBRIS; i++) {
         r = r * 5 + 7;
-        coin_x[i] = F88(32) + ((i16)(r & 31) - 16) * 64;
-        coin_y[i] = F88(TROLLEY_Y + 2);
-        coin_vx[i] = ((i16)(r & 63) - 32) * 12;
-        coin_vy[i] = -F88(1.2) - (i16)(r & 7) * 24;
+        deb_x[i] = F88(32) + ((i16)(r & 31) - 16) * 64;
+        deb_y[i] = F88(TROLLEY_Y + 4);
+        deb_vx[i] = ((i16)(r & 63) - 32) * 12;
+        deb_vy[i] = -F88(1.2) - (i16)(r & 7) * 24;
     }
-    coin_t = 14;
+    deb_t = 14;
 }
 
-void coins_draw(void)
+void debris_draw(void)
 {
     u8 i;
-    if (!coin_t) return;
-    coin_t--;
-    for (i = 0; i < N_COIN; i++) {
-        i16 x = coin_x[i] >> 8, y = coin_y[i] >> 8;
-        coin_x[i] += coin_vx[i];
-        coin_y[i] += coin_vy[i];
-        coin_vy[i] += 64;
+    if (!deb_t) return;
+    deb_t--;
+    for (i = 0; i < N_DEBRIS; i++) {
+        i16 x = deb_x[i] >> 8, y = deb_y[i] >> 8;
+        deb_x[i] += deb_vx[i];
+        deb_y[i] += deb_vy[i];
+        deb_vy[i] += 64;
         if (x >= 0 && x < 64 && y >= 0 && y < GAME_ROWS) {
-            g_rx = (u8)x; g_ry = (u8)y; g_color = (i & 1) ? C_YELLOW : C_WHITE;
+            g_rx = (u8)x; g_ry = (u8)y; g_color = deb_col[i % 3];
             pset();
         }
     }
@@ -103,7 +108,7 @@ void coins_draw(void)
 void fx_reset(void)
 {
     pop_t[0] = pop_t[1] = pop_t[2] = pop_t[3] = 0;
-    coin_t = 0;
+    deb_t = 0;
     g_alt_n = 0;
 }
 

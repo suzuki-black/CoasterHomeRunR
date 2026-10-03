@@ -144,17 +144,13 @@ static void ending_run(const Stage *st)
     vdp_out(row, 32);
     vdp_set_write(0x1800);
     vdp_fill(0x20, 768);
-    /* 文: (行, 桁, 文字…, 0) の並び。行の bit7 が立っていれば「残った宝の量で選ぶ行」で、
-     * bit5-6 = 0: 宝が多い(ライフ 6 以上)/ 1: そこそこ(3〜5)/ 2: 少ない(1〜2)のときだけ出す */
-    v = (life >= 6) ? 0 : (life >= 3) ? 1 : 2;
+    /* 文: (行, 桁, 文字…, 0) の並び。クリアすれば必ずこの文(グッドエンディング。仕様書 5.2) */
     while (p && *p != 0xFF) {
         u8 r = *p++, c = *p++;
         const u8 *q = p;
         while (*p) p++;
-        if (!(r & 0x80) || ((r >> 5) & 3) == v) {
-            vdp_set_write(0x1800 + (u16)(r & 0x1F) * 32 + c);
-            vdp_out(q, (u16)(p - q));
-        }
+        vdp_set_write(0x1800 + (u16)r * 32 + c);
+        vdp_out(q, (u16)(p - q));
         p++;
     }
     /* スコア(内部は 1/10 なので末尾に 0) */

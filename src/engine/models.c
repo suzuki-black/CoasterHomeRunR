@@ -45,10 +45,9 @@ static const MRect m_boss1[] = {        /* 洞窟の主(巨大な岩熊人)・�
 static const MRect m_rock[] = {         /* 投げた岩 */
     { -3, 0, 3, 5, C_BLACK, 0 }, { -2, 1, 2, 4, C_BROWN, 0 },
 };
-static const MRect m_medkit[] = {       /* 金貨袋(撃つと宝が増える = 回復)・茶の袋、黄の金貨 */
-    { -4, 0, 4, 6, C_BROWN, 0 }, { -3, 6, 3, 7, C_BROWN, 0 }, { -2, 7, 2, 8, C_BLACK, 0 },
-    { -3, 8, 3, 10, C_BROWN, 0 }, { -1, 2, 1, 5, C_YELLOW, 0 },
-    { -7, 0, -4, 1, C_YELLOW, 0 }, { 4, 0, 7, 1, C_YELLOW, 0 },
+static const MRect m_medkit[] = {       /* 救急箱(撃つと耐久が戻る = 回復)・白い箱に赤い十字、黒い取っ手 */
+    { -5, 0, 5, 8, C_WHITE, 0 }, { -1, 1, 1, 7, C_RED, 0 }, { -4, 3, 4, 5, C_RED, 0 },
+    { -2, 8, 2, 9, C_BLACK, 0 },
 };
 static const MRect m_e03[] = {          /* キリン人(槍)・黄。首が長く、槍のリーチが長い */
     { -4,  0, -1, 12, C_YELLOW, 2 }, {  1,  0,  4, 12, C_YELLOW, 2 },
@@ -77,9 +76,9 @@ static const MRect m_arrow[] = {        /* 矢(正面から見た鏃と矢羽) *
 static const MRect m_magic[] = {        /* 魔法弾・水の玉 */
     { -4, 0, 4, 7, C_RED, 0 }, { -2, 2, 2, 5, C_YELLOW, 0 },
 };
-static const MRect m_crate[] = {        /* 湖に浮いた木箱と、その上の金貨袋 */
+static const MRect m_crate[] = {        /* 湖に浮いた木箱と、その上の救急箱 */
     { -7, 0, 7, 8, C_BROWN, 0 }, { -7, 3, 7, 4, C_BLACK, 0 },
-    { -4, 8, 4, 14, C_BROWN, 0 }, { -2, 14, 2, 15, C_BLACK, 0 }, { -1, 10, 1, 13, C_YELLOW, 0 },
+    { -4, 8, 4, 14, C_WHITE, 0 }, { -1, 9, 1, 13, C_RED, 0 }, { -3, 10, 3, 12, C_RED, 0 },
 };
 static const MRect m_boss2[] = {        /* 湖の主(大ガエル人)・水色+黒、赤い口、黄色い目 */
     { -16,  0, -6,  8, C_CYAN, 2 },   {  6,  0, 16,  8, C_CYAN, 2 },

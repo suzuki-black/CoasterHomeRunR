@@ -18,7 +18,7 @@
 /* 高さの基準はレール上の点(以前のトロッコの目の高さ)。床はその 1.3m 下 */
 #define FLOOR_Y F88(-1.3)                       /* レール上の点から見た床 */
 #define FLY_Y   F88(-0.3)                       /* コウモリ人の飛ぶ高さ */
-#define EYE_DROP F88(0.4)                       /* コースターは座席が低いので、目はレール上の点より 0.4m 下(床から 0.9m) */
+#define EYE_DROP F88(0.7)                       /* 一人乗りのコースターは座席が低い(F1 のような視点)。目はレール上の点より 0.7m 下(床から 0.6m) */
 
 /* 敵種ごとの定数 */
 /* 敵の種類ごとの動き(仕様書 4 章)。新しい敵はここに 1 行足す。
@@ -51,7 +51,7 @@ static const EDef edef[ET_COUNT] = {
     /* E05 魔法 */ {  3, MV_HOVER, -5,   32,  3,  11, 64,  24, 16, AT_SHOOT, 40, 55, 100, 1,  1, ET_MAGIC, 10 },
     /* B01 親方 */ { 30, MV_KEEP,  -21,  14,  3,  10, 64,   0,  0, AT_MELEE,  0, 15,  45, 1,  1, 0,        0 },
     /* 宝箱     */ EN_ITEM(0, -21),
-    /* 金貨袋   */ EN_ITEM(1, -21),
+    /* 救急箱   */ EN_ITEM(1, -21),
     /* 洞窟の主 */ { 60, MV_KEEP,  -21,  28,  2,  13, 64,   0,  0, AT_CYCLE, 30, 30,  90, 2, 30, ET_ROCK,  35 },
     /* 岩       */ EN_SHOT(1, 5),
     /* 矢       */ EN_SHOT(1, 8),
@@ -165,11 +165,11 @@ static void damage_player(void)
     shake = 4;
     flash_palette();
     se_play(SE_DAMAGE);
-    if (g_cfg.god) return;                   /* 隠しコンフィグ: 被弾しても宝が減らない */
+    if (g_cfg.god) return;                   /* 隠しコンフィグ: 被弾しても耐久が減らない */
     dmg = (g_cfg.damage < life) ? g_cfg.damage : life;
     life -= dmg;
-    popup(POP_LOSS, dmg);                    /* 宝がいくつ減ったか */
-    coins_start();                           /* 宝の山から金貨が飛び散る */
+    popup(POP_LOSS, dmg);                    /* 耐久がいくつ減ったか */
+    debris_start();                          /* 車両から車体の破片が飛び散る */
 }
 
 
@@ -608,7 +608,7 @@ static void draw_enemy(u8 id)
     md = (e->type == ET_E02 && (e->anim & 4)) ? &model_e02b : &models[e->type];
     g_dm_rects = md->r;
     g_dm_n = md->n;
-    /* 縁取りのルール: 敵・敵弾は白、金貨袋は黄。宝箱と分岐の獣人(文字で示す)は縁取りしない */
+    /* 縁取りのルール: 敵・敵弾は白、救急箱は黄。宝箱と分岐の獣人(文字で示す)は縁取りしない */
     if (!e->flash && e->type != ET_TREASURE && !IS_SIGN(e->type)) {
         g_dm_flash = (e->type == ET_MEDKIT || e->type == ET_CRATE) ? C_YELLOW : C_WHITE;
         g_dm_hit = 0;
@@ -754,14 +754,15 @@ static void render(void)
     g_perf_env = timer_read() - t0;
     alt_draw();
     draw_enemies();
-    /* トロッコの縁。振り向き中は横へ滑らせて一度画面外へ出し、反対側から戻す */
-    trolley_set_life(life);
+    /* コースターの車両。耐久が減るほど壊れた絵になる。振り向き中は横へ滑らせて一度画面外へ出し、反対側から戻す。
+     * 見る向きが 90 度を越えたら(画面外に出ている間に)後ろを向いたときの絵に替える */
+    trolley_set(life, (u8)((look >> 8) + 0x40) >= 0x80);
     {
         i16 slide = turning ? fmul(SIN((u8)(look >> 8)), 72) : 0;   /* 90 度で 72 ブロック = 画面外 */
         if (slide > 64) slide = 64; else if (slide < -64) slide = -64;
         trolley_draw((i8)slide, (shake & 2) ? 1 : 0);
     }
-    coins_draw();
+    debris_draw();
     popups_draw();
     if (shake) shake--;
     draw_hud();
@@ -850,7 +851,7 @@ u8 game_run(const Stage *st, u8 first)
         buf_fill(C_BLACK);
         if (i & 16) text_center(12, "GAME", C_RED, 2);
         if (i & 16) text_center(24, "OVER", C_RED, 2);
-        text_center(38, "NO TREASURE LEFT", C_YELLOW, 1);
+        text_center(38, "COASTER BROKEN", C_YELLOW, 1);
         present();
     }
     return 0;

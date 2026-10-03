@@ -11,7 +11,7 @@
 # シンボル _pset がある版)のどちらでも書き出す。比べるのは tools/frame_cmp.py(同じ 64×48 の並びに直して比べる)。
 # 電飾の点滅は割り込みで数えるティック(g_tick、実時間)で決まり、描画が速くなると位相がずれるので、地形を描く間だけ
 # g_tick をフレーム番号から決めた値に差し替え、描き終えたら実際の値(その間に進んだ分を足す)に戻す。
-# 被弾で飛び散る金貨の種(coins_start)も同じように差し替える。
+# 被弾で飛び散る破片の種(debris_start)も同じように差し替える。
 
 set out_dir $::env(TH_OUT)
 array set ::syms {}
@@ -46,7 +46,7 @@ proc start_game {} {
     after time 1.0 start_game
 }
 proc set_tick {v} { debug write memory [sym _g_tick] [expr {$v & 255}]; debug write memory [expr {[sym _g_tick] + 1}] [expr {($v >> 8) & 255}] }
-# 被弾で飛び散る金貨の種も g_tick(fx.c の coins_start)。入口で差し替え、地形を描き始めるときに実際の値へ戻す
+# 被弾で飛び散る破片の種も g_tick(fx.c の debris_start)。入口で差し替え、地形を描き始めるときに実際の値へ戻す
 proc on_coins {} {
     if {!$::on && !$::title && [peek8 [sym _g_scene]] != 1} return
     set ::coin_real [peek16 [sym _g_tick]]
@@ -92,7 +92,7 @@ proc on_xfer {} {
     unset ::env_hex
     if {[incr ::done] >= $::count} { close $::f; exit }
 }
-debug set_bp [sym _coins_start] {} on_coins
+debug set_bp [sym _debris_start] {} on_coins
 debug set_bp [sym _env_draw] {} on_env
 debug set_bp [sym env_back] {} on_env_back
 debug set_bp [sym _vdp_xfer] {} on_xfer

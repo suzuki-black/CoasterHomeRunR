@@ -7,8 +7,8 @@
 - font35      : 3×5 ブロックフォント(仕様書 3.5 / 5.3)
 - spr_patterns: 16×16 スプライト(照準・ヒットマーク)
 - recip9      : 9bit 仮数の逆数表(多角形の辺の傾きを割り算なしで求める)
-- trolley_img : 画面下部のトロッコの縁(64×13。上の 4 行は宝の山の場所で空き)と、
-                積んだ宝の山(trolley_pile。ライフの量だけ見える)
+- coaster_front / coaster_back : 画面下部に重ねるコースターの車両(64×13、前を向いたとき / 後ろを向いたとき)と、
+                壊れ具合の点(coaster_dmg_front / coaster_dmg_back。ライフ(耐久)が減ると現れる)
 - psg_period  : PSG の音程表(MIDI の音番号 24〜95)
 """
 import math
@@ -106,61 +106,149 @@ SPRITES = [
 
 
 # ---------------------------------------------------------------------------
-# 乗り物(画面下部に重ねる、コースターの先頭の車両の縁。64×13 ブロック)。0 = 透過(奥の景色が見える)
-#   上の 4 行 = 縁の上に積んだ宝の山(ライフ)、下の 9 行 = 車両の縁
-#   色: 1 黒(安全バー・影) 2 白(メッキ) 3 赤(車体) 6 黄(帯)
-# 前を向いているときは前の縁、後ろを向いているときは後ろの縁として同じ絵を使う。
+# 乗り物(画面下部に重ねる、ジェットコースターの一人乗りの先頭車両。64×13 ブロック)。0 = 透過(奥の景色が見える)
+#   遊園地のコースターは一人乗りの車両を連結した列車で、主人公の乗った先頭の車両が飛び出したときに切り離された(仕様書 1 章)。
+#   座席が低いので、前を向くと手前のラップバーの先に低い鼻先が、後ろを向くと自分の座席の背もたれと車体の後部が見える。
+#   色: 1 黒(ラップバー・背もたれの詰め物・車輪の覆い・ひび) 2 白(メッキ) 3 赤(車体) 4 茶(詰め物・折れた連結の腕)
+#       6 黄(鼻先の帯) 7 橙(火花)
+# ライフ(車両の耐久)が減るほど壊れていく: 壊れ具合の点(x, y, (現れる耐久 << 4) | 色)は「耐久 < 現れる耐久」のときに重ねる。
+#   色 0 は穴(透過)。8・7 = 新品、6・5 = 傷、4・3 = ひびと欠け、2・1 = 大きく壊れる
 # ---------------------------------------------------------------------------
-TROLLEY_W, PILE_H, RIM_H = 64, 4, 9
-TROLLEY_H = PILE_H + RIM_H
+TROLLEY_W, TROLLEY_H = 64, 13
 
 
-def trolley_base():
-    """コースターの先頭の車両(乗っている人から見た前の縁)。上から: 安全バー(黒)、縁のメッキ(白)、
-    赤い車体に黄色の帯、下のバンパー(白)と影(黒)。両端は安全バーの支柱。
-    名前は以前のトロッコのまま(trolley_img)"""
+def coaster_front():
+    """前を向いたとき: 左右に一人乗りの細い車体の縁(手前ほど内へ張り出す)、奥ほど細い低い鼻先(中央に黄色の帯)、
+    手前のラップバー(黒い棒と茶の詰め物)と床から立つ支柱"""
     img = [[0] * TROLLEY_W for _ in range(TROLLEY_H)]
-    rows = {0: 1, 1: 2, 2: 3, 3: 3, 4: 6, 5: 3, 6: 3, 7: 2, 8: 1}
-    for y in range(RIM_H):
-        x0 = max(0, 6 - y)             # 側面は手前ほど外へ広がる
-        x1 = min(TROLLEY_W - 1, 57 + y)
-        for x in range(x0, x1 + 1):
-            img[PILE_H + y][x] = rows[y]
-        if 1 <= y <= 7:
-            img[PILE_H + y][x0] = 2    # 側面のメッキ
-            img[PILE_H + y][x1] = 2
-    # 安全バーの支柱(左右)
-    for bx in (8, 54):
-        for y in range(0, 4):
-            for x in range(bx, bx + 2):
-                img[PILE_H + y][x] = 1
+    for y in range(TROLLEY_H):
+        if 3 <= y <= 8:                                  # 鼻先
+            hw = 6 + (y - 3) * 3
+            for x in range(32 - hw, 32 + hw):
+                img[y][x] = 2 if y == 3 else 3
+            for x in (30, 31, 32, 33):
+                img[y][x] = 6 if y > 3 else 2
+        wl = front_wall(y)                               # 左右の車体の縁
+        for x in range(0, wl):
+            img[y][x] = 3
+            img[y][TROLLEY_W - 1 - x] = 3
+        img[y][wl] = 2
+        img[y][TROLLEY_W - 1 - wl] = 2
+    for x in range(14, 50):                              # ラップバー
+        img[9][x] = 1
+        img[10][x] = 4
+    img[10][14] = img[10][49] = 1
+    for y in (11, 12):                                   # 床から立つ支柱
+        for x in range(29, 35):
+            img[y][x] = 1
     return img
 
 
-def treasure_pile():
-    """縁の上の宝の山(64×4)。1 バイト = (見えるのに要るライフ << 4) | 色、0 = 無し。
-    ライフ L の山は高さ ceil(L/2) 行、裾の半幅 4 + 2L の山形。金貨(黄)に、光(白)と宝石(赤・水色)を散らし、
-    一番下の行は影(橙)。ライフが減ると外側・上から消えていく"""
-    pile = [[0] * TROLLEY_W for _ in range(PILE_H)]
-    for L in range(8, 0, -1):
-        h = (L + 1) // 2
-        hw = 4 + 2 * L
-        for b in range(h):             # b = 下から数えた行
-            w = hw * (h - b) // h
-            y = PILE_H - 1 - b
-            for x in range(32 - w, 32 + w):
-                k = (x * 7 + y * 13) % 23
-                c = 6
-                if k == 0:
-                    c = 2
-                elif k == 5:
-                    c = 3
-                elif k == 11:
-                    c = 8
-                elif b == 0 and k % 3 == 0:
-                    c = 7
-                pile[y][x] = (L << 4) | c
-    return pile
+def front_wall(y):
+    """前を向いたときの左の車体の縁の幅(右は左右対称)"""
+    return 2 + y // 2 + (y * y) // 12
+
+
+def coaster_back():
+    """後ろを向いたとき: 真ん中の下に自分の座席の背もたれ(赤い殻、黒い詰め物、茶の頭当て)、左右に車体の後部、
+    後ろの角の車輪の覆い、座席の下に外れた連結の受け口(黒)と折れた連結の腕(茶)"""
+    img = [[0] * TROLLEY_W for _ in range(TROLLEY_H)]
+    for y in range(TROLLEY_H):
+        if y >= 6:                                       # 車体の後部
+            ext = back_deck(y)
+            for x in range(ext, TROLLEY_W - ext):
+                img[y][x] = 2 if y == 6 else 3
+        if y >= 1:                                       # 背もたれ
+            hw = 8 if y >= 3 else (6 if y == 2 else 4)
+            for x in range(32 - hw, 32 + hw):
+                img[y][x] = 3
+            for x in range(32 - hw + 2, 32 + hw - 2):
+                img[y][x] = 4 if y <= 3 else 1
+    for y in (10, 11, 12):                               # 車輪の覆い
+        for x in list(range(4, 10)) + list(range(54, 60)):
+            img[y][x] = 1
+    for x in range(28, 36):                              # 外れた連結の受け口
+        img[12][x] = 1
+    for x in range(30, 34):                              # 折れた連結の腕
+        img[11][x] = 4
+    return img
+
+
+def back_deck(y):
+    """後ろを向いたときの車体の後部の、左右の空き(行 6〜12)"""
+    return 6 - (y - 6) // 2
+
+
+def coaster_damage(front):
+    """壊れ具合の点 (x, y, 現れる耐久, 色) の並び。色 0 は穴"""
+    d = []
+    def dot(x, y, thr, c):
+        d.append((x, y, thr, c))
+    if front:
+        # 6・5: 傷(鼻先と左右の縁に黒い点)
+        for x, y in ((27, 5), (36, 6), (24, 7), (40, 7)):
+            dot(x, y, 7, 1)
+        for y in (6, 10):
+            dot(front_wall(y) - 2, y, 7, 1)
+            dot(TROLLEY_W + 1 - front_wall(y), y + 1, 7, 1)
+        # 4・3: 鼻先のひび、メッキの欠け、ラップバーの詰め物の破れ、帯の欠け
+        for x, y in ((31, 4), (30, 5), (29, 6), (29, 7), (28, 8), (37, 5), (38, 6), (39, 7)):
+            dot(x, y, 5, 1)
+        for x in (28, 35):
+            dot(x, 3, 5, 3)
+        for y in (5, 8):
+            dot(front_wall(y), y, 5, 1)
+        for x in (20, 21, 41):
+            dot(x, 10, 5, 1)
+        dot(32, 6, 5, 3)
+        # 2・1: 鼻先の右前が欠けて穴、左の縁の上が取れる、ラップバーの右端が折れる、火花
+        for y in range(4, 7):
+            for x in range(36, 41):
+                dot(x, y, 3, 0)
+        for x in range(35, 42):
+            dot(x, 7, 3, 1)
+        for y in range(0, 4):
+            for x in range(0, front_wall(y) + 1):
+                dot(x, y, 3, 0)
+        for y in range(7, 10):
+            x = TROLLEY_W - 1 - front_wall(y)
+            dot(x, y, 3, 0)
+            dot(x + 1, y, 3, 1)
+        for x in range(44, 49):
+            dot(x, 9, 3, 0)
+            dot(x, 10, 3, 0)
+        for x, y in ((35, 3), (41, 5), (43, 9)):
+            dot(x, y, 3, 7)
+    else:
+        # 6・5: 車体の後部の傷
+        for x, y in ((8, 8), (55, 9), (14, 11), (50, 11)):
+            dot(x, y, 7, 1)
+        # 4・3: 背もたれの詰め物の破れ、メッキの欠け、後部のひび
+        for x, y in ((29, 6), (34, 8), (31, 10)):
+            dot(x, y, 5, 4)
+        for x in (10, 20, 45):
+            dot(x, 6, 5, 3)
+        for x, y in ((12, 9), (13, 10), (52, 8), (51, 9)):
+            dot(x, y, 5, 1)
+        # 2・1: 後部の左右に穴、頭当ての破れ、火花
+        for y in range(7, 10):
+            for x in range(back_deck(y), back_deck(y) + 5):
+                dot(x, y, 3, 0)
+        for y in range(8, 11):
+            for x in range(50, 55):
+                dot(x, y, 3, 0)
+        for x in (27, 28):
+            dot(x, 2, 3, 0)
+        for x, y in ((11, 8), (49, 9)):
+            dot(x, y, 3, 7)
+    return d
+
+
+def damage_bytes(d):
+    out = []
+    for x, y, thr, c in d:
+        out += [x, y, (thr << 4) | c]
+    return out + [0xFF]
 
 
 def sprite_bytes(rows):
@@ -195,8 +283,10 @@ def main(out):
         for row in FONT[ch]:
             font.append(sum((1 << (2 - i)) for i, c in enumerate(row) if c == '#'))
 
-    tro = [c for row in trolley_base() for c in row]
-    pile = [c for row in treasure_pile() for c in row]
+    cfront = [c for row in coaster_front() for c in row]
+    cback = [c for row in coaster_back() for c in row]
+    dfront = damage_bytes(coaster_damage(True))
+    dback = damage_bytes(coaster_damage(False))
 
     # PSG の音程表: MIDI の音番号 24(C1)〜95(B6)の周期 = 3579545 / (16 * 周波数)
     ptab = []
@@ -219,8 +309,10 @@ def main(out):
         f.write(carray('font35_map', 'u8', fmap) + '\n\n')
         f.write(carray('spr_patterns', 'u8', spr) + '\n\n')
         f.write(carray('recip9', 'u16', rtab) + '\n\n')
-        f.write(carray('trolley_img', 'u8', tro) + '\n\n')
-        f.write(carray('trolley_pile', 'u8', pile) + '\n\n')
+        f.write(carray('coaster_front', 'u8', cfront) + '\n\n')
+        f.write(carray('coaster_back', 'u8', cback) + '\n\n')
+        f.write(carray('coaster_dmg_front', 'u8', dfront) + '\n\n')
+        f.write(carray('coaster_dmg_back', 'u8', dback) + '\n\n')
         f.write(carray('psg_period', 'u16', ptab) + '\n')
 
 

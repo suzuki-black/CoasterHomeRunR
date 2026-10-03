@@ -26,7 +26,7 @@ void cfg_defaults(void)
 /* 項目: 名前、最小、最大、値の名前(0 = 数字で出す) */
 enum { CF_DAMAGE, CF_GOD, CF_STAGE, CF_LIFE, CF_ONESHOT, CF_ROUTE, CF_EASY, CF_FPS, CF_XFER, CF_COUNT };
 static const char * const cf_name[CF_COUNT] = {
-    "DAMAGE", "NO DAMAGE", "STAGE", "TREASURE", "ONE SHOT", "ROUTE", "EASY", "FPS", "XFER",
+    "DAMAGE", "NO DAMAGE", "STAGE", "LIFE", "ONE SHOT", "ROUTE", "EASY", "FPS", "XFER",
 };
 static const u8 cf_min[CF_COUNT] = { 1, 0, 1, 1, 0, 0, 0, 0, 0 };
 static const u8 cf_max[CF_COUNT] = { 8, 1, STAGE_COUNT, 8, 1, 2, 2, 1, 1 };
