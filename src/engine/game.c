@@ -836,7 +836,7 @@ u8 game_run(const Stage *st, u8 first)
     /* ゲームオーバー(約 4 秒) */
     g_scene = 2;
     for (i = 0; i < 120; i++) {
-        buf_fill(C_BLACK, BUF);
+        buf_fill(C_BLACK);
         if (i & 16) text_center(12, "GAME", C_RED, 2);
         if (i & 16) text_center(24, "OVER", C_RED, 2);
         text_center(38, "NO TREASURE LEFT", C_YELLOW, 1);

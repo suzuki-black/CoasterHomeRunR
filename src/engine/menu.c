@@ -44,7 +44,7 @@ static void config(void)
     u8 sel = 0, i, prev = 0xFF, in, edge;
     u8 *v;
     for (;;) {
-        buf_fill(C_BLACK, BUF);
+        buf_fill(C_BLACK);
         for (i = 0; i < CF_COUNT; i++) {
             u8 y = 1 + i * 6, c = (i == sel) ? C_YELLOW : C_WHITE;   /* 8 項目 × 6 行で画面いっぱい */
             const char *s = 0;
@@ -83,7 +83,7 @@ void title(void)
     g_spr_attr[0] = 209;
     g_spr_attr[4] = 209;
     for (;;) {
-        buf_fill(C_BLACK, BUF);
+        buf_fill(C_BLACK);
         g_rx = 0; g_ry = 30; g_rw = 64; g_rh = 1; g_color = 9; rect_fill();
         text_center(6, "COASTER", C_YELLOW, 2);
         text_center(18, "HOME RUN", C_ORANGE, 2);

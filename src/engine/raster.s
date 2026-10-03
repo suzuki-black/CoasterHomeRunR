@@ -23,7 +23,7 @@
 ROWS	= 46
 FILLBLK	= 0x0100		; 塗りの展開ブロック(ページ0の RAM。sys_page0_ram が _fillblk_tpl を写す)
 FILLJP	= FILLBLK + 2
-FILLEND	= FILLJP + 3 + 128
+FILLEND	= FILLJP + 3 + 64
 ; 各行の左右端(0..64)。256 境界に置き、fill が inc d / dec d だけで左右を行き来する
 _span_a	== 0xDE00
 _span_b	== 0xDF00
@@ -664,27 +664,27 @@ edge::
 ; fill: C = 最初の行、B = 行数。span_a[r] と span_b[r] の間を g_color で塗る
 ; ---------------------------------------------------------------------------
 fill::
-	; 終わりの行(r0 + 行数)と色を命令へ書き込む(自己書き換え。コードは RAM 上)
-	; ★push で 2 バイトずつ書く版も試したが、塗りの時間は 1 行ごとの準備で決まっていて速くならなかった
+	; 詰めたバッファ(gfx.s の並び)へ塗る。行ごとに左右を決め、展開した書き込みの途中へ飛ぶ。
+	;   奇数の端は半バイトだけ読み書きする。横に隣り合うバイトは +8(展開ブロックは ld (hl),a / add hl,bc の 32 組)
 	ld	a, c
 	add	a, b
-	ld	(fill_cmp + 1), a
+	ld	(f_end), a
+	; 色とバッファの上位バイトを、行ごとの命令の即値へ書き込んでおく(自己書き換え。行ごとにメモリから読まない)
+	ld	a, (_g_buf_hi)
+	ld	(f_buf + 1), a
 	ld	a, (_g_color)
-	ld	(FILLBLK + 1), a
-	; DE = span_a + r0、HL = バッファの行頭
+	and	a, #0x0F
+	ld	(f_lo + 1), a
+	ld	b, a
+	add	a, a
+	add	a, a
+	add	a, a
+	add	a, a
+	ld	(f_hi + 1), a
+	or	a, b
+	ld	(FILLBLK + 1), a	; 両方のブロックが同じ色のバイト
 	ld	d, #SPAN_A_HI
 	ld	e, c
-	ld	l, c
-	ld	h, #0
-	add	hl, hl
-	add	hl, hl
-	add	hl, hl
-	add	hl, hl
-	add	hl, hl
-	add	hl, hl
-	ld	a, (_g_buf_hi)
-	add	a, h
-	ld	h, a
 fill_row:
 	inc	d
 	ld	a, (de)			; span_b
@@ -703,43 +703,81 @@ fill_lt:
 	sub	a, b
 	ld	c, a
 fill_go:
-	; 飛び先の下位 = 終わりの下位 - 幅 * 2(ブロックは 256 境界の中なので上位は固定)
+	; H = バッファ + (行 >> 3)、L = (左端 >> 1) * 8 + (行 & 7)
+	ld	a, e
+	rrca
+	rrca
+	rrca
+	and	a, #0x1F
+f_buf:
+	add	a, #0			; + バッファの上位バイト(書き換える)
+	ld	h, a
+	ld	a, c
+	and	a, #0xFE
+	add	a, a
+	add	a, a
+	ld	l, a
+	ld	a, e
+	and	a, #7
+	or	a, l
+	ld	l, a
+	bit	0, c
+	jr	z, fill_even
+	; 左端が奇数: そのバイトの右半分だけ
+	ld	a, (hl)
+	and	a, #0xF0
+f_lo:
+	or	a, #0			; 色(書き換える)
+	ld	(hl), a
+	ld	a, l
+	add	a, #8
+	ld	l, a
+	dec	b
+	jr	z, fill_next
+fill_even:
+	ld	a, b
+	srl	a			; 丸ごと塗るバイトの数、キャリー = 右端に半分が残る
+	jr	z, fill_tail		; 丸ごとのバイトが無ければキャリーはそのまま
+	ld	b, a
+	ex	af, af'			; キャリーを裏の F に置く(展開ブロックの add hl,bc がキャリーを壊すため。割り込みは裏を使わない)
 	ld	a, b
 	add	a, a
 	ld	b, a
 	ld	a, #<FILLEND
 	sub	a, b
-	ld	(FILLJP + 1), a
-	ld	b, l			; 行頭の下位を覚えておく
-	ld	a, l
-	add	a, c
-	ld	l, a			; 行頭は 64 の倍数、左端 <= 63 なので下位だけで足りる
+	ld	(FILLJP + 1), a		; 飛び先 = 終わり - 数 * 2(ブロックは 256 境界の中なので下位だけ)
+	ld	bc, #8
 	jp	FILLBLK			; 色を A に入れてから展開ブロックの途中へ
 fill_ret::
-	ld	l, b
+	ex	af, af'			; 裏に置いたキャリー
+fill_tail:
+	jr	nc, fill_next
+	; 右端が奇数: そのバイトの左半分だけ
+	ld	a, (hl)
+	and	a, #0x0F
+f_hi:
+	or	a, #0			; 色 << 4(書き換える)
+	ld	(hl), a
 fill_next:
-	ld	a, l
-	add	a, #64
-	ld	l, a
-	jr	nc, fill_inc
-	inc	h
-fill_inc:
 	inc	e
-	ld	a, e
-fill_cmp:
-	cp	a, #0			; 終わりの行(書き換える)
+	ld	a, (f_end)
+	cp	a, e
 	jp	nz, fill_row
-fill_done::				; 計測用(tools/fillbench_log.tcl が塗りの終わりを捕まえる)
+fill_done::				; 計測用(塗りの終わりを捕まえる)
 	ret
 
-; 展開した 64 回の書き込みの元(sys_page0_ram がページ0の FILLBLK = 0x0100 へ写す)。
+	.area	_DATA
+f_end:		.ds	1
+	.area	_CODE
+
+; 展開した 32 回の書き込みの元(sys_page0_ram がページ0の FILLBLK = 0x0100 へ写す)。
 ;   256 境界の中で動くので、飛び先は下位バイトだけを書き換える
 _fillblk_tpl::
 	ld	a, #0			; FILLBLK: 色(書き換える)
 	jp	0x0100			; FILLJP: 飛び先(下位を書き換える。上位は 0x01 固定)
-	.rept	64
+	.rept	32
 	ld	(hl), a
-	inc	l
+	add	hl, bc
 	.endm
 	jp	fill_ret		; FILLEND
 _fillblk_end::

@@ -10,7 +10,8 @@ static void block(i8 x, i8 y, u8 color, u8 scale)
         for (i = 0; i < scale; i++) {
             i8 xx = x + i;
             if (xx < 0 || xx >= 64) continue;
-            BUF[(u8)yy * 64 + (u8)xx] = color;
+            g_rx = (u8)xx; g_ry = (u8)yy; g_color = color;
+            pset();
         }
     }
 }
@@ -71,7 +72,7 @@ void hud_life(u8 life)
 {
     u8 i;
     g_rh = 2;
-    buf_fill_rows(C_BLACK, BUF + 46 * 64);
+    buf_fill_rows(C_BLACK, 46);
     for (i = 0; i < 8; i++) {
         g_rx = 4 + i * 7; g_ry = 46; g_rw = 6; g_rh = 2;
         g_color = (i < life) ? C_YELLOW : 9;     /* 積んだ宝の量(金) */

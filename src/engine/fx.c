@@ -93,7 +93,10 @@ void coins_draw(void)
         coin_x[i] += coin_vx[i];
         coin_y[i] += coin_vy[i];
         coin_vy[i] += 64;
-        if (x >= 0 && x < 64 && y >= 0 && y < GAME_ROWS) BUF[(u8)y * 64 + (u8)x] = (i & 1) ? C_YELLOW : C_WHITE;
+        if (x >= 0 && x < 64 && y >= 0 && y < GAME_ROWS) {
+            g_rx = (u8)x; g_ry = (u8)y; g_color = (i & 1) ? C_YELLOW : C_WHITE;
+            pset();
+        }
     }
 }
 

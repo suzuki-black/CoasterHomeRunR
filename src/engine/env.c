@@ -684,9 +684,9 @@ static void sky_draw(u8 far)
     else if (cam_psin < 0) yh = -1;
     row = (yh < 0) ? 0 : (yh >= 48 * 16) ? 48 : (u8)(yh >> 4);
     g_rh = row;
-    buf_fill_rows(C_SKY, BUF);
+    buf_fill_rows(C_SKY, 0);
     g_rh = 48 - row;
-    buf_fill_rows(far == K_FOREST ? C_DIRT0 : far >= K_PARK ? C_GRASS : C_ROCK1, BUF + (u16)row * BUF_W);
+    buf_fill_rows(far == K_FOREST ? C_DIRT0 : far >= K_PARK ? C_GRASS : C_ROCK1, row);
 }
 
 void envm_draw(u16 s, u16 look16)
@@ -722,7 +722,7 @@ void envm_draw(u16 s, u16 look16)
              * バッファの全消去は要らない。レールの端で塞げないときだけ全消去する */
             if (fwd && !cap_ok(NF)) capped = 0;
             if (back && !cap_ok(-NB)) capped = 0;
-            if (!capped) buf_fill(C_BLACK, BUF);
+            if (!capped) buf_fill(C_BLACK);
         }
     }
 

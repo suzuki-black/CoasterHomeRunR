@@ -1,12 +1,14 @@
 # frame_dump.tcl — ゲーム開始から決まった番号のフレームの描画バッファを書き出す(変更の前後で絵が同じか比べる用)
 #
-#   TH_NOI=build/engine.noi TH_OUT=<出力ディレクトリ> [DUMP_EVERY=50] [DUMP_N=40] [DUMP_STAGE=1] \
+#   TH_NOI=build/engine.noi TH_OUT=<出力ディレクトリ> [DUMP_EVERY=50] [DUMP_N=40] [DUMP_STAGE=1] [DUMP_TURN=1] [DUMP_TITLE=1] \
 #     openmsx -machine TH_turboR_dev -carta build/TrolleyHomeRun.rom -romtype ASCII8 -script frame_dump.tcl
 #
 # ゲームの進みはフレーム単位で決まっているので、描画の処理だけを変えたなら、同じ番号のフレームの絵は 1 ブロックも違わないはず。
 # タイトルが出たらゲームを始め(ライフは減らさない、撃たない)、転送(vdp_xfer)の直前に、DUMP_EVERY フレームごとに
-# 描画バッファ 64×48 を 16 進にして $TH_OUT/frames.txt へ書く(DUMP_N 枚)。1 行 = フレーム番号 位置 完成した絵 地形だけの絵。
-# 比べるのは tools/frame_cmp.py。
+# 前のフレームが転送した VRAM のパターンジェネレータ(1536 バイト = 実際に表示される中身)と、地形を描き終えた時点の
+# 描画バッファを 16 進にして $TH_OUT/frames.txt へ書く(DUMP_N 枚)。1 行 = フレーム番号 位置 VRAM 地形だけの絵。
+# 描画バッファは 1 ブロック 1 バイト(64×48 = 3072 バイト)の版と、詰めた形(VRAM と同じ並び、1536 バイト。
+# シンボル _pset がある版)のどちらでも書き出す。比べるのは tools/frame_cmp.py(同じ 64×48 の並びに直して比べる)。
 # 電飾の点滅は割り込みで数えるティック(g_tick、実時間)で決まり、描画が速くなると位相がずれるので、地形を描く間だけ
 # g_tick をフレーム番号から決めた値に差し替え、描き終えたら実際の値(その間に進んだ分を足す)に戻す。
 # 被弾で飛び散る金貨の種(coins_start)も同じように差し替える。
@@ -24,6 +26,9 @@ set throttle off
 set ::every [expr {[info exists ::env(DUMP_EVERY)] ? $::env(DUMP_EVERY) : 50}]
 set ::count [expr {[info exists ::env(DUMP_N)] ? $::env(DUMP_N) : 40}]
 set ::f [open [file join $out_dir frames.txt] w]
+set ::turn [expr {[info exists ::env(DUMP_TURN)] && $::env(DUMP_TURN)}]
+set ::title [expr {[info exists ::env(DUMP_TITLE)] && $::env(DUMP_TITLE)}]
+set ::buf_len [expr {[info exists ::syms(_pset)] ? 1536 : 3072}]
 set ::on 0
 set ::fr 0
 set ::done 0
@@ -40,13 +45,14 @@ proc start_game {} {
 proc set_tick {v} { debug write memory [sym _g_tick] [expr {$v & 255}]; debug write memory [expr {[sym _g_tick] + 1}] [expr {($v >> 8) & 255}] }
 # 被弾で飛び散る金貨の種も g_tick(fx.c の coins_start)。入口で差し替え、地形を描き始めるときに実際の値へ戻す
 proc on_coins {} {
-    if {!$::on} return
+    if {!$::on && !$::title && [peek8 [sym _g_scene]] != 1} return
     set ::coin_real [peek16 [sym _g_tick]]
     set ::coin_fake [expr {($::fr * 8) & 0xFFFF}]
     set_tick $::coin_fake
 }
 proc on_env {} {
-    if {!$::on} return
+    # 数え始める前(最初の転送の前)のフレームも、ゲームの場面なら差し替える(そのフレームの絵も書き出すため)
+    if {!$::on && !$::title && [peek8 [sym _g_scene]] != 1} return
     if {[info exists ::coin_real]} {
         set_tick [expr {$::coin_real + [peek16 [sym _g_tick]] - $::coin_fake}]
         unset ::coin_real
@@ -64,18 +70,22 @@ proc on_env_back {} {
     unset ::real_tick
     # 書き出すフレームなら、地形を描き終えた時点の絵も取っておく(敵・コイン・HUD を重ねる前)
     if {($::fr + 1) % $::every == 0} {
-        binary scan [debug read_block memory [expr {[peek8 [sym _g_buf_hi]] << 8}] 3072] H* ::env_hex
+        binary scan [debug read_block memory [expr {[peek8 [sym _g_buf_hi]] << 8}] $::buf_len] H* ::env_hex
     }
 }
 proc on_xfer {} {
     # 数え始めは「場面がゲームになって最初の転送」(実時間の見回りで拾うと、新旧で 1 フレームずれる)
-    if {!$::on} { if {[peek8 [sym _g_scene]] != 1} return; set ::on 1 }
+    if {!$::on} { if {!$::title && [peek8 [sym _g_scene]] != 1} return; set ::on 1 }
+    if {$::turn} {
+        if {$::fr % 300 == 150} { keymatrixdown 4 0x04 }
+        if {$::fr % 300 == 153} { keymatrixup 4 0x04 }
+    }
     # ライフは実時間ではなくフレームごとに戻す(戻すフレームがずれると、ライフで変わるコースターの壊れ具合とゲージがずれる)
     debug write memory [sym _life] 8
     incr ::fr
     if {$::fr % $::every} return
-    set base [expr {[peek8 [sym _g_buf_hi]] << 8}]
-    binary scan [debug read_block memory $base 3072] H* hex
+    # 前のフレームが転送したページ = いま転送しようとしているページ(A)の反対
+    binary scan [debug read_block VRAM [expr {(1 - ([reg a] & 1)) * 0x800}] 1536] H* hex
     if {![info exists ::env_hex]} { set ::env_hex - }
     puts $::f "$::fr [format %.2f [expr {[peek16 [sym _cam_s]] / 64.0}]] $hex $::env_hex"
     unset ::env_hex
@@ -85,4 +95,4 @@ debug set_bp [sym _coins_start] {} on_coins
 debug set_bp [sym _env_draw] {} on_env
 debug set_bp [sym env_back] {} on_env_back
 debug set_bp [sym _vdp_xfer] {} on_xfer
-after time 2.0 start_game
+if {!$::title} { after time 2.0 start_game }

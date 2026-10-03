@@ -11,9 +11,9 @@ typedef signed long    i32;
 
 /* ---- メモリ配置(仕様書 7.3) ---- */
 extern u8 g_buf_hi;                 /* 描画バッファの上位バイト(gfx.s)。いまは常に 0xC0 */
-#define BUF        ((u8 *)((u16)g_buf_hi << 8))   /* 描画バッファ 64×48 */
+#define BUF        ((u8 *)((u16)g_buf_hi << 8))   /* 描画バッファ: 64×48 を VRAM と同じ並びに詰めた 1536 バイト(gfx.s)。
+                                                   書くのは gfx.s / raster.s の関数だけ。エンディングでは 2KB の一時領域にも使う */
 #define BUF_A_HI   0xC0
-#define BUF_W      64
 #define GAME_ROWS  46               /* 3D ゲーム画面の行数(46-47 はライフゲージ) */
 #define SLOT_CART  (*(u8 *)0xE0F0)  /* ローダーが書く(src/boot/boot.s の V_CART) */
 #define SLOT_RAM   (*(u8 *)0xE0F1)
@@ -68,9 +68,10 @@ void vdp_xfer(u8 page);
 /* ---- gfx.s ---- */
 extern u8  g_color;
 extern u8  g_rx, g_ry, g_rw, g_rh;
-void buf_fill(u8 color, u8 *dst);
-void buf_fill_rows(u8 color, u8 *dst);
-void rect_fill(void);
+void buf_fill(u8 color);            /* バッファ全体(48 行) */
+void buf_fill_rows(u8 color, u8 row);   /* row から g_rh 行 */
+void rect_fill(void);               /* g_rx, g_ry, g_rw, g_rh(クリップ済み)を g_color で */
+void pset(void);                    /* (g_rx, g_ry) の 1 ブロックを g_color に(画面内であること) */
 
 /* ---- raster.s ---- */
 extern i16 scr[20];                 /* 多角形の画面座標 (x, y) × n(12.4) */
