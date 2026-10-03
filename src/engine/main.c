@@ -93,6 +93,7 @@ static void vdp_init(void)
     for (i = 0; i < sizeof(regs); i += 2) vdp_wreg(regs[i], regs[i + 1]);
     vdp_set_write(0x0000);
     vdp_fill(0, 0x4000);
+    xfer_invalidate();               /* 転送の写し(vdp.s)も捨てる */
     /* ネームテーブル: 行 r の値 = (r >> 2) * 32 + 列(仕様書 7.4) */
     vdp_set_write(0x1000);
     for (r = 0; r < 24; r++) {
@@ -225,6 +226,7 @@ void main(void)
     sys_install_isr();
     sys_page0_ram();
     sys_page0_data();                /* 表(sin・逆数・フォント・敵の絵など)とタイトル・コンフィグをページ0へ */
+    sys_z80x_init();                 /* 実機のファームウェアなら描画バッファを Z80 で送る(vdp.s の vdp_xfer) */
     cfg_defaults();
     sys_seg2(SEG_ENV);               /* 地形モジュールをセグメント 5 へ(以後ページ2はふだんゲームのセグメント) */
     mod_load(ENV_BANK);

@@ -56,6 +56,9 @@ void mod_load(u8 bank);             /* ROM の bank, bank+1(16KB)をページ2(�
 void sys_seg2(u8 seg);              /* ページ2のマッパーのセグメントを切り替える */
 void sys_page0_data(void);          /* ページ0の表とコード(エリア _PAGE0 = 0x1A00-)を ROM のバンク 1 から読み込む */
 void bios_font(u8 *dst);            /* BIOS のフォント 2KB を dst へ(ページ2・3) */
+extern u8 g_z80x;                   /* 1 = 描画バッファを Z80 に切り替えて送る */
+extern u8 g_z80x_ok;                /* 1 = ファームウェアに CHGCPU がある(Z80 に切り替えられる) */
+void sys_z80x_init(void);           /* g_z80x_ok と g_z80x を決める(起動時に 1 回) */
 
 /* ---- vdp.s ---- */
 void vdp_wreg(u8 reg, u8 val);
@@ -64,6 +67,7 @@ void vdp_out(const u8 *src, u16 len);
 void vdp_fill(u8 val, u16 len);
 void vdp_set_palette(u8 first, const u8 *pal);
 void vdp_xfer(u8 page);
+void xfer_invalidate(void);         /* 下の帯の写しを捨てる(VRAM を vdp_xfer 以外で書き換えたとき) */
 
 /* ---- gfx.s ---- */
 extern u8  g_color;

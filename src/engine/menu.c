@@ -24,15 +24,16 @@ void cfg_defaults(void)
 }
 
 /* 項目: 名前、最小、最大、値の名前(0 = 数字で出す) */
-enum { CF_DAMAGE, CF_GOD, CF_STAGE, CF_LIFE, CF_ONESHOT, CF_ROUTE, CF_EASY, CF_FPS, CF_COUNT };
+enum { CF_DAMAGE, CF_GOD, CF_STAGE, CF_LIFE, CF_ONESHOT, CF_ROUTE, CF_EASY, CF_FPS, CF_XFER, CF_COUNT };
 static const char * const cf_name[CF_COUNT] = {
-    "DAMAGE", "NO DAMAGE", "STAGE", "TREASURE", "ONE SHOT", "ROUTE", "EASY", "FPS",
+    "DAMAGE", "NO DAMAGE", "STAGE", "TREASURE", "ONE SHOT", "ROUTE", "EASY", "FPS", "XFER",
 };
-static const u8 cf_min[CF_COUNT] = { 1, 0, 1, 1, 0, 0, 0, 0 };
-static const u8 cf_max[CF_COUNT] = { 8, 1, STAGE_COUNT, 8, 1, 2, 2, 1 };
+static const u8 cf_min[CF_COUNT] = { 1, 0, 1, 1, 0, 0, 0, 0, 0 };
+static const u8 cf_max[CF_COUNT] = { 8, 1, STAGE_COUNT, 8, 1, 2, 2, 1, 1 };
 static const char * const v_onoff[] = { "OFF", "ON" };
 static const char * const v_route[] = { "FREE", "LEFT", "RIGHT" };
 static const char * const v_easy[]  = { "STAGE", "ON", "OFF" };
+static const char * const v_xfer[]  = { "AUTO", "R800" };
 
 static u8 *cf_val(u8 i)
 {
@@ -46,13 +47,15 @@ static void config(void)
     for (;;) {
         buf_fill(C_BLACK);
         for (i = 0; i < CF_COUNT; i++) {
-            u8 y = 1 + i * 6, c = (i == sel) ? C_YELLOW : C_WHITE;   /* 8 項目 × 6 行で画面いっぱい */
+            /* 9 項目 × 5 行で画面いっぱい(行の間が空かないので、選んでいない項目は白と水色を交互に) */
+            u8 y = 2 + i * 5, c = (i == sel) ? C_YELLOW : (i & 1) ? C_CYAN : C_WHITE;
             const char *s = 0;
             v = cf_val(i);
             text_draw(2, (i8)y, cf_name[i], c, 1);
             if (i == CF_GOD || i == CF_ONESHOT || i == CF_FPS) s = v_onoff[*v];
             else if (i == CF_ROUTE) s = v_route[*v];
             else if (i == CF_EASY) s = v_easy[*v];
+            else if (i == CF_XFER) s = v_xfer[*v];
             if (s) text_draw(42, (i8)y, s, c, 1);
             else num_draw(42, (i8)y, *v, 1, c);
         }
@@ -65,7 +68,10 @@ static void config(void)
         if (edge & IN_DOWN) sel = (sel + 1 < CF_COUNT) ? sel + 1 : 0;
         if ((edge & IN_LEFT) && *v > cf_min[sel]) (*v)--;
         if ((edge & IN_RIGHT) && *v < cf_max[sel]) (*v)++;
-        if (edge & IN_A) return;
+        if (edge & IN_A) {
+            g_z80x = g_z80x_ok && !g_cfg.xfer;   /* 転送のしかた(vdp.s の vdp_xfer) */
+            return;
+        }
     }
 }
 

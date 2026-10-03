@@ -34,7 +34,15 @@ _vdp_wreg::
 	or	a, #0x80
 	out	(0x99), a
 	ei
+	dec	c			; R#1 は写しを覚えておく(Z80 転送が割り込みを一時的に止めるため)
+	ret	nz
+	ld	a, l
+	ld	(_g_vdp_r1), a
 	ret
+
+	.area	_DATA
+_g_vdp_r1::	.ds	1	; 最後に書いた R#1
+	.area	_CODE
 
 ; void vdp_set_write(u16 addr)   HL=addr(0000h-3FFFh)
 _vdp_set_write::
@@ -95,10 +103,110 @@ _vdp_set_palette::
 ; ---------------------------------------------------------------------------
 ; void vdp_xfer(u8 page)   A=0/1
 ;   描画バッファ(g_buf_hi << 8、VRAM と同じ並びに詰めた 1536 バイト。gfx.s)を、パターンジェネレータ page へ送る。
-;   R800 では 1 バイトごとに 62 サイクル待たされる(S1990)ので、OTIR で十分。
+;   R800 では 1 バイトごとに 62 サイクル待たされる(S1990)ので、OTIR で十分(8.67µs/バイト)。
+;   ファームウェアに CHGCPU がある機種(実機)では、Z80 に切り替えて OUTI で送る(5.45µs/バイト。sys.s の xfer_z80)。
+;   下の帯(40-47 行目)の列ペア 2-29(224 バイト)はコースターの車体とゲージで覆われていて、ふだんは変わらない。
+;   ページごとに最後に送った中身の写しと比べ、同じなら送らない(xfer_prep。2 枚を交互に使うので比べる相手は 2 フレーム前)。
 ; ---------------------------------------------------------------------------
-	.globl	_g_buf_hi
+	.globl	_g_buf_hi, _g_z80x, _xfer_z80
+
+XF_SKIP_OFS = 0x500 + 16	; 下の帯の列ペア 2 から
+XF_SKIP_LEN = 224		; 列ペア 2-29
+
+	.area	_DATA
+_g_xfer_ok::	.ds	1	; bit p = ページ p の写しが正しい(vdp_init で VRAM を消したら 0 にする)
+_g_xfer_skip::	.ds	1	; 1 = このフレームは下の帯の中央を送らない
+xf_page:	.ds	1
+xf_shadow:	.ds	XF_SKIP_LEN * 2
+	.area	_CODE
+
+; void xfer_invalidate(void) — 写しを捨てる(VRAM のパターンジェネレータを vdp_xfer 以外で書き換えたとき)
+_xfer_invalidate::
+	xor	a, a
+	ld	(_g_xfer_ok), a
+	ret
+
+; xfer_prep: A = ページ → g_xfer_skip を決める。送るときは写しを更新する
+_xfer_prep::
+	ld	(xf_page), a
+	ld	hl, #xf_shadow
+	or	a, a
+	jr	z, 1$
+	ld	de, #XF_SKIP_LEN
+	add	hl, de
+1$:
+	ex	de, hl			; DE = このページの写し
+	ld	a, (_g_buf_hi)
+	add	a, #>XF_SKIP_OFS
+	ld	h, a
+	ld	l, #<XF_SKIP_OFS	; HL = 描画バッファの下の帯の列ペア 2
+	ld	a, (xf_page)
+	inc	a			; ページ 0 → bit0、ページ 1 → bit1
+	ld	b, a
+	ld	a, (_g_xfer_ok)
+	and	a, b
+	jr	z, 4$
+	push	hl
+	push	de
+	ld	c, #XF_SKIP_LEN		; CPI は BC を 1 ずつ減らす。C = 224 なら 224 回の間に B へ繰り下がらない
+	ld	b, #XF_SKIP_LEN / 8	; B = 8 バイトの組の数(djnz)
+2$:
+	.rept	8
+	ld	a, (de)
+	inc	de
+	cpi				; A と (HL) を比べて HL を進める
+	jr	nz, 3$
+	.endm
+	djnz	2$
+	pop	de
+	pop	hl
+	ld	a, #1
+	ld	(_g_xfer_skip), a
+	ret
+3$:
+	pop	de
+	pop	hl
+4$:
+	ld	bc, #XF_SKIP_LEN
+	ldir
+	ld	a, (xf_page)
+	inc	a
+	ld	b, a
+	ld	a, (_g_xfer_ok)
+	or	a, b
+	ld	(_g_xfer_ok), a
+	xor	a, a
+	ld	(_g_xfer_skip), a
+	ret
+
+; xfer_skip_addr: 書き込み先を、いまのページの下の帯の列ペア 30 へ付け直す(割り込みを止めて)。HL を 224 進める
+_xfer_skip_addr::
+	ld	a, (xf_page)
+	add	a, a
+	add	a, a
+	add	a, a
+	add	a, #>(XF_SKIP_OFS + XF_SKIP_LEN)
+	or	a, #0x40
+	ld	b, a
+	di
+	ld	a, #<(XF_SKIP_OFS + XF_SKIP_LEN)
+	out	(0x99), a
+	ld	a, b
+	out	(0x99), a
+	ei
+	ld	de, #XF_SKIP_LEN
+	add	hl, de
+	ret
+
 _vdp_xfer::
+	push	af
+	call	_xfer_prep
+	pop	af
+	ld	c, a
+	ld	a, (_g_z80x)
+	or	a, a
+	ld	a, c
+	jp	nz, _xfer_z80		; ファームウェアに CHGCPU があれば Z80 で送る(sys.s)
 	; 書き込み先 = page * 0x800
 	add	a, a
 	add	a, a
@@ -119,10 +227,24 @@ _vdp_xfer::
 	ld	h, a
 	ld	l, #0
 	ld	c, #0x98
-	ld	d, #6			; 256 バイト × 6
+	ld	d, #5			; 256 バイト × 5
 1$:
 	ld	b, #0
 	otir
 	dec	d
 	jr	nz, 1$
+	ld	b, #16			; 下の帯の列ペア 0-1
+	otir
+	ld	a, (_g_xfer_skip)
+	or	a, a
+	jr	nz, 2$
+	ld	b, #XF_SKIP_LEN
+	otir
+	jr	3$
+2$:
+	call	_xfer_skip_addr
+	ld	c, #0x98
+3$:
+	ld	b, #16			; 列ペア 30-31
+	otir
 	ret

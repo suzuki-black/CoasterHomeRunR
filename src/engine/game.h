@@ -131,6 +131,7 @@ typedef struct {
     u8 route;       /* 分岐: 0 = 撃って選ぶ、1 = 左に固定、2 = 右に固定 */
     u8 easy;        /* やさしい進行: 0 = ステージの指定どおり、1 = 常に、2 = しない */
     u8 fps;         /* 1 = 左上に fps とティック数 */
+    u8 xfer;        /* 転送: 0 = AUTO(ファームウェアに CHGCPU があれば Z80 で送る)、1 = 常に R800 */
 } Config;
 extern Config g_cfg;
 void cfg_defaults(void);
