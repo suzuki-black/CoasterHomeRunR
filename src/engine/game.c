@@ -730,8 +730,19 @@ static void render(void)
         i8 tgt;
         if (i + 1 >= rail_len / RAIL_STEP) i = rail_len / RAIL_STEP - 2;
         dy = (rail[i + 1].y - rail[i].y) >> 1;   /* 1m あたりの高さ変化(8.8)。点は 2m ごと */
-        /* atan(x) ≒ x / (1 + 0.28x²)(急な坂でも破綻しない)。1 フレームで差の 1/4 ずつ追う */
-        tgt = (i8)(((i32)dy * 41) / (256 + (((i32)dy * dy * 72) >> 16)));
+        /* atan(x) ≒ x / (1 + 0.28x²)(急な坂でも破綻しない)。1 フレームで差の 1/4 ずつ追う。
+         * dy だけで決まるので、前のフレームと同じ dy なら計算し直さない(32bit の割り算は R800 でも数千サイクル) */
+        {
+            static i16 last_dy;
+            static i8 last_tgt;
+            static u8 tgt_ok;                /* モジュールの変数は 0 で始まる(初期値つきは使えない) */
+            if (!tgt_ok || dy != last_dy) {
+                tgt_ok = 1;
+                last_dy = dy;
+                last_tgt = (i8)(((i32)dy * 41) / (256 + (((i32)dy * dy * 72) >> 16)));
+            }
+            tgt = last_tgt;
+        }
         {
             i8 st = (i8)((tgt - pitch_cur) >> 2);
             if (!st) st = (tgt > pitch_cur) ? 1 : (tgt < pitch_cur) ? -1 : 0;

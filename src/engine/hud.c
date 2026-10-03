@@ -55,15 +55,22 @@ void text_center(i8 y, const char *s, u8 color, u8 scale)
     text_draw((i8)((64 - (i8)(n * 4 * scale - scale)) / 2), y, s, color, scale);
 }
 
+/* 10 進の各桁は、割り算(R800 には割り算の命令が無く、ライブラリは 1 回数百サイクル)でなく、
+ * 10000・1000・100・10 を引いて求める */
+static const u16 pow10[4] = { 10000, 1000, 100, 10 };
+
 void num_draw(i8 x, i8 y, u16 n, u8 digits, u8 color)
 {
     char buf[6];
-    u8 i = 5;
+    u8 i, k;
+    for (k = 0; k < 4; k++) {
+        char c = '0';
+        while (n >= pow10[k]) { n -= pow10[k]; c++; }
+        buf[k] = c;
+    }
+    buf[4] = (char)('0' + n);
     buf[5] = 0;
-    do {
-        buf[--i] = '0' + (n % 10);
-        n /= 10;
-    } while (n && i);
+    for (i = 0; i < 4 && buf[i] == '0'; i++) ;   /* 先頭の 0 は出さない(0 は 1 桁の「0」) */
     x += (i8)((digits - (5 - i)) * 4);
     text_draw(x, y, &buf[i], color, 1);
 }
