@@ -921,7 +921,7 @@ slot_addr:
 	ret
 
 ; slot_ensure: A = id、HL = p、DE = q(画面座標へのポインタ)→ HL = スロットの先頭
-;   このフレームでまだなら、スロットを割り当てて辺 p→q の行ごとの x を計算して置く。IX/IY は壊さない
+;   このフレームでまだなら、スロットを割り当てて辺 p→q の行ごとの x を計算して置く。IX は壊さない、IY は壊す
 slot_ensure::
 	ld	c, a
 	ld	b, #0
@@ -942,86 +942,98 @@ slot_ensure::
 	ld	(hl), a
 	dec	a
 6$:
-	pop	hl
-	; --- 作る。スロットの先頭を e_dst に
-	push	de
-	push	hl
-	call	slot_addr
+	; --- 作る(1 本 約 330 → 約 200 サイクル: 関数を呼ばず、座標は ldir で写さず 16bit で直接、見出しは 1 回だけ書く)
+	; スロットの先頭 = ESLOT + A * 64(64 境界)
+	rrca
+	rrca
+	ld	c, a
+	and	a, #0xC0
+	ld	l, a
+	ld	a, c
+	and	a, #0x3F
+	add	a, #>ESLOT
+	ld	h, a
 	ld	(e_dst), hl
-	ld	de, #46
-	add	hl, de
-	xor	a, a
-	ld	(hl), a			; rs = re = 0(行なし)
-	inc	hl
-	ld	(hl), a
-	inc	hl
-	ld	(hl), a			; 向き
 	pop	hl			; p
-	pop	de			; q
-	; p.y と q.y を比べ、上端 → 下端の順で e_x0.. に入れる
-	push	hl
-	push	de
-	inc	hl
-	inc	hl
+	; p をいったん上端として e_x0 / e_y0 に置く
 	ld	c, (hl)
 	inc	hl
-	ld	b, (hl)			; BC = p.y
-	ex	de, hl
+	ld	b, (hl)
 	inc	hl
+	ld	a, (hl)
+	inc	hl
+	ld	h, (hl)
+	ld	l, a			; HL = p.y
+	ld	(e_x0), bc
+	ld	(e_y0), hl
+	ex	de, hl			; HL = q、DE = p.y
+	ld	c, (hl)
+	inc	hl
+	ld	b, (hl)			; BC = q.x
 	inc	hl
 	ld	a, (hl)
 	inc	hl
 	ld	h, (hl)
 	ld	l, a			; HL = q.y
+	push	hl
 	or	a, a
-	sbc	hl, bc
-	pop	de			; q
-	pop	hl			; p
+	sbc	hl, de			; q.y - p.y
+	pop	hl
 	jr	z, 7$			; 水平: 行なし
 	jp	m, 2$
-	; 下り: そのまま。向きを記録
-	push	hl
-	ld	hl, (e_dst)
-	ld	bc, #48
-	add	hl, bc
-	ld	(hl), #1
-	pop	hl
+	; 下り(p → q): 作ったときの向き = 1
+	ld	(e_x1), bc
+	ld	(e_y1), hl
+	ld	a, #1
 	jr	3$
 2$:
-	ex	de, hl			; 上り: 入れ替える
+	; 上り: q を上端に入れ替える。向き = 0
+	ld	(e_y1), de		; p.y
+	ld	de, (e_x0)
+	ld	(e_x1), de		; p.x
+	ld	(e_x0), bc
+	ld	(e_y0), hl
+	xor	a, a
 3$:
-	; HL = 上端、DE = 下端
-	ld	bc, #4
-	push	de
-	ld	de, #e_x0		; e_x0, e_y0 は連続
-	ldir
-	pop	hl
-	ld	de, #e_x1		; e_x1, e_y1 は連続
-	ld	c, #4
-	ldir
+	ld	hl, (e_dst)
+	ld	e, a
+	ld	a, l
+	or	a, #48
+	ld	l, a
+	ld	(hl), e			; [48] 向き
 	xor	a, a
 	ld	(e_cnt), a
-	push	ix
-	push	iy
-	call	edge
-	pop	iy
-	pop	ix
+	call	edge			; edge が壊すのは IY だけ(IY は呼び出し元の band_fast / hex_fast が帯ごとに保存する)
+	; [46] 最初の行、[47] 最後の行 + 1(行が無ければ 0, 0)
 	ld	hl, (e_dst)
+	ld	a, l
+	or	a, #46
+	ld	l, a
 	ld	a, (e_cnt)
 	or	a, a
-	ret	z
+	jr	z, 4$
 	ld	b, a
-	push	hl
-	ld	de, #46
-	add	hl, de
 	ld	a, (e_rs)
 	ld	(hl), a
-	inc	hl
+	inc	l
 	add	a, b
 	ld	(hl), a
-	pop	hl
+	ld	hl, (e_dst)
 	ret
 7$:
+	; 水平: 行なし、向き 0
+	ld	hl, (e_dst)
+	ld	a, l
+	or	a, #48
+	ld	l, a
+	ld	(hl), #0
+	dec	l
+	dec	l
+4$:
+	xor	a, a
+	ld	(hl), a
+	inc	l
+	ld	(hl), a
 	ld	hl, (e_dst)
 	ret
 8$:
@@ -1032,23 +1044,26 @@ slot_ensure::
 ; seg_copy: HL = スロット、A = 1 なら作ったときと逆向きに使う
 ;   面の中での向きが下りなら span_a、上りなら span_b へ、覆う行の x をコピーし、sc_r0 / sc_r1 を広げる
 seg_copy:
+	; スロットは 64 境界なので、見出し [46] の番地は下位バイトの or で作れる(push / pop しない)
 	ld	c, a
-	push	hl
-	ld	de, #46
-	add	hl, de
-	ld	b, (hl)			; rs
-	inc	hl
-	ld	a, (hl)			; re
-	inc	hl
+	ld	d, h
+	ld	a, l
+	or	a, #46
+	ld	e, a
+	ld	a, (de)
+	ld	b, a			; rs
+	inc	e
+	ld	a, (de)			; re
+	inc	e
 	sub	a, b
-	jr	z, 9$
-	jr	c, 9$
-	ld	e, a			; 行数
-	ld	a, (hl)			; 作ったときの向き
+	ret	z
+	ret	c
+	ex	af, af'			; A' = 行数
+	ld	a, (de)			; 作ったときの向き
 	xor	a, c
-	ld	d, #SPAN_A_HI
+	ld	c, #SPAN_A_HI
 	jr	nz, 1$
-	inc	d			; span_b
+	inc	c			; span_b
 1$:
 	; 範囲を広げる
 	ld	a, (sc_r0)
@@ -1057,26 +1072,24 @@ seg_copy:
 	ld	a, b
 	ld	(sc_r0), a
 2$:
-	ld	a, b
-	add	a, e
-	ld	c, a
+	ex	af, af'
+	ld	e, a			; 行数
+	add	a, b
+	ld	d, a			; re
 	ld	a, (sc_r1)
-	cp	a, c
+	cp	a, d
 	jr	nc, 3$
-	ld	a, c
+	ld	a, d
 	ld	(sc_r1), a
 3$:
-	ld	c, e			; 行数
-	ld	e, b			; DE = span + rs
-	pop	hl
 	ld	a, l
 	add	a, b
 	ld	l, a			; スロット + rs(64 境界の中)
+	ld	d, c
+	ld	c, e			; 行数
+	ld	e, b			; DE = span + rs
 	ld	b, #0
 	ldir
-	ret
-9$:
-	pop	hl
 	ret
 
 ; sc_fill: sc_r0..sc_r1 を g_color で塗り、範囲を空に戻す
@@ -1162,6 +1175,7 @@ ring_ptr:
 ; ---------------------------------------------------------------------------
 _band_fast::
 	push	ix
+	push	iy			; slot_ensure(edge)が IY を壊す
 	ld	(bf_a), a
 	ld	a, l
 	ld	(bf_b), a
@@ -1286,6 +1300,7 @@ _band_fast::
 	ld	(bf_k), a
 	cp	a, #6
 	jp	nz, 2$
+	pop	iy
 	pop	ix
 	ret
 
@@ -1326,6 +1341,7 @@ band_ring_edge:
 
 ; void hex_fast(u8 r)   A = リング番号。リングの六角形を g_color で塗る(リングの辺を共有)
 _hex_fast::
+	push	iy			; slot_ensure(edge)が IY を壊す
 	ld	(bf_a), a
 	ld	a, #ROWS
 	ld	(sc_r0), a
@@ -1344,7 +1360,9 @@ _hex_fast::
 	ld	(bf_k), a
 	cp	a, #6
 	jr	nz, 1$
-	jp	sc_fill
+	call	sc_fill
+	pop	iy
+	ret
 
 ; i16 qmul(i16 v, u16 q)   HL = v(8.8 m)、DE = q(2^23 / z)→ DE = v * q >> 14(画面上の長さ 12.4、±15000 に飽和)
 ;   リング面の飾り(env.c)を、リング中心の投影から 2D で求めるのに使う
