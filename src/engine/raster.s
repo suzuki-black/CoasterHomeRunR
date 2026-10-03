@@ -888,6 +888,8 @@ bf_pb:		.ds	2
 bf_a:		.ds	1
 bf_b:		.ds	1
 bf_k:		.ds	1
+bf_ck:		.ds	1	; band_fast: 塗る面のビット(ループで 1 つずつ右へ送る)
+bf_cr:		.ds	1	; band_fast: 使う放射の辺のビット(同上)
 sc_r0:		.ds	1
 sc_r1:		.ds	1
 
@@ -1109,26 +1111,8 @@ ring_ptr:
 	add	hl, de
 	ret
 
-; ---------------------------------------------------------------------------
-; void band_fast(u8 a, u8 b)   A = 手前のリング番号、L = 奥のリング番号
-;   2 本のリングの間の 6 面(面 k = a[k], a[k+1], b[k+1], b[k])を色 g_band_col[k] で塗る。
-;   全頂点が手前(投影済み)であること。
-; ---------------------------------------------------------------------------
-_band_fast::
-	push	ix
-	ld	(bf_a), a
-	ld	a, l
-	ld	(bf_b), a
-	call	ring_ptr
-	ld	(bf_pb), hl
-	ld	a, (bf_a)
-	call	ring_ptr
-	ld	(bf_pa), hl
-	; --- 18 本の辺を用意(計算済みならスロットを引くだけ)
-	ld	ix, #sl_tbl
-	xor	a, a
-	ld	(bf_k), a
-1$:
+; band_fast の辺の用意(リング a・b の辺 k と、放射 k)。IX = sl_tbl + k * 2
+	.macro	BF_RING
 	; リング a の辺 k: a[k] → a[k+1]
 	ld	a, (bf_k)
 	ld	b, a
@@ -1143,6 +1127,8 @@ _band_fast::
 	call	band_ring_edge
 	ld	12 (ix), l
 	ld	13 (ix), h
+	.endm
+	.macro	BF_RADIAL
 	; 放射 k: a[k] → b[k]
 	ld	a, (bf_k)
 	add	a, a
@@ -1167,13 +1153,92 @@ _band_fast::
 	call	slot_ensure
 	ld	24 (ix), l
 	ld	25 (ix), h
+	.endm
+
+; ---------------------------------------------------------------------------
+; void band_fast(u8 a, u8 b)   A = 手前のリング番号、L = 奥のリング番号
+;   2 本のリングの間の 6 面(面 k = a[k], a[k+1], b[k+1], b[k])を色 g_band_col[k] で塗る。
+;   全頂点が手前(投影済み)であること。
+; ---------------------------------------------------------------------------
+_band_fast::
+	push	ix
+	ld	(bf_a), a
+	ld	a, l
+	ld	(bf_b), a
+	call	ring_ptr
+	ld	(bf_pb), hl
+	ld	a, (bf_a)
+	call	ring_ptr
+	ld	(bf_pa), hl
+	; --- 塗る面が使う辺だけを用意する(計算済みならスロットを引くだけ)
+	;   面 k はリング a の辺 k・リング b の辺 k・放射 k・放射 k+1 を使う。色 0 の面(屋外の空など)の辺は作らない
+	;   (遊園地で 1 フレーム 54 本 → 40 本)。使わない sl_tbl の欄は、2 つ目のループでも読まない
+	; 塗る面のビット(bit k = 面 k の色が 0 でない)と、使う放射の辺のビット(bit k = 面 k か面 k-1 を塗る)を先に作る
+	ld	hl, (_g_band_col)
+	ld	b, #6
+	ld	c, #0
+14$:
+	ld	a, (hl)
+	inc	hl
+	cp	a, #1			; 0 ならキャリー
+	ccf
+	rr	c			; 面 0 が bit2、面 5 が bit7 に入る
+	djnz	14$
+	ld	a, c
+	rrca
+	rrca				; bit k = 面 k
+	ld	(bf_ck), a
+	ld	c, a
+	add	a, a			; bit k = 面 k-1(k = 1..5)
+	ld	b, a
+	ld	a, c
+	rlca
+	rlca
+	rlca				; 面 5 → bit0
+	and	a, #1
+	or	a, b
+	or	a, c
+	ld	(bf_cr), a
+	ld	ix, #sl_tbl
+	xor	a, a
+	ld	(bf_k), a
+	ld	a, (bf_ck)
+	cp	a, #0x3F
+	jr	nz, 1$
+	; 6 面とも塗る帯(洞窟・坑道など): ビットを確かめずに 18 本とも用意する
+15$:
+	BF_RING
+	BF_RADIAL
 	inc	ix
 	inc	ix
 	ld	a, (bf_k)
 	inc	a
 	ld	(bf_k), a
 	cp	a, #6
-	jr	nz, 1$
+	jr	nz, 15$
+	jr	16$
+	; 塗らない面がある帯: 塗る面が使う辺だけ
+1$:
+	ld	a, (bf_ck)
+	rrca
+	ld	(bf_ck), a
+	jr	nc, 12$
+	BF_RING
+12$:
+	ld	a, (bf_cr)
+	rrca
+	ld	(bf_cr), a
+	jr	nc, 13$
+	BF_RADIAL
+13$:
+	inc	ix
+	inc	ix
+	ld	a, (bf_k)
+	inc	a
+	ld	(bf_k), a
+	cp	a, #6
+	jp	nz, 1$
+16$:
 	; --- 面
 	ld	a, #ROWS
 	ld	(sc_r0), a

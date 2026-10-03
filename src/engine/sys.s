@@ -164,7 +164,7 @@ _env_draw::
 	out	(0xFE), a
 	pop	af
 	call	ENVM_DRAW
-env_back:
+env_back::
 	ld	a, #SEG_GAME
 	ld	(_g_seg2), a
 	out	(0xFE), a
