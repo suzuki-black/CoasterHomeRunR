@@ -542,7 +542,6 @@ _g_dm_grow::	.ds	1
 dm_c:		.ds	2
 dm_sx:		.ds	2
 dm_sy:		.ds	2
-dm_k:		.ds	2
 dm_x0:		.ds	1
 dm_x1:		.ds	1
 dm_y0:		.ds	1
@@ -557,40 +556,27 @@ dm_cache:	.ds	DM_CMAX * 4	; 矩形ごとの x0, x1, y0, y1(ブロック、広げ
 
 	.area	_CODE
 
-; HL = (A(符号付き) * dm_k) >> 8
-dm_scale:
-	ld	hl, (dm_k)
+; dm_cx: A = x(1/16m、符号付き)→ A = clamp((sx + scale(x) + 7) >> 4, 0, 64)
+; dm_cy: A = y(1/16m、符号付き)→ A = clamp((sy - scale(y) + 7) >> 4, 0, 46)
+;   scale(v) = (|v| * k) >> 8 に v の符号を付けたもの(k = 1/16m あたりの画面量)。k・sx・sy は draw_model が
+;   命令の即値(dm_k_i・dm_sx_i・dm_sy_i)に書く(メモリの変数を読まない)。BC・DE・HL を壊す
+;   (値ごとに結果を覚えて使い回す形も試したが、覚える・戻す手間のほうが重く、ステージ 3 で +0.6ms だった)
+dm_cx:
+	call	dm_sc
+dm_sx_i:
+	ld	de, #0			; sx(draw_model が書く)
+	add	hl, de
+	ld	c, #64
+	jr	dm_blk
+dm_cy:
+	call	dm_sc
+	ex	de, hl
+dm_sy_i:
+	ld	hl, #0			; sy(draw_model が書く)
 	or	a, a
-	jp	p, 1$
-	neg
-	call	2$
-	xor	a, a
-	sub	a, l
-	ld	l, a
-	sbc	a, a
-	sub	a, h
-	ld	h, a
-	ret
-1$:
-2$:
-	; 拡大率が 256 未満なら 8×8 の MULUB(14 サイクル。MULUW は 36)。積は 16bit に収まり、結果は同じ
-	inc	h
-	dec	h
-	jr	nz, 3$
-	ld	e, l
-	MULUB_A_E			; HL = A * E
-	ld	l, h
-	ld	h, #0
-	ret
-3$:
-	ld	c, a
-	ld	b, #0
-	MULUW_HL_BC			; DE:HL
-	ld	l, h
-	ld	h, e
-	ret
-
-; A = clamp((HL + 7) >> 4, 0, C)(HL は画面座標 12.4)
+	sbc	hl, de
+	ld	c, #46
+; HL(画面座標 12.4)→ A = clamp((HL + 7) >> 4, 0, C)。0 <= HL + 7 < 1024 なら (HL + 7) << 4 の上位バイトが答え
 dm_blk:
 	ld	de, #7
 	add	hl, de
@@ -599,19 +585,11 @@ dm_blk:
 	ld	a, h
 	cp	a, #4
 	jr	nc, 2$			; 1024 以上 = 64 ブロック以上
-	ld	a, l
-	rrca
-	rrca
-	rrca
-	rrca
-	and	a, #0x0F
-	ld	l, a
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
 	ld	a, h
-	rlca
-	rlca
-	rlca
-	rlca
-	or	a, l
 	cp	a, c
 	ret	c
 2$:
@@ -619,6 +597,44 @@ dm_blk:
 	ret
 1$:
 	xor	a, a
+	ret
+; dm_sc: A = v → HL = scale(v)
+dm_sc:
+	ld	d, a			; D = v(符号)
+	bit	7, a
+	jr	z, 1$
+	neg
+1$:
+dm_k_i:
+	ld	hl, #0			; k(draw_model が書く)
+	inc	h
+	dec	h
+	jr	nz, 2$
+	; 拡大率が 256 未満なら 8×8 の MULUB(14 サイクル。MULUW は 36)。積は 16bit に収まり、結果は同じ
+	ld	e, l
+	MULUB_A_E			; HL = A * E
+	ld	l, h
+	ld	h, #0
+	jr	3$
+2$:
+	ld	c, a
+	ld	b, #0
+	ld	a, d
+	ex	af, af'			; MULUW は DE を壊すので v を裏の A に(割り込み処理は裏のレジスタを使わない)
+	MULUW_HL_BC			; DE:HL
+	ld	l, h
+	ld	h, e
+	ex	af, af'
+	ld	d, a
+3$:
+	bit	7, d
+	ret	z
+	xor	a, a
+	sub	a, l
+	ld	l, a
+	sbc	a, a
+	sub	a, h
+	ld	h, a
 	ret
 
 _draw_model::
@@ -674,7 +690,11 @@ _draw_model::
 	rr	l
 	srl	h
 	rr	l
-	ld	(dm_k), hl
+	ld	(dm_k_i + 1), hl	; 座標の計算(dm_cx / dm_cy)の即値に書く
+	ld	hl, (dm_sx)
+	ld	(dm_sx_i + 1), hl
+	ld	hl, (dm_sy)
+	ld	(dm_sy_i + 1), hl
 43$:
 	ld	ix, (_g_dm_rects)
 	ld	a, (_g_dm_n)
@@ -701,39 +721,18 @@ _draw_model::
 	ld	(dm_cp), hl
 	jp	45$
 44$:
-	; 左右 = sx + scale(x0 / x1)
+	; 左右 = sx + scale(x0 / x1)、上下 = sy - scale(y1 / y0)
 	ld	a, 0 (ix)
-	call	dm_scale
-	ld	de, (dm_sx)
-	add	hl, de
-	ld	c, #64
-	call	dm_blk
+	call	dm_cx
 	ld	(dm_x0), a
 	ld	a, 2 (ix)
-	call	dm_scale
-	ld	de, (dm_sx)
-	add	hl, de
-	ld	c, #64
-	call	dm_blk
+	call	dm_cx
 	ld	(dm_x1), a
-	; 上下 = sy - scale(y1 / y0)
 	ld	a, 3 (ix)
-	call	dm_scale
-	ex	de, hl
-	ld	hl, (dm_sy)
-	or	a, a
-	sbc	hl, de
-	ld	c, #46
-	call	dm_blk
+	call	dm_cy
 	ld	(dm_y0), a
 	ld	a, 1 (ix)
-	call	dm_scale
-	ex	de, hl
-	ld	hl, (dm_sy)
-	or	a, a
-	sbc	hl, de
-	ld	c, #46
-	call	dm_blk
+	call	dm_cy
 	ld	(dm_y1), a
 	ld	a, (dm_mode)
 	or	a, a
