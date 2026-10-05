@@ -67,7 +67,7 @@ void vdp_out(const u8 *src, u16 len);
 void vdp_fill(u8 val, u16 len);
 void vdp_set_palette(u8 first, const u8 *pal);
 void vdp_xfer(u8 page);
-void xfer_invalidate(void);         /* 下の帯の写しを捨てる(VRAM を vdp_xfer 以外で書き換えたとき) */
+void xfer_invalidate(void);         /* 転送の写し(差分転送が比べる相手)を捨てる(VRAM を vdp_xfer 以外で書き換えたとき) */
 
 /* ---- gfx.s ---- */
 extern u8  g_color;

@@ -449,8 +449,9 @@ rl_end:
 ; ---------------------------------------------------------------------------
 ; Z80 転送(vdp.s の vdp_xfer から)。A = ページ(0/1)
 ;   S1990 は R800 から VDP への書き込みに 1 バイト 8.67µs の待ちを入れるが、Z80 には入れない(5.45µs。
-;   実機の FS-A1ST と openMSX で同じ。docs/検証記録.md)。描画バッファは VRAM と同じ並びなので、
-;   CPU を Z80 に切り替えて OUTI で頭から送る。切り替えは BIOS の CHGCPU(往復 約 0.9ms)。
+;   実機の FS-A1ST と openMSX で同じ。docs/検証記録.md)。送る量が多いフレームは、CPU を Z80 に切り替えて、
+;   xfer_prep(vdp.s)が書き出した転送のコード(変わった区間ごとに書き込み先を付け直して OUTI の列へ call)を走らせる。
+;   切り替えは BIOS の CHGCPU(往復 約 0.9ms)。
 ;   ・CHGCPU を呼ぶ間はページ0を BIOS に戻す。CHGCPU は戻るときに割り込みを許可するので、その間は VDP の割り込み
 ;     (R#1 の IE0)を止めておく。止めている間に帰線が始まっても S#0 の F は立つので、IE0 を戻すとすぐ割り込みが入る
 ;   ・転送中はページ0を自前の RAM に戻して割り込みを許可する(割り込み処理と音は Z80 でも動く。R800 専用の命令なし)
@@ -464,7 +465,7 @@ _g_z80x::	.ds	1	; 1 = Z80 で転送する(隠しコンフィグの XFER で R800
 _g_z80x_ok::	.ds	1	; 1 = ファームウェアに CHGCPU がある(sys_z80x_init が決める)
 	.area	_CODE
 
-	.globl	_g_vdp_r1, _g_buf_hi, _g_xfer_skip, _xfer_skip_addr
+	.globl	_g_vdp_r1, XF_CODE
 
 ; void sys_z80x_init(void) — ファームウェアに CHGCPU があるか(MSXVER >= 3)で g_z80x_ok と g_z80x を決める。起動時に 1 回
 _sys_z80x_init::
@@ -513,65 +514,24 @@ z80x_switch:
 	ret
 
 _xfer_z80::
-	ld	(z80x_page), a
 	xor	a, a
 	call	z80x_switch		; → Z80
-	; 書き込み先 = page * 0x800
-	ld	a, (z80x_page)
-	add	a, a
-	add	a, a
-	add	a, a
-	ld	c, a
 	di
 	xor	a, a
 	out	(0x99), a
 	ld	a, #0x8E
 	out	(0x99), a		; R#14 = 0
-	xor	a, a
-	out	(0x99), a
-	ld	a, c
-	or	a, #0x40
-	out	(0x99), a
 	ei
-	ld	a, (_g_buf_hi)
-	ld	h, a
-	ld	l, #0
 	ld	c, #0x98
-	push	ix
-	ld	d, #5			; 256 バイト × 5
-1$:
-	call	z80x_out256
-	dec	d
-	jr	nz, 1$
-	ld	ix, #z80x_out_end - 16 * 2	; 下の帯の列ペア 0-1(16 バイト)
-	call	z80x_jpix
-	ld	a, (_g_xfer_skip)
-	or	a, a
-	jr	nz, 2$
-	ld	ix, #z80x_out_end - 224 * 2	; 列ペア 2-29(224 バイト)
-	call	z80x_jpix
-	jr	3$
-2$:
-	call	_xfer_skip_addr		; 前に送った中身と同じなので飛ばす(vdp.s)
-	ld	c, #0x98
-3$:
-	ld	ix, #z80x_out_end - 16 * 2	; 列ペア 30-31
-	call	z80x_jpix
-	pop	ix
+	call	XF_CODE			; vdp.s の xfer_prep が書き出した転送のコード
 	ld	a, #2
 	jp	z80x_switch		; → R800(DRAM モード)
 
-z80x_jpix:
-	jp	(ix)
-
 ; OUTI を 256 個並べたもの。途中へ飛び込めば n 個だけ送る(終わりの番地 - n * 2)
-z80x_out256:
+z80x_out256::
 	.rept	256
 	outi
 	.endm
-z80x_out_end:
+z80x_out_end::
 	ret
 
-	.area	_DATA
-z80x_page:	.ds	1
-	.area	_CODE
