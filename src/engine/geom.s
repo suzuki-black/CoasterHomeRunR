@@ -12,7 +12,7 @@
 	.globl	_cam_x, _cam_y, _cam_z, _cam_sin, _cam_cos, _cam_yaw
 	.globl	_cam_pitch, _cam_psin, _cam_pcos
 	.globl	_fmul, _project2, _sin_tab
-	.globl	_ring_v, _ring_s, _ring_front, _ring_ok
+	.globl	_ring_v, _ring_s, _ring_front, _ring_ok, _g_rp_last
 
 NEAR_Z	= 128
 
@@ -326,6 +326,9 @@ _ring_make::
 	push	ix
 	push	iy
 	ld	(rm_idx), a
+	ld	a, #0xFF
+	ld	(_g_rp_last), a		; 飾りの点の計算(raster.s の rp_ring)が覚えているリングを捨てる
+	ld	a, (rm_idx)
 	push	de
 	ex	de, hl
 	call	xf_core			; 中心(ピッチの定数もここで用意される)

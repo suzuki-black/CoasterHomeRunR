@@ -1625,11 +1625,23 @@ _g_qv0::	.ds	2
 _g_qv1::	.ds	2
 rp_cx:		.ds	2
 rp_cy:		.ds	2
+rp_q:		.ds	2
+_g_rp_last::	.ds	1	; rp_ring が覚えているリング(0xFF = なし)
 rp_i:		.ds	1
 	.area	_CODE
 
-; L = idx → rp_cx, rp_cy、BC = q
+; L = idx → rp_cx, rp_cy、BC = q。同じリングが続く(飾りは同じリングの点・長方形を続けて描く)ときは表を読まない。
+;   ring_make(geom.s)がリングを作り直すたびに g_rp_last を 0xFF(覚えていない)にする
 rp_ring:
+	ld	a, l
+	ld	hl, #_g_rp_last
+	cp	a, (hl)
+	jr	nz, 1$
+	ld	bc, (rp_q)
+	ret
+1$:
+	ld	(hl), a
+	ld	l, a
 	ld	h, #0
 	ld	e, l
 	ld	d, h
@@ -1651,6 +1663,7 @@ rp_ring:
 	ld	c, (hl)
 	inc	hl
 	ld	b, (hl)
+	ld	(rp_q), bc
 	ret
 
 _rpt_a::
