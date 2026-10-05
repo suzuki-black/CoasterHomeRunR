@@ -13,6 +13,7 @@
 ; 行ごとのループは exx で 32bit の加算をレジスタだけで回す(その間は DI)。
 
 	.module	raster
+	.r800				; IYL(edge)
 	.include "r800.inc"
 
 	.globl	div_core
@@ -29,30 +30,21 @@ _span_a	== 0xDE00
 _span_b	== 0xDF00
 SPAN_A_HI = 0xDE
 
-; ROWCLAMP: HL = y(12.4)→ A = (y + 7) >> 4 を 0..ROWS に丸めた値(関数呼び出しと 16bit シフトをしない)
+; ROWCLAMP: HL = y(12.4)→ A = (y + 7) >> 4 を 0..ROWS に丸めた値(関数呼び出しをしない)。DE・HL を壊す
+;   0 <= y < 768 なら (y + 7) << 4 の上位バイトが答え(y + 7 < 4096 なので桁あふれしない)
 	.macro	ROWCLAMP ?rc_n, ?rc_b, ?rc_d
 	bit	7, h
 	jr	nz, rc_n
 	ld	a, h
 	cp	a, #3
 	jr	nc, rc_b			; y >= 768 → 48 行以上
-	ld	a, l
-	add	a, #7
-	ld	l, a
+	ld	de, #7
+	add	hl, de
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
 	ld	a, h
-	adc	a, #0
-	add	a, a
-	add	a, a
-	add	a, a
-	add	a, a			; 上位 * 16
-	ld	h, a
-	ld	a, l
-	rrca
-	rrca
-	rrca
-	rrca
-	and	a, #0x0F
-	or	a, h
 	cp	a, #ROWS + 1
 	jr	c, rc_d
 rc_b:
@@ -327,10 +319,212 @@ r_done:
 	ret
 
 ; ---------------------------------------------------------------------------
-; edge: e_x0,e_y0(上端)→ e_x1,e_y1(下端)が覆う行の x を e_dst[行] に書く
-;   IX/IY は壊してよい(_raster が保存している)
+; edge: e_x0,e_y0(上端)→ e_x1,e_y1(下端)が覆う行の x を e_dst[行] に書き、e_rs = 最初の行、e_cnt = 行数(行があるとき)
+;   IY は壊してよい。IX は壊さない(slot_ensure の呼び出し元が使う)
+;   ほとんどの辺は「始点・終点の x が ±1792 以内、t < 4096、傾きが 128 ブロック/行 未満」の速い経路に乗る。
+;   速い経路はここで、途中の値をメモリに置かずに計算する(R800 はデータのメモリアクセスのたびにページが変わって待たされる)。
+;   乗らない辺は edge_gen(はじめから、一般の経路も含めて計算する)。どちらも同じ値を書く
 ; ---------------------------------------------------------------------------
 edge::
+	ld	a, (e_x0 + 1)
+	add	a, #7
+	cp	a, #14
+	jp	nc, edge_gen		; 上位バイトが 0..6 か 0xF9..0xFF でなければ ±1792 の外
+	ld	a, (e_x1 + 1)
+	add	a, #7
+	cp	a, #14
+	jp	nc, edge_gen
+	; ---- 覆う行 [rs, re)
+	ld	hl, (e_y0)
+	ROWCLAMP
+	ld	(e_rs), a
+	ld	c, a
+	ld	hl, (e_y1)
+	ROWCLAMP
+	sub	a, c
+	ret	z
+	ret	c
+	ld	(e_cnt), a
+	; ---- t = rs*16 + 8 - y0(>= 0)
+	ld	l, c
+	ld	h, #0
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	ld	de, #8
+	add	hl, de
+	ld	de, (e_y0)
+	or	a, a
+	sbc	hl, de
+	ld	a, h
+	cp	a, #0x10
+	jp	nc, edge_gen		; t >= 4096
+	push	hl			; t
+	; ---- |dx| と符号
+	ld	hl, (e_x1)
+	push	de
+	ld	de, (e_x0)
+	or	a, a
+	sbc	hl, de
+	pop	de			; DE = y0
+	ld	a, h
+	ld	(e_neg), a		; bit7 = 左へ
+	bit	7, h
+	jr	z, 1$
+	xor	a, a
+	sub	a, l
+	ld	l, a
+	sbc	a, a
+	sub	a, h
+	ld	h, a
+1$:
+	push	hl			; |dx|
+	; ---- dy = y1 - y0 を 9bit の仮数 m(256..511)にそろえる。k = 8 + ずらした回数(裏の A に置く)
+	ld	hl, (e_y1)
+	or	a, a
+	sbc	hl, de
+	ld	b, #8
+2$:
+	ld	a, h
+	cp	a, #2
+	jr	c, 4$
+	srl	h
+	rr	l
+	inc	b
+	jr	2$
+4$:
+	bit	0, h
+	jr	nz, 5$
+	add	hl, hl
+	dec	b
+	jr	4$
+5$:
+	ld	a, b
+	ex	af, af'			; A' = k(割り込み処理は裏のレジスタを使わない)
+	ld	h, #0
+	add	hl, hl
+	ld	de, #_recip9
+	add	hl, de
+	ld	a, (hl)
+	inc	hl
+	ld	h, (hl)
+	ld	l, a
+	pop	bc			; |dx|
+	MULUW_HL_BC			; DE:HL = P = |dx| * recip9[m]
+	; ---- step88 = P >> (k + 8)
+	ex	af, af'
+	sub	a, #8
+	jr	c, 7$
+	ex	de, hl			; HL = P >> 16
+	jr	z, 9$
+	ld	b, a
+6$:
+	srl	h
+	rr	l
+	djnz	6$
+	jr	9$
+7$:
+	neg				; k < 8: 左へ 8 - k ずらしてから上位 16bit
+	ld	b, a
+8$:
+	add	hl, hl
+	rl	e
+	rl	d
+	djnz	8$
+	ex	de, hl
+9$:
+	bit	7, h
+	jr	z, 10$
+	pop	hl			; 傾き >= 128 ブロック/行: 一般の経路(はじめから)
+	jp	edge_gen
+10$:
+	; ---- off88 = step88 * (t << 4) >> 8(MULUW の中央 2 バイト)
+	ld	b, h
+	ld	c, l			; BC = |step88|
+	pop	hl			; t
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	MULUW_HL_BC
+	ld	l, h
+	ld	h, e
+	ex	de, hl			; DE = off88
+	; ---- x88 = (x0 + 8) << 4 ± off88、DE = ±step88
+	ld	hl, (e_x0)
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	ld	a, l
+	add	a, #0x80		; + 8 << 4
+	ld	l, a
+	jr	nc, 11$
+	inc	h
+11$:
+	ld	a, (e_neg)
+	rla
+	jr	c, 12$
+	add	hl, de
+	ld	d, b
+	ld	e, c
+	jr	13$
+12$:
+	or	a, a
+	sbc	hl, de
+	xor	a, a
+	sub	a, c
+	ld	e, a
+	sbc	a, a
+	sub	a, b
+	ld	d, a
+13$:
+	; ---- 書く: BC = 書き込み先(e_dst + rs。行は 256 バイトの中で収まる)、IYL = 行数
+	ld	a, (e_dst + 1)
+	ld	b, a
+	ld	a, (e_rs)
+	ld	c, a
+	ld	a, (e_dst)
+	add	a, c
+	ld	c, a
+	ld	a, (e_cnt)
+	ld	iyl, a
+	; 始点・終点とも画面の中(0 <= x < 1024)なら丸めずに書くだけ
+	ld	a, (e_x0 + 1)
+	cp	a, #4
+	jr	nc, 16$
+	ld	a, (e_x1 + 1)
+	cp	a, #4
+	jr	nc, 16$
+14$:
+	ld	a, h
+	ld	(bc), a
+	inc	c
+	add	hl, de
+	dec	iyl
+	jr	nz, 14$
+	ret
+16$:
+	ld	a, h
+	bit	7, a
+	jr	nz, 18$
+	cp	a, #65
+	jr	c, 19$
+	ld	a, #64
+	jr	19$
+18$:
+	xor	a, a
+19$:
+	ld	(bc), a
+	inc	c
+	add	hl, de
+	dec	iyl
+	jr	nz, 16$
+	ret
+
+; edge_gen: edge のはじめからの計算(一般の経路を含む。速い経路に乗る辺も同じ値になる)
+edge_gen:
 	; ---- 覆う行 [rs, re)
 	ld	hl, (e_y0)
 	ROWCLAMP
