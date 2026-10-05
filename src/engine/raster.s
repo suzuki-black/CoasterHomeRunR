@@ -63,6 +63,54 @@ rc_n:
 rc_d:
 	.endm
 
+; PSCALE: DE = clamp((HL * BC) >> 14, ±15000)(HL 符号付き、BC = q)。BC は保つ。A・HL・F を壊す
+;   負の数は絶対値で掛けて最後に符号を戻す(0 へ向けて切り捨て)。呼び出しの多い所(1 フレーム 170〜240 回)なので展開する
+	.macro	PSCALE	?neg, ?sat, ?satn, ?done
+	bit	7, h
+	jr	nz, neg
+	MULUW_HL_BC			; DE:HL
+	ld	a, d
+	cp	a, #0x0E
+	jr	nc, sat			; 14336 以上は飽和
+	add	hl, hl			; DE:HL >> 14 → DE(= DE << 2 | H >> 6)
+	rl	e
+	rl	d
+	add	hl, hl
+	rl	e
+	rl	d
+	jr	done
+sat:
+	ld	de, #15000
+	jr	done
+neg:
+	xor	a, a
+	sub	a, l
+	ld	l, a
+	sbc	a, a
+	sub	a, h
+	ld	h, a
+	MULUW_HL_BC
+	ld	a, d
+	cp	a, #0x0E
+	jr	nc, satn
+	add	hl, hl
+	rl	e
+	rl	d
+	add	hl, hl
+	rl	e
+	rl	d
+	xor	a, a
+	sub	a, e
+	ld	e, a
+	sbc	a, a
+	sub	a, d
+	ld	d, a
+	jr	done
+satn:
+	ld	de, #-15000
+done:
+	.endm
+
 	.area	_DATA
 e_fast:		.ds	1
 _scr::		.ds	4 * 10
@@ -840,14 +888,14 @@ _project2::
 14$:
 	ld	(_p_q), hl
 	ld	b, h
-	ld	c, l			; BC = q(p_scale の間は保たれる)
+	ld	c, l			; BC = q(PSCALE の間は保たれる)
 	pop	hl			; y
-	call	p_scale
+	PSCALE
 	ld	hl, #368
 	or	a, a
 	sbc	hl, de			; sy
 	ex	(sp), hl		; スタック = sy、HL = x
-	call	p_scale
+	PSCALE
 	ld	hl, #512
 	add	hl, de			; sx
 	pop	de			; sy
@@ -860,45 +908,6 @@ _project2::
 	ld	(hl), e
 	inc	hl
 	ld	(hl), d
-	ret
-
-; DE = clamp((HL * BC) >> 14, ±15000)(HL 符号付き、BC = q)。BC は保つ
-p_scale:
-	bit	7, h
-	jr	nz, 5$
-	MULUW_HL_BC			; DE:HL
-	call	6$
-	ret
-5$:
-	xor	a, a
-	sub	a, l
-	ld	l, a
-	sbc	a, a
-	sub	a, h
-	ld	h, a
-	MULUW_HL_BC
-	call	6$
-	xor	a, a
-	sub	a, e
-	ld	e, a
-	sbc	a, a
-	sub	a, d
-	ld	d, a
-	ret
-	; DE:HL >> 14 → DE(15000 で飽和)。結果 = DE << 2 | H >> 6
-6$:
-	ld	a, d
-	cp	a, #0x0E
-	jr	nc, 7$			; 14336 以上は飽和
-	add	hl, hl
-	rl	e
-	rl	d
-	add	hl, hl
-	rl	e
-	rl	d
-	ret
-7$:
-	ld	de, #15000
 	ret
 
 ; ---------------------------------------------------------------------------
@@ -1405,7 +1414,7 @@ _hex_fast::
 
 ; ---------------------------------------------------------------------------
 ; リング面の飾り(env.c)の点と長方形。点 = リングの中心 + (u, v) * q(ring_c[idx] = 中心の x, y と q)
-;   void rpt_a(u8 i, u8 idx)   A = i、L = idx。scr[i] = (cx + g_pu * q >> 14, cy - g_pv * q >> 14)(p_scale。±15000 に飽和)
+;   void rpt_a(u8 i, u8 idx)   A = i、L = idx。scr[i] = (cx + g_pu * q >> 14, cy - g_pv * q >> 14)(PSCALE。±15000 に飽和)
 ;   void rquad_a(u8 idx)       A = idx。u0..u1 × v0..v1(g_qu0, g_qu1, g_qv0, g_qv1)を g_color で塗る
 ; リング面の形は画面上でそのまま縮小されるだけなので、四角形は必ず軸に沿った長方形になる。
 ; rquad_a は多角形の塗り(raster)を通さず、raster と同じ丸め(列 = (x + 8) >> 4、行 = (y + 7) >> 4、
@@ -1454,12 +1463,12 @@ _rpt_a::
 	ld	(rp_i), a
 	call	rp_ring
 	ld	hl, (_g_pu)
-	call	p_scale			; BC は保たれる
+	PSCALE				; BC は保たれる
 	ld	hl, (rp_cx)
 	add	hl, de
 	push	hl			; x
 	ld	hl, (_g_pv)
-	call	p_scale
+	PSCALE
 	ld	hl, (rp_cy)
 	or	a, a
 	sbc	hl, de
@@ -1516,23 +1525,23 @@ _rquad_a::
 	ld	l, a
 	call	rp_ring			; BC = q
 	ld	hl, (_g_qu0)
-	call	p_scale
+	PSCALE
 	ld	hl, (rp_cx)
 	add	hl, de
 	push	hl			; x0
 	ld	hl, (_g_qu1)
-	call	p_scale
+	PSCALE
 	ld	hl, (rp_cx)
 	add	hl, de
 	push	hl			; x1
 	ld	hl, (_g_qv0)
-	call	p_scale
+	PSCALE
 	ld	hl, (rp_cy)
 	or	a, a
 	sbc	hl, de
 	push	hl			; y0
 	ld	hl, (_g_qv1)
-	call	p_scale
+	PSCALE
 	ld	hl, (rp_cy)
 	or	a, a
 	sbc	hl, de			; HL = y1

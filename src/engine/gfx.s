@@ -42,6 +42,25 @@ _g_rh::		.ds	1
 	.endm
 
 ; ---------------------------------------------------------------------------
+; pf_band: H = 帯の上位バイト、A = 色のバイト → 帯の 256 バイトを push で塗る(2 バイトずつ。ld (hl), a より約 3 倍速い)
+;   SP を帯の終わりに向けるので、その間は割り込みを止める(割り込みが積むと前の帯やバッファの外を壊す)。HL・DE を壊す
+; ---------------------------------------------------------------------------
+pf_band:
+	ld	e, a
+	ld	d, a
+	inc	h
+	ld	l, #0			; 帯の終わり(push は先に SP を減らしてから書く)
+	ld	(pf_sp), sp
+	di
+	ld	sp, hl
+	.rept	128
+	push	de
+	.endm
+	ld	sp, (pf_sp)
+	ei
+	ret
+
+; ---------------------------------------------------------------------------
 ; void buf_fill(u8 color)   A = 色。バッファ全体(48 行)を塗る
 ; ---------------------------------------------------------------------------
 _buf_fill::
@@ -54,14 +73,13 @@ _buf_fill::
 	ld	c, a
 	ld	a, (_g_buf_hi)
 	ld	h, a
-	ld	l, #0
-	ld	b, #48			; 1536 / 32
-	ld	a, c
+	ld	b, #6			; 帯 6 本
 1$:
-	.rept	32
-	ld	(hl), a
-	inc	hl
-	.endm
+	ld	a, c
+	push	hl
+	call	pf_band
+	pop	hl
+	inc	h
 	djnz	1$
 	ret
 
@@ -106,15 +124,8 @@ _buf_fill_rows::
 	ld	a, (_g_buf_hi)
 	add	a, h
 	ld	h, a
-	ld	l, #0
 	ld	a, (fr_cc)
-	ld	b, #8
-4$:
-	.rept	32
-	ld	(hl), a
-	inc	l
-	.endm
-	djnz	4$
+	call	pf_band
 	pop	bc
 	ld	a, c
 	add	a, #8
@@ -139,6 +150,7 @@ _buf_fill_rows::
 fr_cc:		.ds	1
 fr_lo:		.ds	1
 fr_hi:		.ds	1
+pf_sp:		.ds	2	; pf_band の間の SP の退避
 	.area	_CODE
 
 ; ---------------------------------------------------------------------------
