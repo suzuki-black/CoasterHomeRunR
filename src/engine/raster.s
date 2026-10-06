@@ -908,9 +908,11 @@ edge_gen:
 fill::
 	; 詰めたバッファ(gfx.s の並び)へ塗る。行ごとに左右を決め、展開した書き込みの途中へ飛ぶ。
 	;   奇数の端は半バイトだけ読み書きする。横に隣り合うバイトは +8(展開ブロックは ld (hl),a / add hl,bc の 32 組)
+	push	ix
+	ld	ix, #FILLBLK		; IXH = 展開ブロックの上位(行ごとに IXL だけ書いて jp (ix))
 	ld	a, c
 	add	a, b
-	ld	(f_end), a
+	ld	(f_endi + 1), a		; 終わりの行(行ごとの比べる即値)
 	; 色とバッファの上位バイトを、行ごとの命令の即値へ書き込んでおく(自己書き換え。行ごとにメモリから読まない)
 	ld	a, (_g_buf_hi)
 	ld	(f_buf + 1), a
@@ -924,7 +926,7 @@ fill::
 	add	a, a
 	ld	(f_hi + 1), a
 	or	a, b
-	ld	(FILLBLK + 1), a	; 両方のブロックが同じ色のバイト
+	ld	(f_cc + 1), a		; 両方のブロックが同じ色のバイト
 	ld	d, #SPAN_A_HI
 	ld	e, c
 fill_row:
@@ -987,9 +989,11 @@ fill_even:
 	ld	b, a
 	ld	a, #<FILLEND
 	sub	a, b
-	ld	(FILLJP + 1), a		; 飛び先 = 終わり - 数 * 2(ブロックは 256 境界の中なので下位だけ)
+	ld	ixl, a			; 飛び先 = 終わり - 数 * 2(ブロックは 256 境界の中なので下位だけ)
 	ld	bc, #8
-	jp	FILLBLK			; 色を A に入れてから展開ブロックの途中へ
+f_cc:
+	ld	a, #0			; 両方のブロックが同じ色のバイト(書き換える)
+	jp	(ix)			; 展開ブロックの途中へ
 fill_ret::
 	ex	af, af'			; 裏に置いたキャリー
 fill_tail:
@@ -1002,21 +1006,20 @@ f_hi:
 	ld	(hl), a
 fill_next:
 	inc	e
-	ld	a, (f_end)
-	cp	a, e
+	ld	a, e
+f_endi:
+	cp	a, #0			; 終わりの行(書き換える)
 	jp	nz, fill_row
 fill_done::				; 計測用(塗りの終わりを捕まえる)
+	pop	ix
 	ret
 
-	.area	_DATA
-f_end:		.ds	1
-	.area	_CODE
 
 ; 展開した 32 回の書き込みの元(sys_page0_ram がページ0の FILLBLK = 0x0100 へ写す)。
 ;   256 境界の中で動くので、飛び先は下位バイトだけを書き換える
 _fillblk_tpl::
-	ld	a, #0			; FILLBLK: 色(書き換える)
-	jp	0x0100			; FILLJP: 飛び先(下位を書き換える。上位は 0x01 固定)
+	ld	a, #0			; FILLBLK(使わない。fill は色を A に入れて、下の展開の途中へ jp (ix) で飛ぶ)
+	jp	0x0100			; FILLJP(使わない)
 	.rept	32
 	ld	(hl), a
 	add	hl, bc
