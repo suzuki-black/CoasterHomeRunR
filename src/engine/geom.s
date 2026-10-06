@@ -545,16 +545,11 @@ _g_dm_grow::	.ds	1
 dm_c:		.ds	2
 dm_sx:		.ds	2
 dm_sy:		.ds	2
-dm_x0:		.ds	1
-dm_x1:		.ds	1
-dm_y0:		.ds	1
-dm_y1:		.ds	1
 DM_CMAX = 24			; 座標の表に入る矩形の数(モデルは最大 18)
 dm_mode:	.ds	1	; 0 = 求める、1 = 求めて表に書く(縁取りの回)、2 = 表を使う(縁取りの直後の回)
 dm_cv:		.ds	1	; 1 = 表が直前の縁取りの回のもの
 dm_cc:		.ds	2	; 表を書いたときの足元の点と矩形の列
 dm_cr:		.ds	2
-dm_cp:		.ds	2
 dm_cache:	.ds	DM_CMAX * 4	; 矩形ごとの x0, x1, y0, y1(ブロック、広げる前)
 
 	.area	_CODE
@@ -642,6 +637,7 @@ dm_k_i:
 
 _draw_model::
 	push	ix
+	push	iy
 	ld	(dm_c), hl
 	; 縁取りの回(広げて塗る)と直後の普通の回は、同じ敵の同じ矩形なので、座標を表で使い回す
 	ld	a, (_g_dm_grow)
@@ -680,8 +676,6 @@ _draw_model::
 	inc	a
 42$:
 	ld	(dm_cv), a		; 縁取りの回だけ、次の回のために表を残す
-	ld	hl, #dm_cache
-	ld	(dm_cp), hl
 	ld	a, b
 	cp	a, #2
 	jr	z, 43$			; 中心の投影と拡大率は前の回のまま
@@ -699,6 +693,40 @@ _draw_model::
 	ld	hl, (dm_sy)
 	ld	(dm_sy_i + 1), hl
 43$:
+	; 当たり判定の表の書き先(IY = hits + n_hits * 7)と、奥行き・番号(矩形ごとに書く即値)は 1 体につき 1 回だけ用意する
+	ld	a, (_g_dm_hit)
+	or	a, a
+	jr	z, 52$
+	ld	a, (_n_hits)
+	ld	l, a
+	ld	h, #0
+	ld	d, h
+	ld	e, l
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	or	a, a
+	sbc	hl, de			; * 7
+	ld	de, #_hits
+	add	hl, de
+	push	hl
+	pop	iy
+	ld	hl, (dm_c)
+	ld	de, #4
+	add	hl, de
+	ld	a, (hl)
+	ld	(55$ + 3), a		; z の下位
+	inc	hl
+	ld	a, (hl)
+	ld	(56$ + 3), a		; z の上位
+	ld	a, (_g_dm_id)
+	ld	(57$ + 3), a
+52$:
+	; 矩形の x0, x1, y0, y1(ブロック)は裏の B, C, D, E に置く。裏の HL = 座標の表(縁取りの回と次の回で使い回す)。
+	; 座標の計算(dm_cx / dm_cy)・塗り(rect_fill)・広げる(dm_grow1)は裏のレジスタを使わない(割り込み処理も使わない)
+	exx
+	ld	hl, #dm_cache
+	exx
 	ld	ix, (_g_dm_rects)
 	ld	a, (_g_dm_n)
 	ld	b, a
@@ -708,73 +736,66 @@ _draw_model::
 	cp	a, #2
 	jr	nz, 44$
 	; 表から
-	ld	hl, (dm_cp)
-	ld	a, (hl)
-	ld	(dm_x0), a
+	exx
+	ld	b, (hl)
 	inc	hl
-	ld	a, (hl)
-	ld	(dm_x1), a
+	ld	c, (hl)
 	inc	hl
-	ld	a, (hl)
-	ld	(dm_y0), a
+	ld	d, (hl)
 	inc	hl
-	ld	a, (hl)
-	ld	(dm_y1), a
+	ld	e, (hl)
 	inc	hl
-	ld	(dm_cp), hl
 	jp	45$
 44$:
 	; 左右 = sx + scale(x0 / x1)、上下 = sy - scale(y1 / y0)
 	ld	a, 0 (ix)
 	call	dm_cx
-	ld	(dm_x0), a
+	exx
+	ld	b, a
+	exx
 	ld	a, 2 (ix)
 	call	dm_cx
-	ld	(dm_x1), a
+	exx
+	ld	c, a
+	exx
 	ld	a, 3 (ix)
 	call	dm_cy
-	ld	(dm_y0), a
+	exx
+	ld	d, a
+	exx
 	ld	a, 1 (ix)
 	call	dm_cy
-	ld	(dm_y1), a
+	exx
+	ld	e, a
 	ld	a, (dm_mode)
 	or	a, a
 	jr	z, 45$
 	; 縁取りの回: 表に書く
-	ld	hl, (dm_cp)
-	ld	a, (dm_x0)
-	ld	(hl), a
+	ld	(hl), b
 	inc	hl
-	ld	a, (dm_x1)
-	ld	(hl), a
+	ld	(hl), c
 	inc	hl
-	ld	a, (dm_y0)
-	ld	(hl), a
+	ld	(hl), d
 	inc	hl
-	ld	a, (dm_y1)
-	ld	(hl), a
+	ld	(hl), e
 	inc	hl
-	ld	(dm_cp), hl
 45$:
-	; 空なら次へ
-	ld	a, (dm_x0)
-	ld	c, a
-	ld	a, (dm_x1)
-	sub	a, c
-	jp	z, 8$
-	jp	c, 8$
+	; 空なら次へ(ここは裏のレジスタのまま)
+	ld	a, c
+	sub	a, b
+	jp	z, 58$
+	jp	c, 58$
 	ld	(_g_rw), a
-	ld	a, c
+	ld	a, b
 	ld	(_g_rx), a
-	ld	a, (dm_y0)
-	ld	c, a
-	ld	a, (dm_y1)
-	sub	a, c
-	jp	z, 8$
-	jp	c, 8$
+	ld	a, e
+	sub	a, d
+	jp	z, 58$
+	jp	c, 58$
 	ld	(_g_rh), a
-	ld	a, c
+	ld	a, d
 	ld	(_g_ry), a
+	exx
 	ld	a, (_g_dm_grow)
 	or	a, a
 	jr	z, 30$
@@ -801,54 +822,34 @@ _draw_model::
 	ld	a, (_n_hits)
 	cp	a, #MAX_HIT
 	jr	nc, 8$
-	ld	c, a
 	inc	a
 	ld	(_n_hits), a
-	ld	l, c
-	ld	h, #0
-	ld	d, h
-	ld	e, l
-	add	hl, hl
-	add	hl, hl
-	add	hl, hl
-	or	a, a
-	sbc	hl, de			; * 7
-	ld	de, #_hits
-	add	hl, de
-	ld	a, (dm_x0)
-	ld	(hl), a
-	inc	hl
-	ld	a, (dm_y0)
-	ld	(hl), a
-	inc	hl
-	ld	a, (dm_x1)
-	ld	(hl), a
-	inc	hl
-	ld	a, (dm_y1)
-	ld	(hl), a
-	inc	hl
-	push	hl
-	ld	hl, (dm_c)
-	ld	de, #4
-	add	hl, de
-	ld	e, (hl)
-	inc	hl
-	ld	d, (hl)			; z
-	pop	hl
-	ld	(hl), e
-	inc	hl
-	ld	(hl), d
-	inc	hl
-	ld	a, (_g_dm_id)
-	ld	(hl), a
+	exx
+	ld	0 (iy), b
+	ld	1 (iy), d
+	ld	2 (iy), c
+	ld	3 (iy), e
+	exx
+55$:
+	ld	4 (iy), #0		; z の下位(上で書く)
+56$:
+	ld	5 (iy), #0		; z の上位
+57$:
+	ld	6 (iy), #0		; 番号
+	ld	de, #7
+	add	iy, de
 8$:
 	ld	de, #6
 	add	ix, de
 	pop	bc
 	dec	b
 	jp	nz, 1$
+	pop	iy
 	pop	ix
 	ret
+58$:
+	exx
+	jr	8$
 
 ; dm_grow1: HL = 位置、DE = 長さ、C = 画面の端 → 両側に 1 ブロックずつ広げる(画面の外へは出さない)
 dm_grow1:
