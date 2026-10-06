@@ -1131,8 +1131,6 @@ bf_b:		.ds	1
 bf_k:		.ds	1
 bf_ck:		.ds	1	; band_fast: 塗る面のビット(ループで 1 つずつ右へ送る)
 bf_cr:		.ds	1	; band_fast: 使う放射の辺のビット(同上)
-sc_r0:		.ds	1
-sc_r1:		.ds	1
 
 	.area	_CODE
 
@@ -1283,7 +1281,7 @@ slot_ensure::
 	jp	slot_addr
 
 ; seg_copy: HL = スロット、A = 1 なら作ったときと逆向きに使う
-;   面の中での向きが下りなら span_a、上りなら span_b へ、覆う行の x をコピーし、sc_r0 / sc_r1 を広げる
+;   面の中での向きが下りなら span_a、上りなら span_b へ、覆う行の x をコピーし、塗る範囲(裏の B..C)を広げる
 seg_copy:
 	; スロットは 64 境界なので、見出し [46] の番地は下位バイトの or で作れる(push / pop しない)
 	ld	c, a
@@ -1306,23 +1304,23 @@ seg_copy:
 	jr	nz, 1$
 	inc	c			; span_b
 1$:
-	; 範囲を広げる
-	ld	a, (sc_r0)
-	cp	a, b
-	jr	c, 2$
+	; 範囲を広げる(裏の B = 最初の行、裏の C = 最後の行 + 1。割り込み処理は裏のレジスタを使わない)
 	ld	a, b
-	ld	(sc_r0), a
+	exx
+	cp	a, b
+	jr	nc, 2$
+	ld	b, a
 2$:
+	exx
 	ex	af, af'
 	ld	e, a			; 行数
-	add	a, b
-	ld	d, a			; re
-	ld	a, (sc_r1)
-	cp	a, d
-	jr	nc, 3$
-	ld	a, d
-	ld	(sc_r1), a
+	add	a, b			; re
+	exx
+	cp	a, c
+	jr	c, 3$
+	ld	c, a
 3$:
+	exx
 	ld	a, l
 	add	a, b
 	ld	l, a			; スロット + rs(64 境界の中)
@@ -1333,22 +1331,20 @@ seg_copy:
 	ldir
 	ret
 
-; sc_fill: sc_r0..sc_r1 を g_color で塗り、範囲を空に戻す
+; sc_fill: 裏の B..C の行を g_color で塗り、範囲を空に戻す
 sc_fill:
-	ld	a, (sc_r0)
-	ld	c, a
-	ld	a, (sc_r1)
-	sub	a, c
-	jr	z, 1$
-	jr	c, 1$
+	exx
+	push	bc			; B = 最初の行、C = 最後の行 + 1
+	ld	bc, #ROWS << 8		; 範囲を空に戻す
+	exx
+	pop	bc
+	ld	a, c
+	sub	a, b
+	ret	z
+	ret	c
+	ld	c, b
 	ld	b, a
-	call	fill
-1$:
-	ld	a, #ROWS
-	ld	(sc_r0), a
-	xor	a, a
-	ld	(sc_r1), a
-	ret
+	jp	fill
 
 ; HL = g_ring_s + A * 24
 ring_ptr:
@@ -1496,11 +1492,11 @@ _band_fast::
 	cp	a, #6
 	jp	nz, 1$
 16$:
-	; --- 面
-	ld	a, #ROWS
-	ld	(sc_r0), a
+	; --- 面(ここからは辺を作らない: edge_gen が裏のレジスタを使うので、塗る範囲を裏に置けるのは辺を作り終えてから)
+	exx
+	ld	bc, #ROWS << 8		; 塗る範囲を空に
+	exx
 	xor	a, a
-	ld	(sc_r1), a
 	ld	ix, #sl_tbl
 	ld	(bf_k), a
 2$:
@@ -1580,30 +1576,47 @@ band_ring_edge:
 
 ; void hex_fast(u8 r)   A = リング番号。リングの六角形を g_color で塗る(リングの辺を共有)
 _hex_fast::
+	push	ix
 	push	iy			; slot_ensure(edge)が IY を壊す
 	ld	(bf_a), a
 	call	ring_ptr
 	ld	(bf_pa), hl
-	ld	a, #ROWS
-	ld	(sc_r0), a
+	; 先に 6 本の辺を用意する(辺を作る edge_gen は裏のレジスタを使うので、写して塗る範囲を裏に置くのはその後)
+	ld	ix, #sl_tbl
 	xor	a, a
-	ld	(sc_r1), a
 	ld	(bf_k), a
 1$:
-	ld	a, (bf_k)
 	ld	b, a
 	ld	hl, (bf_pa)
 	ld	a, (bf_a)
 	call	band_ring_edge
-	xor	a, a
-	call	seg_copy
+	ld	0 (ix), l
+	ld	1 (ix), h
+	inc	ix
+	inc	ix
 	ld	a, (bf_k)
 	inc	a
 	ld	(bf_k), a
 	cp	a, #6
 	jr	nz, 1$
+	exx
+	ld	bc, #ROWS << 8		; 塗る範囲を空に
+	exx
+	ld	ix, #sl_tbl
+	ld	b, #6
+2$:
+	push	bc
+	ld	l, 0 (ix)
+	ld	h, 1 (ix)
+	xor	a, a
+	call	seg_copy
+	inc	ix
+	inc	ix
+	pop	bc
+	djnz	2$
 	call	sc_fill
 	pop	iy
+	pop	ix
 	ret
 
 ; ---------------------------------------------------------------------------
