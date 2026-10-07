@@ -6,7 +6,7 @@
 # ゲームの進みはフレーム単位で決まっているので、描画の処理だけを変えたなら、同じ番号のフレームの絵は 1 ブロックも違わないはず。
 # タイトルが出たらゲームを始め(無敵、撃たない)、転送(vdp_xfer)の直前に、DUMP_EVERY フレームごとに
 # 前のフレームが転送した VRAM のパターンジェネレータ(1536 バイト = 実際に表示される中身)と、地形を描き終えた時点の
-# 描画バッファを 16 進にして $TH_OUT/frames.txt へ書く(DUMP_N 枚)。1 行 = フレーム番号 位置 VRAM 地形だけの絵。
+# 描画バッファを 16 進にして $TH_OUT/frames.txt へ書く(DUMP_N 枚)。1 行 = フレーム番号 位置 VRAM 地形だけの絵 パレット。
 # 描画バッファは 1 ブロック 1 バイト(64×48 = 3072 バイト)の版と、詰めた形(VRAM と同じ並び、1536 バイト。
 # シンボル _pset がある版)のどちらでも書き出す。比べるのは tools/frame_cmp.py(同じ 64×48 の並びに直して比べる)。
 # 電飾の点滅は割り込みで数えるティック(g_tick、実時間)で決まり、描画が速くなると位相がずれるので、地形を描く間だけ
@@ -88,7 +88,8 @@ proc on_xfer {} {
     # 前のフレームが転送したページ = いま転送しようとしているページ(A)の反対
     binary scan [debug read_block VRAM [expr {(1 - ([reg a] & 1)) * 0x800}] 1536] H* hex
     if {![info exists ::env_hex]} { set ::env_hex - }
-    puts $::f "$::fr [format %.2f [expr {[peek16 [sym _cam_s]] / 64.0}]] $hex $::env_hex"
+    binary scan [debug read_block {VDP palette} 0 32] H* pal
+    puts $::f "$::fr [format %.2f [expr {[peek16 [sym _cam_s]] / 64.0}]] $hex $::env_hex $pal"
     unset ::env_hex
     if {[incr ::done] >= $::count} { close $::f; exit }
 }
