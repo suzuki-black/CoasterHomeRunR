@@ -95,6 +95,7 @@ c_cs_a:		.ds	2
 c_cs_s:		.ds	1
 c_sn_a:		.ds	2
 c_sn_s:		.ds	1
+_g_xf_ok::	.ds	1	; 1 = xf_core のカメラの定数(c_cos・c_sin・c_pc・c_ps)を用意済み
 	.area	_CODE
 
 ; ---------------------------------------------------------------------------
@@ -102,6 +103,9 @@ c_sn_s:		.ds	1
 ;   x' = dx*cos - dz*sin、z' = dx*sin + dz*cos、y' = dy(ピッチがあれば y と z を回す)
 ; ---------------------------------------------------------------------------
 xf_core:
+	ld	a, (_g_xf_ok)		; カメラの定数は、カメラが変わったとき(render_set_camera が 0 にする)だけ用意する
+	or	a, a
+	jr	nz, 2$
 	push	hl
 	ld	hl, (_cam_cos)
 	CPREP	c_cos
@@ -115,7 +119,10 @@ xf_core:
 	ld	hl, (_cam_psin)
 	CPREP	c_ps
 1$:
+	ld	a, #1
+	ld	(_g_xf_ok), a
 	pop	hl
+2$:
 	ld	e, (hl)
 	inc	hl
 	ld	d, (hl)			; DE = wx
@@ -515,6 +522,110 @@ _ring_make::
 	ld	hl, #_ring_ok
 	add	hl, de
 	ld	(hl), #1
+	pop	iy
+	pop	ix
+	ret
+
+; ---------------------------------------------------------------------------
+; void alt_mk_a(const RailPt *p, AltP *o)   HL = p、DE = o
+;   分岐の選ばれていない側の線路の点(game.c の alt_draw)。g_al_lat の g_al_n 個の横位置 lat について、
+;   ワールドの点 (p.x + fmul(lat, cos h), p.y + g_al_fy, p.z - fmul(lat, sin h))(h = p.yaw の上位)をカメラ空間へ変換し、
+;   z >= NEAR_Z なら投影して、AltP(V3 v、i16 s[2]、u8 in。11 バイト)を順に書く。
+;   C で書いていた形(alt_pt → xform → xform3、投影は project2)と同じ値になる。C の関数を何段も通らないぶん軽い
+; ---------------------------------------------------------------------------
+	.area	_DATA
+_g_al_lat::	.ds	2
+_g_al_n::	.ds	1
+_g_al_fy::	.ds	2
+a_cs_a:		.ds	2
+a_cs_s:		.ds	1
+a_sn_a:		.ds	2
+a_sn_s:		.ds	1
+al_w:		.ds	6	; ワールドの点
+al_o:		.ds	2
+al_k:		.ds	1
+	.area	_CODE
+
+_alt_mk_a::
+	push	ix
+	push	iy
+	ld	(al_o), de
+	push	hl
+	pop	iy			; IY = p
+	ld	l, 7 (iy)		; h = ヨーの上位
+	ld	h, #0
+	add	hl, hl
+	ld	de, #_sin_tab
+	add	hl, de
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)			; DE = sin h
+	ld	bc, #127
+	add	hl, bc
+	ld	c, (hl)
+	inc	hl
+	ld	b, (hl)			; BC = cos h
+	ex	de, hl
+	push	bc
+	CPREP	a_sn
+	pop	hl
+	CPREP	a_cs
+	ld	l, 2 (iy)
+	ld	h, 3 (iy)
+	ld	de, (_g_al_fy)
+	add	hl, de
+	ld	(al_w + 2), hl		; y
+	ld	ix, (_g_al_lat)
+	ld	a, (_g_al_n)
+	ld	(al_k), a
+1$:
+	ld	l, 0 (ix)
+	ld	h, 1 (ix)
+	FMC	a_cs			; DE = fmul(lat, cos h)
+	ld	l, 0 (iy)
+	ld	h, 1 (iy)
+	add	hl, de
+	ld	(al_w), hl		; x
+	ld	l, 0 (ix)
+	ld	h, 1 (ix)
+	FMC	a_sn			; DE = fmul(lat, sin h)
+	ld	l, 4 (iy)
+	ld	h, 5 (iy)
+	or	a, a
+	sbc	hl, de
+	ld	(al_w + 4), hl		; z
+	ld	hl, #al_w
+	call	xf_core			; gx, gy, gz
+	ld	de, (al_o)
+	ld	hl, #gx			; gx, gy, gz は連続
+	ld	bc, #6
+	ldir				; o->v。DE = o->s
+	ld	hl, (gz)
+	ld	bc, #-NEAR_Z
+	add	hl, bc
+	bit	7, h
+	jr	nz, 2$
+	push	de
+	ld	hl, #gx
+	call	_project2		; o->s(IX・IY は保たれる)
+	pop	de
+	ld	hl, #4
+	add	hl, de
+	ld	(hl), #1		; o->in
+	jr	3$
+2$:
+	ld	hl, #4
+	add	hl, de
+	ld	(hl), #0
+3$:
+	inc	hl
+	ld	(al_o), hl		; 次の AltP
+	inc	ix
+	inc	ix
+	ld	a, (al_k)
+	dec	a
+	ld	(al_k), a
+	jp	nz, 1$
 	pop	iy
 	pop	ix
 	ret

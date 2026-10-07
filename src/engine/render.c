@@ -12,6 +12,7 @@ i16 cam_psin, cam_pcos;
 i16 cam_sin, cam_cos;
 
 static V3  clip_v[10];
+extern u8 g_xf_ok;
 
 void render_set_camera(i16 x, i16 y, i16 z, u16 yaw, i8 pitch)
 {
@@ -22,6 +23,7 @@ void render_set_camera(i16 x, i16 y, i16 z, u16 yaw, i8 pitch)
     cam_pitch = pitch;
     cam_psin = SIN((u8)pitch);
     cam_pcos = COS((u8)pitch);
+    g_xf_ok = 0;                    /* geom.s の xf_core にカメラの定数を用意し直させる */
 }
 
 /* ワールド → カメラ。ワールド座標は 16bit で折り返すが、差分(±128m 以内)は正しく出る。

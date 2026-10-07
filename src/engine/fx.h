@@ -15,7 +15,7 @@ void debris_draw(void);
 #define ALT_N 12
 extern RailPt g_alt[ALT_N];
 extern u8 g_alt_n;
-void alt_draw(void);
+void alt_draw(void);              /* 描く処理はゲームモジュール(game.c) */
 void fx_reset(void);              /* ステージの始めに */
 
 #endif

@@ -7,9 +7,7 @@
 #include "trolley.h"
 #include "fx.h"
 
-#define M(x)    ((u16)((x) * 64))
 #define F88(x)  ((i16)((x) * 256))
-#define FLOOR_Y F88(-1.3)
 
 /* 数字の表示(ルール: 色・形・場所・動きで 3 種類を分ける)
  *   得点        白  数字だけ「100」            倒した敵の位置    上へ流れる
@@ -115,38 +113,4 @@ void fx_reset(void)
 RailPt g_alt[ALT_N];
 u8  g_alt_n;
 
-/* 選ばれていない側の線路(分岐点から 24m): レール 2 本と枕木を、地形の上に描く */
-static void alt_pt(const RailPt *p, i16 lat, V3 *o)
-{
-    u8 h = p->yaw >> 8;
-    xform(p->x + fmul(lat, COS(h)), p->y + FLOOR_Y, p->z - fmul(lat, SIN(h)), o);
-}
-
-static void alt_quad(const RailPt *a, const RailPt *b, i16 l0, i16 l1, u8 color)
-{
-    V3 q[4];
-    alt_pt(a, l0, &q[0]);
-    alt_pt(a, l1, &q[1]);
-    alt_pt(b, l1, &q[2]);
-    alt_pt(b, l0, &q[3]);
-    poly3(q, 4, color);
-}
-
-void alt_draw(void)
-{
-    u8 i;
-    u16 f = rail_fork_m() << 6;
-    if (!g_alt_n || cam_s + M(40) < f || cam_s > f + M(30)) return;
-    for (i = g_alt_n - 1; i > 0; i--) {                /* 奥から */
-        const RailPt *a = &g_alt[i - 1], *b = &g_alt[i];
-        RailPt m;                                    /* 枕木: 区間の頭から 1/8 */
-        m.x = a->x + ((b->x - a->x) >> 3);
-        m.y = a->y + ((b->y - a->y) >> 3);
-        m.z = a->z + ((b->z - a->z) >> 3);
-        m.yaw = a->yaw;
-        alt_quad(a, &m, -180, 180, 9);
-        alt_quad(a, b, -128, -102, 10);
-        alt_quad(a, b, 102, 128, 10);
-    }
-}
 

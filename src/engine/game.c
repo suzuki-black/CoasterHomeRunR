@@ -595,6 +595,84 @@ static void trolley_update(void)
 /* ---------------------------------------------------------------------------
  * 描画
  * --------------------------------------------------------------------------- */
+/* 選ばれていない側の線路(分岐点から 24m): レール 2 本と枕木を、地形の上に描く(g_alt は常駐部の fx.c。描く処理は常駐部に入らないのでここ) */
+/* 変換と投影を済ませた点(隣の区間・同じ区間の四角形どうしで使い回す)。in = 0 なら手前に無い(投影していない) */
+typedef struct { V3 v; i16 s[2]; u8 in; } AltP;
+
+/* 点を求めるのは geom.s の alt_mk_a: レールの点 p から、横位置の並び g_al_lat(g_al_n 個)の点を変換・投影して o に並べる */
+extern const i16 *g_al_lat;
+extern u8 g_al_n;
+extern i16 g_al_fy;
+void alt_mk_a(const RailPt *p, AltP *o);
+static void alt_mkn(const RailPt *p, const i16 *lat, u8 n, AltP *o)
+{
+    g_al_lat = lat;
+    g_al_n = n;
+    alt_mk_a(p, o);
+}
+
+/* 四角形 p0→p1→p2→p3。4 点とも手前なら投影済みの座標で塗る(手前で切る poly3 と同じ順・同じ値になる) */
+static void alt_q(const AltP *p0, const AltP *p1, const AltP *p2, const AltP *p3, u8 color)
+{
+    if (p0->in && p1->in && p2->in && p3->in) {
+        scr[0] = p0->s[0]; scr[1] = p0->s[1];
+        scr[2] = p1->s[0]; scr[3] = p1->s[1];
+        scr[4] = p2->s[0]; scr[5] = p2->s[1];
+        scr[6] = p3->s[0]; scr[7] = p3->s[1];
+        raster(4, color);
+    } else {
+        V3 q[4];
+        q[0] = p0->v; q[1] = p1->v; q[2] = p2->v; q[3] = p3->v;
+        poly3(q, 4, color);
+    }
+}
+
+/* 枕木の端(±180)とレールの両端(±128、±102)。区間ごとに、手前の点(a)の 6 つと枕木の奥の端 2 つだけを新しく求め、
+ * 奥の点(b)のレールの 4 つは前の区間で求めたものを使う(1 フレーム 132 点 → 約 86 点)。
+ * 選ばれていない側の線路はすぐ視界の外へ曲がっていくので、レールの点ごとに中心(横 0)だけを先に変換し、区間の両端の中心が
+ * 同じ側(画面の左の外・右の外・後ろ)に余裕 ALT_MARGIN をもって出ていれば、その区間は点を求めずに飛ばす。
+ * 枕木の端は中心から横に 180(0.7m)なので、カメラ空間の x と z はそれぞれ 180 までしか動かない。区間の途中の点(枕木の奥の端、
+ * 手前で切った点)は両端の点の間にあるので、同じ側に出る。だから飛ばした区間は、描いても 1 ブロックも塗らない */
+#define ALT_MARGIN 400
+static const i16 ALT_LAT[6] = { -180, 180, -128, -102, 102, 128 };
+static const i16 alt_zero = 0;
+static AltP alt_p0[6], alt_p1[6];
+static u8 alt_side[ALT_N];
+
+void alt_draw(void)
+{
+    u8 i, sa, sb, bok;
+    AltP *pa = alt_p0, *pb = alt_p1, *pt;
+    AltP mm[2], c;
+    u16 f = rail_fork_m() << 6;
+    if (!g_alt_n || cam_s + M(40) < f || cam_s > f + M(30)) return;
+    g_al_fy = FLOOR_Y;
+    for (i = 0; i < g_alt_n; i++) {
+        alt_mkn(&g_alt[i], &alt_zero, 1, &c);
+        alt_side[i] = (c.v.z < -ALT_MARGIN) ? 1 : (c.v.x + c.v.z < -ALT_MARGIN) ? 2 : (c.v.x - c.v.z > ALT_MARGIN) ? 3 : 0;
+    }
+    bok = 0;                                         /* pb(奥の点のレールの 4 つ)を求めてあるか */
+    for (i = g_alt_n - 1; i > 0; i--) {                /* 奥から */
+        const RailPt *a = &g_alt[i - 1], *b = &g_alt[i];
+        RailPt m;                                    /* 枕木: 区間の頭から 1/8 */
+        sa = alt_side[i - 1];
+        sb = alt_side[i];
+        if (sa && sa == sb) { bok = 0; continue; }     /* 区間ごと画面の外 */
+        if (!bok) alt_mkn(b, &ALT_LAT[2], 4, &pb[2]);
+        m.x = a->x + ((b->x - a->x) >> 3);
+        m.y = a->y + ((b->y - a->y) >> 3);
+        m.z = a->z + ((b->z - a->z) >> 3);
+        m.yaw = a->yaw;
+        alt_mkn(a, ALT_LAT, 6, pa);
+        alt_mkn(&m, ALT_LAT, 2, mm);               /* 枕木の奥の端(-180、180) */
+        alt_q(&pa[0], &pa[1], &mm[1], &mm[0], 9);
+        alt_q(&pa[2], &pa[3], &pb[3], &pb[2], 10);
+        alt_q(&pa[4], &pa[5], &pb[5], &pb[4], 10);
+        pt = pa; pa = pb; pb = pt;
+        bok = 1;
+    }
+}
+
 /* 敵モデルを描く(本体は geom.s の draw_model) */
 extern const MRect *g_dm_rects;
 extern u8 g_dm_n, g_dm_flash, g_dm_id, g_dm_hit, g_dm_grow;
