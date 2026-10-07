@@ -294,6 +294,14 @@ static void ring_calc(i8 r)
     ring_make(idx, RAIL_PT(m));
 }
 
+/* envm_draw が後回しにしたリング(ring_d0〜ring_d1)を作る(仮リングを作れなかったとき) */
+static i8 ring_d0, ring_d1;
+static void ring_late(void)
+{
+    i8 r;
+    for (r = ring_d0; r <= ring_d1; r++) ring_calc(r);
+}
+
 /* 仮リングをレール位置 sv に作る(断面は前後のリングから補間) */
 static u8 vring_make(u16 sv)
 {
@@ -707,12 +715,33 @@ void envm_draw(u16 s, u16 look16)
     for (r = 0; r <= NR; r++) ring_ok[r] = 0;
     g_ring_s = &ring_s[0][0];
     eslot_clear();
+    /* 前だけ・後ろだけを見ているときは、カメラを含む区間を仮リングで描くので、その向こう側のリング(d0〜d1)は
+     * 仮リングを作れないときにしか使わない。計算はそのときまで後回しにする(空が見えるかの判定はリングの番号だけで決まる) */
+    {
+        i8 d0 = 1, d1 = 0;
+        if (fwd && !back) {
+            d0 = 0;
+            d1 = ((u16)(ring_m0 + RSTEP) * 64 > s + VR_D + 6) ? 0 : 1;
+        } else if (back && !fwd && s >= VR_D + 6) {
+            d0 = ((u16)ring_m0 * 64 + 6 < s - VR_D) ? 1 : 0;
+            d1 = 1;
+        }
+        ring_d0 = d0;
+        ring_d1 = d1;
+    }
     {
         u8 open = 0, far = K_CAVE;
         for (r = back ? -NB : 0; r <= (fwd ? NF : 1); r++) {
-            ring_calc(r);
             k = (i8)(r + NB);
-            if (ring_ok[k]) {
+            if (r >= ring_d0 && r <= ring_d1) {
+                i16 m = ring_meter(r);
+                if (m < 0 || m >= (i16)rail_len) continue;
+                ring_no[k] = (u8)(m / RSTEP);
+            } else {
+                ring_calc(r);
+                if (!ring_ok[k]) continue;
+            }
+            {
                 u8 no = ring_no[k];
                 if (DECO[no] & D_OPEN) { open = 1; far = KIND[no]; }
             }
@@ -764,6 +793,7 @@ void envm_draw(u16 s, u16 look16)
             band_draw(VR, (u8)(rn + NB), 0);
             frame_draw(rn);
         } else {
+            ring_late();
             for (k = rn - 1; k >= 0; k--) { seg_draw(k); frame_draw(k + 1); }
         }
         return;
@@ -797,6 +827,7 @@ void envm_draw(u16 s, u16 look16)
             band_draw((u8)(rn + NB), VR, 0);
             frame_draw(rn);
         } else {
+            ring_late();
             for (k = rn; k <= 0; k++) { seg_draw(k); frame_draw(k); }
         }
         return;
