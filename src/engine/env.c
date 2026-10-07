@@ -655,6 +655,18 @@ static u8 far_ok(i8 r)
     return cap_ok(r) && KIND[ring_no[idx]] != K_LAKE;
 }
 
+/* リング r〜r+2 の 2 区間を 1 つの帯で描いてよいか: 3 本とも森か地底湖(断面の形がなめらかに変わる地形)。
+ * 町の家並みや遊園地の建物は、リングごとに形が変わるので、途中のリングを飛ばすと遠くの屋根や建物の形が欠ける */
+static u8 merge_ok(i8 r)
+{
+    u8 i, kd;
+    for (i = 0; i < 3; i++) {
+        kd = KIND[ring_no[(u8)(r + NB + i)]];
+        if (kd != K_FOREST && kd != K_LAKE) return 0;
+    }
+    return 1;
+}
+
 /* 奥の開口部を塞ぐ色: 坑道は闇(黒)、地底湖は岩壁と同じ暗い岩の色(黒い穴に見えないように) */
 static u8 cap_col(i8 r)
 {
@@ -737,7 +749,17 @@ void envm_draw(u16 s, u16 look16)
         /* 手前: 6 面ずつ。カメラを含む区間は「0.6m 先の仮リング → その先の最初のリング」で置き換える
          * (仮リングの頂点は全部画面外に投影されるので、ニアクリップ無しで画面の縁まで覆える) */
         rn = ((u16)(ring_m0 + RSTEP) * 64 > sv + 6) ? 1 : 2;
-        for (k = kn - 1; k >= rn; k--) { seg_draw(k); frame_draw(k + 1); }
+        for (k = kn - 1; k >= rn; k--) {
+            if (k == NF - 1 && kn == NF && k - 1 >= rn && merge_ok(NF - 2)) {
+                /* 遠い 2 区間(12〜20m)は 1 つの帯で描く(途中の 16m のリングは飾りの位置にだけ使う) */
+                band_draw((u8)(NB + NF - 2), (u8)(NB + NF), 3);
+                frame_draw(NF);
+                frame_draw(NF - 1);
+                k--;
+                continue;
+            }
+            seg_draw(k); frame_draw(k + 1);
+        }
         if (vring_make(sv)) {
             band_draw(VR, (u8)(rn + NB), 0);
             frame_draw(rn);
@@ -761,7 +783,16 @@ void envm_draw(u16 s, u16 look16)
             kn = -NB;
         }
         rn = ((u16)ring_m0 * 64 + 6 < sv) ? 0 : -1;
-        for (k = kn; k < rn; k++) { seg_draw(k); frame_draw(k); }
+        for (k = kn; k < rn; k++) {
+            if (k == -NB && kn == -NB && k + 2 <= rn && merge_ok(-NB)) {
+                band_draw(0, 2, 3);                  /* 遠い 2 区間は 1 つの帯で(前と同じ) */
+                frame_draw(-NB);
+                frame_draw(-NB + 1);
+                k++;
+                continue;
+            }
+            seg_draw(k); frame_draw(k);
+        }
         if (vring_make(sv)) {
             band_draw((u8)(rn + NB), VR, 0);
             frame_draw(rn);
