@@ -482,6 +482,124 @@ _runs_draw::
 	jr	1$
 
 ; ---------------------------------------------------------------------------
+; void trolley_runs(void)   乗り物の絵 timg(64×13、1 点 1 バイト、0 = 透過)から、runs_draw の表 runs と
+;   丸ごと不透明なバイトの詰めた値 pimg を作る(trolley.c。振り向いて真横を過ぎたときと被弾のときに呼ぶ)。
+;   列ペア(2 点 = 1 バイト)ごとに: 両方不透明 → 続くかぎり 1 つの区間、片方だけ → 半分のバイト、両方透過 → 飛ばす。
+;   表は 120 個まで(trolley.c の MAX_RUNS)。HL = timg の位置、DE = pimg の位置、IY = 表、B = 列ペア、C = 行
+; ---------------------------------------------------------------------------
+	.area	_DATA
+tr_left:	.ds	1	; 表にあと足せる個数
+	.area	_CODE
+_trolley_runs::
+	push	iy
+	ld	iy, #_runs
+	ld	a, #120
+	ld	(tr_left), a
+	ld	hl, #_timg
+	ld	de, #_pimg
+	ld	c, #0
+1$:
+	ld	b, #0
+2$:
+	ld	a, (hl)
+	or	a, a
+	jr	z, 5$
+	inc	hl
+	ld	a, (hl)
+	dec	hl
+	or	a, a
+	jr	z, 4$
+	; 両方不透明: 続くかぎり 1 つの区間(値は pimg に詰める)
+	ld	0 (iy), c
+	ld	1 (iy), b
+	ld	2 (iy), b		; 始めの列ペア(あとで個数に直す)
+	ld	3 (iy), e
+	ld	4 (iy), d
+3$:
+	ld	a, (hl)
+	add	a, a
+	add	a, a
+	add	a, a
+	add	a, a
+	inc	hl
+	or	a, (hl)
+	inc	hl
+	ld	(de), a
+	inc	de
+	inc	b
+	ld	a, b
+	cp	a, #32
+	jr	z, 31$
+	ld	a, (hl)
+	or	a, a
+	jr	z, 31$
+	inc	hl
+	ld	a, (hl)
+	dec	hl
+	or	a, a
+	jr	nz, 3$
+31$:
+	ld	a, b
+	sub	a, 2 (iy)
+	ld	2 (iy), a
+	jr	7$
+4$:
+	; 左だけ不透明
+	ld	a, (hl)
+	add	a, a
+	add	a, a
+	add	a, a
+	add	a, a
+	ld	4 (iy), a
+	ld	3 (iy), #0x0F		; 残すビット
+	jr	6$
+5$:
+	inc	hl
+	ld	a, (hl)
+	dec	hl
+	or	a, a
+	jr	z, 9$			; 両方透過
+	; 右だけ不透明
+	ld	4 (iy), a
+	ld	3 (iy), #0xF0
+6$:
+	ld	0 (iy), c
+	ld	1 (iy), b
+	ld	2 (iy), #0
+	inc	hl
+	inc	hl
+	inc	de
+	inc	b
+7$:
+	inc	iy
+	inc	iy
+	inc	iy
+	inc	iy
+	inc	iy
+	ld	a, (tr_left)
+	dec	a
+	ld	(tr_left), a
+	jr	z, 11$			; 表が一杯(元の C も、ここから先の行では何も足さない)
+	jr	10$
+9$:
+	inc	hl
+	inc	hl
+	inc	de
+	inc	b
+10$:
+	ld	a, b
+	cp	a, #32
+	jp	nz, 2$
+	inc	c
+	ld	a, c
+	cp	a, #13
+	jp	nz, 1$
+11$:
+	ld	0 (iy), #0xFF
+	pop	iy
+	ret
+
+; ---------------------------------------------------------------------------
 ; void glyph1(const u8 *g)   HL = 3×5 の字形(5 バイト、下位 3bit。bit2 が左)。g_rx, g_ry の位置に g_color で描く
 ;   倍率 1 の文字用。画面内(x <= 61, y <= 43)であること(hud.c が確かめる)
 ;   列ごとに縦に描く: 先に 3 列それぞれの「5 行分のビット」を作り、番地は 1 回だけ求める。
