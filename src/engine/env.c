@@ -24,6 +24,7 @@
 #define NB    5            /* 後方の区間数 */
 #define NR    (NF + NB + 1)
 #define VR    NR           /* 仮リング(カメラの 0.6m 先/後ろ)の番号 */
+#define TURN_K 3           /* 振り向きの最中の見える区間の数(12m) */
 #define FAR_K 3            /* この番号から先(12m〜)のリングは「断面 1 枚」で近似する */
 #define VR_D  38           /* 仮リングまでの距離(1/64m) */
 
@@ -709,6 +710,10 @@ void envm_draw(u16 s, u16 look16)
     u8 back = (look > 48 && look < 208);
     i8 r, k, rn;
     u8 capped = 1;
+    /* 見える距離(区間の数)。振り向きの最中(前後の両方を描く数フレーム)は、前後とも 12m までにする
+     * (画面が大きく回っている間なので、遠くが欠けても目立たない。1 フレームが一番重くなる所) */
+    i8 lf = NF, lb = NB;
+    if (fwd && back) lf = lb = TURN_K;
 
     ring_m0 = (s >> 6) - (s >> 6) % RSTEP;
     view_back = back && !fwd;
@@ -731,7 +736,7 @@ void envm_draw(u16 s, u16 look16)
     }
     {
         u8 open = 0, far = K_CAVE;
-        for (r = back ? -NB : 0; r <= (fwd ? NF : 1); r++) {
+        for (r = back ? -lb : 0; r <= (fwd ? lf : 1); r++) {
             k = (i8)(r + NB);
             if (r >= ring_d0 && r <= ring_d1) {
                 i16 m = ring_meter(r);
@@ -753,8 +758,8 @@ void envm_draw(u16 s, u16 look16)
         } else {
             /* トンネルの内側からは壁が視界を全部覆うので、奥の開口部を黒く塞げば
              * バッファの全消去は要らない。レールの端で塞げないときだけ全消去する */
-            if (fwd && !cap_ok(NF)) capped = 0;
-            if (back && !cap_ok(-NB)) capped = 0;
+            if (fwd && !cap_ok(lf)) capped = 0;
+            if (back && !cap_ok(-lb)) capped = 0;
             if (!capped) buf_fill(C_BLACK);
         }
     }
@@ -833,14 +838,14 @@ void envm_draw(u16 s, u16 look16)
         return;
     }
     if (capped) {
-        if (fwd) hex_draw(NF, cap_col(NF));
-        if (back) hex_draw(-NB, cap_col(-NB));
+        if (fwd) hex_draw(lf, cap_col(lf));
+        if (back) hex_draw(-lb, cap_col(-lb));
     }
 
     /* 振り向き中(と後方の端): 前後の区間を距離の遠い順に交互に描き、カメラを含む区間はクリップ */
-    for (k = NB > NF ? NB : NF; k >= 1; k--) {
-        if (fwd && k < NF) { seg_draw(k); frame_draw(k + 1); }
-        if (back) { seg_draw(-k); frame_draw(-k); }
+    for (k = lb > lf ? lb : lf; k >= 1; k--) {
+        if (fwd && k < lf) { seg_draw(k); frame_draw(k + 1); }
+        if (back && k <= lb) { seg_draw(-k); frame_draw(-k); }
     }
     seg_draw(0);
     frame_draw(1);
