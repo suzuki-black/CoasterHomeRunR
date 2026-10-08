@@ -714,6 +714,9 @@ void envm_draw(u16 s, u16 look16)
      * (画面が大きく回っている間なので、遠くが欠けても目立たない。1 フレームが一番重くなる所) */
     i8 lf = NF, lb = NB;
     if (fwd && back) lf = lb = TURN_K;
+    /* 後ろだけを見ているとき: カメラは区間の途中にいるので、後ろのリングは前より 1 本ぶん遠くまである(前は 16〜20m 先まで、
+     * 後ろは 20〜24m 後ろまで)。前と同じ距離までにそろえる */
+    else if (back) lb = NB - 1;
 
     ring_m0 = (s >> 6) - (s >> 6) % RSTEP;
     view_back = back && !fwd;
@@ -807,22 +810,22 @@ void envm_draw(u16 s, u16 look16)
         u16 sv = s - VR_D;
         i8 kn = -FAR_K;
         if (capped) {
-            for (k = -FAR_K; k > -NB; k--) if (!far_ok(k)) break;
-            if (k == -NB) {
-                for (k = -FAR_K; k > -NB; k--) hex_draw(k, C_ROCK0);
+            for (k = -FAR_K; k > -lb; k--) if (!far_ok(k)) break;
+            if (k == -lb) {
+                for (k = -FAR_K; k > -lb; k--) hex_draw(k, C_ROCK0);
             } else {
-                kn = -NB;
+                kn = -lb;
             }
-            hex_draw(-NB, cap_col(-NB));
+            hex_draw(-lb, cap_col(-lb));
         } else {
-            kn = -NB;
+            kn = -lb;
         }
         rn = ((u16)ring_m0 * 64 + 6 < sv) ? 0 : -1;
         for (k = kn; k < rn; k++) {
-            if (k == -NB && kn == -NB && k + 2 <= rn && merge_ok(-NB)) {
-                band_draw(0, 2, 3);                  /* 遠い 2 区間は 1 つの帯で(前と同じ) */
-                frame_draw(-NB);
-                frame_draw(-NB + 1);
+            if (k == -lb && kn == -lb && k + 2 <= rn && merge_ok(-lb)) {
+                band_draw((u8)(NB - lb), (u8)(NB - lb + 2), 3);  /* 遠い 2 区間は 1 つの帯で(前と同じ) */
+                frame_draw(-lb);
+                frame_draw(-lb + 1);
                 k++;
                 continue;
             }
