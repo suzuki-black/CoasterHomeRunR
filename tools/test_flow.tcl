@@ -25,7 +25,7 @@ proc poke16 {a v} { debug write memory $a [expr {$v & 255}]; debug write memory 
 proc s16 {v} { expr {$v >= 32768 ? $v - 65536 : $v} }
 proc shot {name} { screenshot -raw -prefix {} [file join $::out_dir flow_$name.png] }
 set mute on
-set ::god [expr {[info exists ::env(TH_GOD)] && $::env(TH_GOD)}]
+set ::god [expr {[info exists ::env(TH_GOD)] && $::env(TH_GOD) ne "" && $::env(TH_GOD)}]   ;# make は GOD を付けないと空で渡す
 
 set ::scene -1
 set ::stage 0
