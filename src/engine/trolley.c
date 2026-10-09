@@ -19,9 +19,10 @@ void runs_draw(const u8 *tbl, u16 y0);
 void trolley_runs(void);    /* gfx.s: timg から runs と pimg を作る(MAX_RUNS 個まで) */
 
 u8 timg[TROLLEY_W * TROLLEY_H];          /* gfx.s の trolley_runs も使う */
-/* まっすぐ前(横ずれ 0)のときに使う、詰めた形(gfx.s の描画バッファの並び)の表。5 バイトずつ、行 = 0xFF で終わり:
- *   (行, 列ペア, n, 元の下位, 元の上位)   n >= 1: 丸ごと不透明なバイト n 個(値は pimg)を写す
- *   (行, 列ペア, 0, 残すビット, 値)      片側だけ不透明なバイト */
+/* まっすぐ前(横ずれ 0)のときに使う、詰めた形(gfx.s の描画バッファの並び)の表。5 バイトずつ、2 バイト目 = 0xFF で終わり:
+ *   (番地の下位, 帯 | 行 << 4, n, 元の下位, 元の上位)   n >= 1: 丸ごと不透明なバイト n 個(値は pimg)を写す
+ *   (番地の下位, 帯 | 行 << 4, 0, 残すビット, 値)      片側だけ不透明なバイト
+ * 番地は揺れていない位置(TROLLEY_Y から)のもので、そのときは runs_draw が計算せずに使う */
 #define MAX_RUNS 120
 u8 runs[MAX_RUNS * 5 + 1];
 u8 pimg[TROLLEY_H * 32];     /* 丸ごと不透明なバイトの詰めた値 */

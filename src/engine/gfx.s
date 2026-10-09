@@ -418,33 +418,95 @@ _blit_trans::
 
 ; ---------------------------------------------------------------------------
 ; void runs_draw(const u8 *tbl, u16 y0)   HL = 表、E = 描き始めの行
-;   表(trolley.c が詰めた形で作る): 5 バイトずつ、行 = 0xFF で終わり。行 >= g_rh は描かない(揺れで下にはみ出す行)
-;     (行, 列ペア, n, 元の下位, 元の上位)       n >= 1: 丸ごとのバイト n 個を元から写す(+8 ずつ)
-;     (行, 列ペア, 0, 残すビット, 値)          半分だけのバイト: (描き先 & 残すビット) | 値
+;   表(gfx.s の trolley_runs が作る): 5 バイトずつ、2 バイト目 = 0xFF で終わり。
+;     (番地の下位, 帯 | 行 << 4, n, 元の下位, 元の上位)   n >= 1: 丸ごとのバイト n 個を元から写す(+8 ずつ)
+;     (番地の下位, 帯 | 行 << 4, 0, 残すビット, 値)       半分だけのバイト: (描き先 & 残すビット) | 値
+;   番地の下位と帯は、揺れの無い位置(y0 = TR_Y)のもの。そのときは番地を計算せずにそのまま使う。
+;   揺れているとき(y0 = TR_Y + 1)は、行 >= g_rh を描かず、行と列(番地の下位 >> 3)から番地を求め直す
 ; ---------------------------------------------------------------------------
+TR_Y	= 33			; 乗り物の絵の一番上の行(trolley.h の TROLLEY_Y = GAME_ROWS - TROLLEY_H)
 	.area	_DATA
 rd_y0:		.ds	1
 	.area	_CODE
 _runs_draw::
+	ld	a, (_g_buf_hi)
+	ld	(3$ + 1), a
 	ld	a, e
-	ld	(rd_y0), a
+	cp	a, #TR_Y
+	jr	nz, 20$
+	; 揺れていない: 表の番地をそのまま使う
 1$:
-	ld	a, (hl)			; 行
+	ld	e, (hl)
+	inc	hl
+	ld	a, (hl)
+	inc	hl
 	cp	a, #0xFF
 	ret	z
-	ld	c, a
+	and	a, #0x0F
+3$:
+	add	a, #0			; 描画バッファの上位(書き換える)
+	ld	d, a			; DE = 描き先
+	ld	a, (hl)
+	inc	hl
+	or	a, a
+	jr	z, 5$
+	; 丸ごとのバイトを n 個
+	ld	b, a
+	ld	c, (hl)
+	inc	hl
+	ld	a, (hl)
+	inc	hl
+	push	hl
+	ld	h, a
+	ld	l, c			; HL = 元
+2$:
+	ld	a, (hl)
+	inc	hl
+	ld	(de), a
+	ld	a, e
+	add	a, #8
+	ld	e, a
+	djnz	2$
+	pop	hl
+	jr	1$
+5$:
+	; 半分だけ
+	ld	a, (de)
+	and	a, (hl)
+	inc	hl
+	or	a, (hl)
+	inc	hl
+	ld	(de), a
+	jr	1$
+	; 揺れている: 行と列から番地を求め直す
+20$:
+	ld	(rd_y0), a
+21$:
+	inc	hl
+	ld	a, (hl)			; 帯 | 行 << 4
+	dec	hl
+	cp	a, #0xFF
+	ret	z
+	rrca
+	rrca
+	rrca
+	rrca
+	and	a, #0x0F
+	ld	c, a			; C = 絵の行
 	ld	a, (_g_rh)
 	cp	a, c
-	jr	z, 9$
-	jr	c, 9$
+	jr	z, 29$
+	jr	c, 29$
 	push	hl
 	ld	a, (rd_y0)
 	add	a, c
 	ld	c, a			; C = 画面の行
-	inc	hl
-	ld	a, (hl)			; 列ペア
-	add	a, a
+	ld	a, (hl)			; 番地の下位 = 列ペア << 3 | 行の下位
+	rrca
+	rrca
+	and	a, #0x3E
 	ld	b, a			; B = 列
+	inc	hl
 	inc	hl
 	ld	a, (hl)			; n
 	inc	hl
@@ -455,31 +517,29 @@ _runs_draw::
 	PADDR
 	pop	af
 	or	a, a
-	jr	z, 5$
-	; 丸ごとのバイトを n 個
+	jr	z, 25$
 	ld	b, a
 	ld	c, #8
-2$:
+22$:
 	ld	a, (de)
 	inc	de
 	ld	(hl), a
 	ld	a, l
 	add	a, c
 	ld	l, a
-	djnz	2$
+	djnz	22$
 	pop	hl
-	jr	9$
-5$:
-	; 半分だけ
+	jr	29$
+25$:
 	ld	a, (hl)
 	and	a, e
 	or	a, d
 	ld	(hl), a
 	pop	hl
-9$:
+29$:
 	ld	de, #5
 	add	hl, de
-	jr	1$
+	jr	21$
 
 ; ---------------------------------------------------------------------------
 ; void trolley_runs(void)   乗り物の絵 timg(64×13、1 点 1 バイト、0 = 透過)から、runs_draw の表 runs と
@@ -489,6 +549,7 @@ _runs_draw::
 ; ---------------------------------------------------------------------------
 	.area	_DATA
 tr_left:	.ds	1	; 表にあと足せる個数
+tr_hb:		.ds	1	; いまの行の「帯 | 行 << 4」
 	.area	_CODE
 _trolley_runs::
 	push	iy
@@ -499,6 +560,25 @@ _trolley_runs::
 	ld	de, #_pimg
 	ld	c, #0
 1$:
+	; この行の、番地の下位の行の部分(y & 7)と「帯 | 行 << 4」(y = 行 + TR_Y)
+	ld	a, c
+	add	a, #TR_Y
+	ld	b, a
+	and	a, #7
+	ld	(tr_y7 + 1), a
+	ld	a, b
+	rrca
+	rrca
+	rrca
+	and	a, #0x1F
+	ld	b, a
+	ld	a, c
+	add	a, a
+	add	a, a
+	add	a, a
+	add	a, a
+	or	a, b
+	ld	(tr_hb), a
 	ld	b, #0
 2$:
 	ld	a, (hl)
@@ -510,8 +590,7 @@ _trolley_runs::
 	or	a, a
 	jr	z, 4$
 	; 両方不透明: 続くかぎり 1 つの区間(値は pimg に詰める)
-	ld	0 (iy), c
-	ld	1 (iy), b
+	call	tr_head
 	ld	2 (iy), b		; 始めの列ペア(あとで個数に直す)
 	ld	3 (iy), e
 	ld	4 (iy), d
@@ -563,8 +642,7 @@ _trolley_runs::
 	ld	4 (iy), a
 	ld	3 (iy), #0xF0
 6$:
-	ld	0 (iy), c
-	ld	1 (iy), b
+	call	tr_head
 	ld	2 (iy), #0
 	inc	hl
 	inc	hl
@@ -595,8 +673,20 @@ _trolley_runs::
 	cp	a, #13
 	jp	nz, 1$
 11$:
-	ld	0 (iy), #0xFF
+	ld	1 (iy), #0xFF
 	pop	iy
+	ret
+; 表の 1・2 バイト目: 番地の下位 = 列ペア << 3 | (y & 7)、帯 | 行 << 4
+tr_head:
+	ld	a, b
+	add	a, a
+	add	a, a
+	add	a, a
+tr_y7:
+	or	a, #0			; y & 7(行ごとに書き換える)
+	ld	0 (iy), a
+	ld	a, (tr_hb)
+	ld	1 (iy), a
 	ret
 
 ; ---------------------------------------------------------------------------
