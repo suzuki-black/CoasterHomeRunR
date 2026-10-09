@@ -1049,23 +1049,31 @@ _project2::
 	inc	hl
 	ld	h, (hl)
 	ld	l, a			; HL = z
-	; q = 2^23 / z を逆数表で。z を 9bit の仮数 m(256..511)にそろえ、q = recip9[m] >> k
-	ld	c, #1
-10$:
+	; q = 2^23 / z を逆数表で。z を 9bit の仮数 m(256..511)にそろえ(右へ k 回)、q = recip9[m] >> (k + 1)。
+	; z < 256(0.5〜1m)は左へ 1 回そろえて q = recip9[m]。k は上位バイトの桁で決め、シフトはループせずに並べる
 	ld	a, h
 	cp	a, #2
-	jr	c, 11$			; HL < 512
-	srl	h
-	rr	l
-	inc	c
-	jr	10$
-11$:
-	bit	0, h
-	jr	nz, 12$			; HL >= 256
+	jr	c, 20$
+	cp	a, #8
+	jr	c, 21$
+	cp	a, #32
+	jr	c, 22$
+	cp	a, #64
+	jp	c, 25$
+	jp	26$
+21$:
+	cp	a, #4
+	jr	c, 31$
+	jp	32$
+22$:
+	cp	a, #16
+	jp	c, 33$
+	jp	34$
+20$:
+	or	a, a
+	jr	nz, 30$
+	; z < 256: 左へ 1 回
 	add	hl, hl
-	dec	c
-	jr	11$
-12$:
 	ld	h, #0
 	add	hl, hl
 	ld	de, #_recip9
@@ -1074,14 +1082,174 @@ _project2::
 	inc	hl
 	ld	h, (hl)
 	ld	l, a			; HL = recip9[m]
-	ld	a, c
-	or	a, a
-	jr	z, 14$
-13$:
+	jp	14$
+30$:
+	ld	h, #0
+	add	hl, hl
+	ld	de, #_recip9
+	add	hl, de
+	ld	a, (hl)
+	inc	hl
+	ld	h, (hl)
+	ld	l, a			; HL = recip9[m]
 	srl	h
 	rr	l
-	dec	c
-	jr	nz, 13$
+	jp	14$
+31$:
+	srl	h
+	rr	l
+	ld	h, #0
+	add	hl, hl
+	ld	de, #_recip9
+	add	hl, de
+	ld	a, (hl)
+	inc	hl
+	ld	h, (hl)
+	ld	l, a			; HL = recip9[m]
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	jp	14$
+32$:
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	ld	h, #0
+	add	hl, hl
+	ld	de, #_recip9
+	add	hl, de
+	ld	a, (hl)
+	inc	hl
+	ld	h, (hl)
+	ld	l, a			; HL = recip9[m]
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	jp	14$
+33$:
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	ld	h, #0
+	add	hl, hl
+	ld	de, #_recip9
+	add	hl, de
+	ld	a, (hl)
+	inc	hl
+	ld	h, (hl)
+	ld	l, a			; HL = recip9[m]
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	jp	14$
+34$:
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	ld	h, #0
+	add	hl, hl
+	ld	de, #_recip9
+	add	hl, de
+	ld	a, (hl)
+	inc	hl
+	ld	h, (hl)
+	ld	l, a			; HL = recip9[m]
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	jp	14$
+25$:
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	ld	h, #0
+	add	hl, hl
+	ld	de, #_recip9
+	add	hl, de
+	ld	a, (hl)
+	inc	hl
+	ld	h, (hl)
+	ld	l, a			; HL = recip9[m]
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	jp	14$
+26$:
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	ld	h, #0
+	add	hl, hl
+	ld	de, #_recip9
+	add	hl, de
+	ld	a, (hl)
+	inc	hl
+	ld	h, (hl)
+	ld	l, a			; HL = recip9[m]
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
 14$:
 	ld	(_p_q), hl
 	ld	b, h
