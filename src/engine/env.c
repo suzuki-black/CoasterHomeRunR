@@ -304,6 +304,28 @@ static void ring_late(void)
 }
 
 /* 仮リングをレール位置 sv に作る(断面は前後のリングから補間) */
+/* 仮リングの頂点のうち、手前の面(0.5m)より近いものも投影する。森の木の壁は目より 6m も高いので、坂でカメラが少し
+ * 傾くだけで上の頂点が 0.3m ほどまで寄り、仮リングが使えずに手前の区間をニアクリップで描いていた(重いフレームの多く)。
+ * 0.125m 以上前にあれば、x・y・z を 2 倍か 4 倍にして project2 の範囲に入れて投影する(結果は同じ)。
+ * そこはもともと画面のずっと外なので、絵はニアクリップで描いたときと変わらない */
+static u8 vring_near(void)
+{
+    u8 k, sh;
+    V3 t;
+    const V3 *v = ring_v[VR];
+    for (k = 0; k < 6; k++, v++) {
+        if (v->z < 32 || v->x < -2048 || v->x > 2047 || v->y < -2048 || v->y > 2047) return 0;
+    }
+    for (k = 0, v = ring_v[VR]; k < 6; k++, v++) {
+        if (v->z >= NEAR_Z) continue;
+        sh = v->z >= 64 ? 1 : 2;
+        t.x = v->x << sh; t.y = v->y << sh; t.z = v->z << sh;
+        project2(&t, &ring_s[VR][k * 2]);
+    }
+    ring_front[VR] = 0x3F;
+    return 1;
+}
+
 static u8 vring_make(u16 sv)
 {
     V3 p;
@@ -322,7 +344,7 @@ static u8 vring_make(u16 sv)
     ring_no[VR] = no;
     g_rm_prof = vprof;
     ring_make(VR, &rp);
-    return ring_front[VR] == 0x3F;
+    return ring_front[VR] == 0x3F || vring_near();
 }
 
 /* ---------------------------------------------------------------------------
