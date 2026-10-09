@@ -42,6 +42,22 @@ static void char_draw(i8 x, i8 y, char ch, u8 color, u8 scale)
 
 void text_draw(i8 x, i8 y, const char *s, u8 color, u8 scale)
 {
+    if (scale == 1 && y >= 0 && y <= 43) {
+        /* 倍率 1 で画面に収まる字は、char_draw を通さずに glyph1 を直接呼ぶ(「ENEMY AHEAD!」などで 1 文字ずつの呼び出しが重かった) */
+        for (; *s; s++, x += 4) {
+            u8 ch = (u8)*s, n;
+            if (x < 0 || x > 61) {
+                char_draw(x, y, (char)ch, color, 1);
+                continue;
+            }
+            if (ch < 0x20 || ch > 0x7F) continue;
+            n = font35_map[ch - 0x20];
+            if (n == 0xFF) continue;
+            g_rx = (u8)x; g_ry = (u8)y; g_color = color;
+            glyph1(&font35[n * 5]);
+        }
+        return;
+    }
     for (; *s; s++) {
         char_draw(x, y, *s, color, scale);
         x += 4 * scale;
