@@ -536,6 +536,41 @@ edge_gen:
 	ret	z
 	ret	c
 	ld	(e_cnt), a		; 辺キャッシュ(slot_ensure)が行の範囲を記録する
+	; ---- 両端とも画面の左に 16 ブロック以上外(x < -256)なら全部の行が 0、右に 16 ブロック以上外(x >= 1280)なら 64。
+	;   傾きの誤差(逆数表の仮数 9bit、|dx| / 256 = 128 以内)では値が変わらない。仮リングの頂点のような画面のずっと外の辺
+	ld	b, a			; B = 行数
+	ld	a, (e_x0 + 1)
+	cp	a, #0x80
+	jr	c, 60$
+	cp	a, #0xFF
+	jr	z, 69$			; -256 <= x0 < 0
+	ld	a, (e_x1 + 1)
+	cp	a, #0x80
+	jr	c, 69$
+	cp	a, #0xFF
+	jr	z, 69$
+	xor	a, a
+	jr	65$
+60$:
+	cp	a, #5
+	jr	c, 69$			; x0 < 1280
+	ld	a, (e_x1 + 1)
+	cp	a, #5
+	jr	c, 69$
+	cp	a, #0x80
+	jr	nc, 69$
+	ld	a, #64
+65$:
+	ld	hl, (e_dst)
+	ld	e, c
+	ld	d, #0
+	add	hl, de
+66$:
+	ld	(hl), a
+	inc	hl
+	djnz	66$
+	ret
+69$:
 	; ---- t = rs*16 + 8 - y0(>= 0)
 	ld	l, c
 	ld	h, #0
