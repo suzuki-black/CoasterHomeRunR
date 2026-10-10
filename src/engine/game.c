@@ -402,26 +402,38 @@ static void kill_enemy(Enemy *e)
 /* ---------------------------------------------------------------------------
  * 射撃(ヒットスキャン。照準ブロックに重なる矩形のうち最も手前)
  * --------------------------------------------------------------------------- */
-static void fire(void)
+/* 照準ブロックに重なる矩形のうち最も手前の、撃てる敵の番号(いなければ 0xFF)。*hi = その矩形の hits の番号。
+ * トロッコの縁に隠れた所は撃てない。照準の色(hud)と射撃(fire)で同じ判定を使う */
+static u8 aim_target(u8 *hi)
 {
     u8 bx = (u8)(aim_x >> 2), by = (u8)(aim_y >> 2);
     u8 i, best = 0xFF;
     i16 bz = 32767;
-    se_play(SE_SHOT);
-    if (trolley_covers(bx, by)) return;    /* トロッコの縁に隠れた所は撃てない */
+    if (trolley_covers(bx, by)) return 0xFF;
     for (i = 0; i < n_hits; i++) {
         HitRect *h = &hits[i];
         if (bx >= h->x0 && bx < h->x1 && by >= h->y0 && by < h->y1 && h->z < bz) {
             bz = h->z;
             best = h->id;
-            g_pop_hx = (u8)((h->x0 + h->x1) >> 1);
-            g_pop_hy = (h->y0 > 6) ? h->y0 - 6 : 0;
+            *hi = i;
         }
     }
-    if (best >= MAX_EN) return;
+    if (best >= MAX_EN) return 0xFF;
+    if (en[best].type == ET_NONE || en[best].state == ST_DEAD) return 0xFF;
+    return best;
+}
+
+static void fire(void)
+{
+    u8 hi, best;
+    se_play(SE_SHOT);
+    best = aim_target(&hi);
+    if (best == 0xFF) return;
     {
         Enemy *e = &en[best];
-        if (e->type == ET_NONE || e->state == ST_DEAD) return;
+        HitRect *h = &hits[hi];
+        g_pop_hx = (u8)((h->x0 + h->x1) >> 1);
+        g_pop_hy = (h->y0 > 6) ? h->y0 - 6 : 0;
         hitmark = 4;
         if (g_cfg.oneshot) e->hp = 1;        /* 隠しコンフィグ: 1 発で倒せる */
         if (e->hp) e->hp--;
@@ -787,7 +799,11 @@ static void draw_hud(void)
         num_draw(7, 14, g_perf_ticks, 2, C_YELLOW);
     }
     if (!ctrl) { g_spr_attr[0] = 209; g_spr_attr[4] = 209; return; }
-    set_sprite(0, (i16)aim_x - 16, (i16)aim_y - 16, 0, C_WHITE);
+    {
+        u8 hi;
+        /* 撃てる敵に重なっていれば赤 */
+        set_sprite(0, (i16)aim_x - 16, (i16)aim_y - 16, 0, aim_target(&hi) != 0xFF ? C_RED : C_WHITE);
+    }
     if (hitmark) set_sprite(1, (i16)aim_x - 16, (i16)aim_y - 16, 4, C_YELLOW);
     else g_spr_attr[4] = 209;
 }
