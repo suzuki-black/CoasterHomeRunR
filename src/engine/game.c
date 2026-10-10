@@ -374,7 +374,8 @@ static void branch_pick(u8 dir)
 static u8 mis_left;                             /* 残りの誘導弾 */
 static u8 lock_n, lock_id[LOCK_MAX];            /* ロックした敵(古い順) */
 static u8 fly_n, fly_id[LOCK_MAX], fly_t[LOCK_MAX], fly_x[LOCK_MAX], fly_y[LOCK_MAX];   /* 飛んでいる誘導弾(位置はブロック) */
-static u8 box_x0[MAX_EN], box_y0[MAX_EN], box_x1[MAX_EN], box_y1[MAX_EN];             /* このフレームに描いた敵の外枠 */
+static u8 box_x0[MAX_EN], box_y0[MAX_EN], box_x1[MAX_EN], box_y1[MAX_EN];             /* このフレームに描いた敵の外枠(0xFF = 無い) */
+static u8 box_n, box_id[LOCK_MAX * 2];          /* 外枠を書いた敵(mis_draw が使い終わったら 0xFF に戻す) */
 
 static void kill_enemy(Enemy *e)
 {
@@ -534,20 +535,7 @@ static void mis_draw(void)
 {
     u8 i;
     if (lock_n || fly_n) {
-        const HitRect *h = hits;
-        for (i = 0; i < MAX_EN; i++) box_x0[i] = 0xFF;
-        for (i = 0; i < n_hits; i++, h++) {
-            u8 id = h->id;
-            if (id >= MAX_EN) continue;
-            if (box_x0[id] == 0xFF) {
-                box_x0[id] = h->x0; box_y0[id] = h->y0; box_x1[id] = h->x1; box_y1[id] = h->y1;
-            } else {
-                if (h->x0 < box_x0[id]) box_x0[id] = h->x0;
-                if (h->y0 < box_y0[id]) box_y0[id] = h->y0;
-                if (h->x1 > box_x1[id]) box_x1[id] = h->x1;
-                if (h->y1 > box_y1[id]) box_y1[id] = h->y1;
-            }
-        }
+        /* 外枠は draw_enemy が、ロック中・飛行中の敵だけ描いた直後に作る */
         /* ロック: 倒れた・画面に映っていない敵は外す。残りに赤い枠 */
         for (i = 0; i < lock_n; ) {
             u8 id = lock_id[i];
@@ -597,6 +585,8 @@ static void mis_draw(void)
             i++;
         }
     }
+    for (i = 0; i < box_n; i++) box_x0[box_id[i]] = 0xFF;
+    box_n = 0;
     /* 残りの誘導弾(左上) */
     for (i = 0; i < mis_left; i++) mis_rect((i8)(1 + i * 3), 1, 2, 4, C_YELLOW);
 }
@@ -868,10 +858,10 @@ static void draw_enemy(u8 id)
     g_dm_id = id;
     g_dm_hit = e->type != ET_TREASURE && e->state != ST_DEAD;
     {
-        u8 h0 = n_hits;
+        u8 h0 = n_hits, sign = IS_SIGN(e->type);
         draw_model(&e->c);
-        if (IS_SIGN(e->type) && n_hits > h0) {
-            /* お腹の文字 L / R: 絵の外接矩形から位置を出し、白地に黒で大きめに描く(遠くても読めるように) */
+        if (n_hits > h0 && (sign || ((lock_n || fly_n) && box_n < LOCK_MAX * 2 && mis_targeted(id)))) {
+            /* 絵の外接矩形: 分岐の獣人のお腹の文字と、誘導弾(ロックの枠・弾の行き先)に使う */
             u8 k, x0 = 255, y0 = 255, x1 = 0, y1 = 0;
             for (k = h0; k < n_hits; k++) {
                 if (hits[k].x0 < x0) x0 = hits[k].x0;
@@ -879,6 +869,12 @@ static void draw_enemy(u8 id)
                 if (hits[k].x1 > x1) x1 = hits[k].x1;
                 if (hits[k].y1 > y1) y1 = hits[k].y1;
             }
+            if (!sign) {
+                box_x0[id] = x0; box_y0[id] = y0; box_x1[id] = x1; box_y1[id] = y1;
+                box_id[box_n++] = id;
+                return;
+            }
+            /* お腹の文字 L / R: 白地に黒で大きめに描く(遠くても読めるように) */
             x0 = (u8)((x0 + x1) >> 1);
             y0 = (u8)(y0 + (u8)(((u16)(y1 - y0) * 115) >> 8));
             if (x0 >= 2 && x0 <= 61 && y0 >= 3 && y0 + 4 <= GAME_ROWS) {
@@ -1066,7 +1062,8 @@ u8 game_run(const Stage *st, u8 first)
     aim_x = 128; aim_y = 92; aim_hold = 0;
     in_prev = 0xFF;                      /* タイトルで押したボタンを射撃と見なさない */
     fire_cd = 0; hitmark = 0;
-    mis_left = MIS_START; lock_n = 0; fly_n = 0;
+    mis_left = MIS_START; lock_n = 0; fly_n = 0; box_n = 0;
+    for (i = 0; i < MAX_EN; i++) box_x0[i] = 0xFF;
     if (first) { life = g_cfg.life; g_score = 0; }
     attack_dir = DIR_NONE;
     boss_alive = 0;
