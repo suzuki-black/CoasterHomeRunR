@@ -835,9 +835,10 @@ void alt_draw(void)
 
 /* 敵モデルを描く(本体は geom.s の draw_model) */
 extern const MRect *g_dm_rects;
-extern u8 g_dm_n, g_dm_flash, g_dm_id, g_dm_hit, g_dm_grow;
+extern u8 g_dm_n, g_dm_flash, g_dm_id, g_dm_hit, g_dm_grow, g_dm_thin;
 void draw_model(const V3 *c);
 
+#define FAR_EN_Z 3000     /* 遠くの敵(約 12m より先) */
 static void draw_enemy(u8 id)
 {
     Enemy *e = &en[id];
@@ -846,6 +847,10 @@ static void draw_enemy(u8 id)
     md = (e->type == ET_E02 && (e->anim & 4)) ? &model_e02b : &models[e->type];
     g_dm_rects = md->r;
     g_dm_n = md->n;
+    /* 遠くの敵は、画面で半ブロックに満たない部品(四捨五入で出たり消えたりする細い部品)を描かない(geom.s)。
+     * アイテム(救急箱・誘導弾の箱・宝箱)は、遠くでも十字や弾の色で見分けられるように省かない */
+    g_dm_thin = (e->c.z > FAR_EN_Z && e->type != ET_MEDKIT && e->type != ET_CRATE && e->type != ET_MISBOX &&
+                 e->type != ET_TREASURE) ? (u8)((u16)(e->c.z - 1) >> 10) : 0;
     /* 縁取りのルール: 敵・敵弾は白、救急箱と誘導弾の箱は黄。宝箱と分岐の獣人(文字で示す)は縁取りしない */
     if (!e->flash && e->type != ET_TREASURE && !IS_SIGN(e->type)) {
         g_dm_flash = (e->type == ET_MEDKIT || e->type == ET_CRATE || e->type == ET_MISBOX) ? C_YELLOW : C_WHITE;
