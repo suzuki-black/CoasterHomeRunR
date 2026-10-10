@@ -425,12 +425,19 @@ static void kill_enemy(Enemy *e)
 /* 照準ブロックに重なる矩形のうち最も手前の、撃てる敵の番号(いなければ 0xFF)。*hi = その矩形の hits の番号。
  * トロッコの縁に隠れた所は撃てない。照準の色(hud)と射撃(fire)で同じ判定を使う */
 u8 aim_scan(u8 bx, u8 by);   /* aimhit.s: 照準ブロックに重なる最も手前の矩形の hits の番号(無ければ 0xFF) */
+/* 照準のブロックの下の矩形(aim_scan の結果、0xFF = 無い)。当たり判定の表と乗り物の絵は描くときにしか変わらないので、
+ * 描いてから次に描くまでは、同じブロックなら使い回す(照準の色・ロック・射撃で 1 フレームに 2〜3 回呼ぶ)。render で as_bx = 0xFF */
+static u8 as_bx, as_by, as_i;          /* ステージの始めに as_bx = 0xFF */
+
 static u8 aim_target(u8 *hi)
 {
     u8 bx = (u8)(aim_x >> 2), by = (u8)(aim_y >> 2);
     u8 i, best;
-    if (trolley_covers(bx, by)) return 0xFF;
-    i = aim_scan(bx, by);
+    if (bx != as_bx || by != as_by) {
+        as_bx = bx; as_by = by;
+        as_i = trolley_covers(bx, by) ? 0xFF : aim_scan(bx, by);
+    }
+    i = as_i;
     if (i == 0xFF) return 0xFF;
     *hi = i;
     best = hits[i].id;
@@ -975,6 +982,7 @@ static void render(void)
     u16 t0;
     timer_reset();
     t0 = timer_read();
+    as_bx = 0xFF;                        /* 当たり判定の表を作り直す */
     rail_at(cam_s, &p, &yaw);
     /* 坂: レールの傾きからピッチの目標(≒ atan、256 分割)を出し、1 フレーム 1 ずつ追う。
      * 後ろを向いているときは向きが逆、振り向き中はその間を cos で補間する */
@@ -1056,6 +1064,7 @@ u8 game_run(const Stage *st, u8 first)
     set_stage_palette(st->palette);
     for (i = 0; i < MAX_EN; i++) en[i].type = ET_NONE;
     n_hits = 0;
+    as_bx = 0xFF;
     stage = st;
     cam_s = M(st->start_m); cam_sub = 0; cam_v = 0; hold = 1;
     if (!st->skip_tick) {                /* 演出の無いステージは走っている状態から始まる */
