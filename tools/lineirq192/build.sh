@@ -4,11 +4,11 @@
 #   build/PCMTEST.ROM … 走査線割込みで PCM の声「FIRE」を鳴らす(pcmtest.s、測り方は pcmrec.tcl)
 #   build/PCMTEST_NOLOG.ROM … 同じで、A4h に書いた時刻を記録しない(割込みの重さを測る用)
 #   build/PCMTEST_FAST.ROM  … さらに遅れの判定をしない(割込みの重さの下限を測る用。割込みを止める区間があると外す)
-#   声の素材は mac の読み上げ(say)で作る: VOICE=Fred(既定)。3,996Hz・8bit に直して build/lineirq192/fire.inc へ
+#   声の素材は mac の読み上げ(say)で作る: VOICE=Junior(既定。2026-10-10 にユーザーが選んだ)。3,996Hz・8bit に直して build/lineirq192/fire.inc へ
 set -e
 cd "$(dirname "$0")/../.."
 OUT=build/lineirq192
-VOICE=${VOICE:-Fred}
+VOICE=${VOICE:-Junior}
 mkdir -p "$OUT"
 say -v "$VOICE" -r 220 -o "$OUT/fire.aiff" "Fire!"
 afconvert -f WAVE -d LEI16@3996 -c 1 "$OUT/fire.aiff" "$OUT/fire.wav"
