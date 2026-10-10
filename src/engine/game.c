@@ -64,6 +64,7 @@ static const EDef edef[ET_COUNT] = {
     /* 亜人の王 */ {100, MV_KEEP,  -21,  24,  2,  13, 64,   0,  0, AT_CYCLE, 30, 30,  90, 2, 30, ET_MAGIC, 35 },
     /* 分岐 L   */ EN_ITEM(1, -21),
     /* 分岐 R   */ EN_ITEM(1, -21),
+    /* 弾の箱   */ EN_ITEM(1, -21),
 };
 #define IS_SIGN(t) ((t) == ET_SIGNL || (t) == ET_SIGNR)
 
@@ -364,12 +365,29 @@ static void branch_pick(u8 dir)
         if (IS_SIGN(en[i].type)) en[i].type = ET_NONE;
 }
 
+/* 誘導弾(アフターバーナー II にならう)の状態。中身は fire の後ろ */
+#define LOCK_MAX  4             /* 同時にロックできる数 */
+#define MIS_START 3             /* ステージの始めの弾数 */
+#define MIS_MAX   5             /* 持てる弾数 */
+#define MIS_T     8             /* 撃ってから当たるまでのフレーム数 */
+#define MIS_BOSS  5             /* ボスに与える傷(ふつうの弾の数) */
+static u8 mis_left;                             /* 残りの誘導弾 */
+static u8 lock_n, lock_id[LOCK_MAX];            /* ロックした敵(古い順) */
+static u8 fly_n, fly_id[LOCK_MAX], fly_t[LOCK_MAX], fly_x[LOCK_MAX], fly_y[LOCK_MAX];   /* 飛んでいる誘導弾(位置はブロック) */
+static u8 box_x0[MAX_EN], box_y0[MAX_EN], box_x1[MAX_EN], box_y1[MAX_EN];             /* このフレームに描いた敵の外枠 */
+
 static void kill_enemy(Enemy *e)
 {
     u8 t = e->type;
     if (IS_SIGN(t)) {                        /* 先に撃った側へ */
         se_play(SE_KILL);
         branch_pick(t == ET_SIGNR);
+        return;
+    }
+    if (t == ET_MISBOX) {                    /* 誘導弾の箱: 1 発増える */
+        if (mis_left < MIS_MAX) mis_left++;
+        e->type = ET_NONE;
+        se_play(SE_HEAL);
         return;
     }
     if (t == ET_MEDKIT || t == ET_CRATE) {
@@ -444,11 +462,148 @@ static void fire(void)
 }
 
 /* ---------------------------------------------------------------------------
- * スクリプト
+ * 誘導弾(アフターバーナー II にならう): 照準が通った敵を最大 4 体までロックし(「ピピ」)、A を押しながら B を押すたびに、
+ * いちばん古いロックへ 1 発撃つ(「FIRE」。内蔵 PCM、pcm.s)。弾はステージの始めに 3 発、最大 5 発、残りより多くはロックしない。
+ * 誘導弾の箱を撃つと 1 発増える。ロックの印と飛んでいく弾は描画バッファに描く(スプライトは常駐部とページ0に空きが無い)
  * --------------------------------------------------------------------------- */
 /* 攻撃してくるもの(敵・ボス・敵弾)か */
-#define IS_FOE(t) ((t) != ET_NONE && (t) != ET_TREASURE && (t) != ET_MEDKIT && (t) != ET_CRATE && !IS_SIGN(t))
+#define IS_FOE(t) ((t) != ET_NONE && (t) != ET_TREASURE && (t) != ET_MEDKIT && (t) != ET_CRATE && (t) != ET_MISBOX && !IS_SIGN(t))
 
+static u8 mis_targeted(u8 id)
+{
+    u8 i;
+    for (i = 0; i < lock_n; i++) if (lock_id[i] == id) return 1;
+    for (i = 0; i < fly_n; i++) if (fly_id[i] == id) return 1;
+    return 0;
+}
+
+/* 照準の下の敵をロックする(player_update から。当たり判定は前のフレームの絵) */
+static void mis_lock(void)
+{
+    u8 hi, t;
+    if (lock_n >= LOCK_MAX || lock_n >= mis_left) return;
+    t = aim_target(&hi);
+    if (t == 0xFF || !IS_FOE(en[t].type) || IS_SHOT(en[t].type) || mis_targeted(t)) return;
+    lock_id[lock_n++] = t;
+    se_play(SE_LOCK);
+}
+
+/* A を押しながら B: いちばん古いロックへ 1 発 */
+static void mis_fire(void)
+{
+    u8 i;
+    if (!lock_n || !mis_left || fly_n >= LOCK_MAX) return;
+    fly_id[fly_n] = lock_id[0];
+    fly_t[fly_n] = 0;
+    fly_x[fly_n] = 32;                   /* 乗り物から */
+    fly_y[fly_n] = TROLLEY_Y;
+    fly_n++;
+    for (i = 1; i < lock_n; i++) lock_id[i - 1] = lock_id[i];
+    lock_n--;
+    mis_left--;
+    pcm_fire_voice();
+}
+
+/* 長方形を画面(64 × GAME_ROWS)に切り詰めて塗る */
+static void mis_rect(i8 x, i8 y, u8 w, u8 h, u8 color)
+{
+    i8 x1 = x + (i8)w, y1 = y + (i8)h;
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    if (x1 > 64) x1 = 64;
+    if (y1 > GAME_ROWS) y1 = GAME_ROWS;
+    if (x >= x1 || y >= y1) return;
+    g_rx = (u8)x; g_ry = (u8)y; g_rw = (u8)(x1 - x); g_rh = (u8)(y1 - y); g_color = color;
+    rect_fill();
+}
+
+/* 当たった: ふつうの敵は倒れ、ボスは MIS_BOSS 発ぶんの傷 */
+static void mis_hit(u8 id)
+{
+    Enemy *e = &en[id];
+    g_pop_hx = (u8)((box_x0[id] + box_x1[id]) >> 1);
+    g_pop_hy = (box_y0[id] > 6) ? box_y0[id] - 6 : 0;
+    if (IS_BOSS(e->type)) e->hp = (e->hp > MIS_BOSS) ? e->hp - MIS_BOSS : 0;
+    else e->hp = 0;
+    if (!e->hp) kill_enemy(e);
+    else { e->flash = 2; se_play(SE_HIT); }
+}
+
+/* 描いたあと(draw_hud から): 敵の外枠をまとめ、ロックを確かめて印を描き、誘導弾を進めて描き、残りの弾を描く */
+static void mis_draw(void)
+{
+    u8 i;
+    if (lock_n || fly_n) {
+        const HitRect *h = hits;
+        for (i = 0; i < MAX_EN; i++) box_x0[i] = 0xFF;
+        for (i = 0; i < n_hits; i++, h++) {
+            u8 id = h->id;
+            if (id >= MAX_EN) continue;
+            if (box_x0[id] == 0xFF) {
+                box_x0[id] = h->x0; box_y0[id] = h->y0; box_x1[id] = h->x1; box_y1[id] = h->y1;
+            } else {
+                if (h->x0 < box_x0[id]) box_x0[id] = h->x0;
+                if (h->y0 < box_y0[id]) box_y0[id] = h->y0;
+                if (h->x1 > box_x1[id]) box_x1[id] = h->x1;
+                if (h->y1 > box_y1[id]) box_y1[id] = h->y1;
+            }
+        }
+        /* ロック: 倒れた・画面に映っていない敵は外す。残りに赤い枠 */
+        for (i = 0; i < lock_n; ) {
+            u8 id = lock_id[i];
+            if (en[id].type == ET_NONE || en[id].state == ST_DEAD || box_x0[id] == 0xFF) {
+                u8 j;
+                for (j = i + 1; j < lock_n; j++) lock_id[j - 1] = lock_id[j];
+                lock_n--;
+                continue;
+            }
+            {
+                i8 x0 = (i8)box_x0[id] - 2, y0 = (i8)box_y0[id] - 2;
+                u8 w = (u8)(box_x1[id] - box_x0[id] + 4), hh = (u8)(box_y1[id] - box_y0[id] + 4);
+                mis_rect(x0, y0, w, 1, C_RED);
+                mis_rect(x0, y0 + (i8)hh - 1, w, 1, C_RED);
+                mis_rect(x0, y0, 1, hh, C_RED);
+                mis_rect(x0 + (i8)w - 1, y0, 1, hh, C_RED);
+            }
+            i++;
+        }
+        /* 誘導弾: 毎フレーム、残りのフレーム数で割った分だけ敵の今の位置へ寄せる(MIS_T フレームでちょうど当たる) */
+        for (i = 0; i < fly_n; ) {
+            u8 id = fly_id[i];
+            if (en[id].type == ET_NONE || en[id].state == ST_DEAD || box_x0[id] == 0xFF) {
+                u8 j;
+                for (j = i + 1; j < fly_n; j++) {
+                    fly_id[j - 1] = fly_id[j]; fly_t[j - 1] = fly_t[j]; fly_x[j - 1] = fly_x[j]; fly_y[j - 1] = fly_y[j];
+                }
+                fly_n--;
+                continue;
+            }
+            {
+                u8 k = MIS_T - fly_t[i];
+                i16 tx = (box_x0[id] + box_x1[id]) >> 1, ty = (box_y0[id] + box_y1[id]) >> 1;
+                fly_x[i] = (u8)(fly_x[i] + (tx - fly_x[i]) / k);
+                fly_y[i] = (u8)(fly_y[i] + (ty - fly_y[i]) / k);
+                mis_rect((i8)fly_x[i] - 1, (i8)fly_y[i] - 1, 2, 2, C_YELLOW);
+                if (++fly_t[i] >= MIS_T) {
+                    u8 j;
+                    mis_hit(id);
+                    for (j = i + 1; j < fly_n; j++) {
+                        fly_id[j - 1] = fly_id[j]; fly_t[j - 1] = fly_t[j]; fly_x[j - 1] = fly_x[j]; fly_y[j - 1] = fly_y[j];
+                    }
+                    fly_n--;
+                    continue;
+                }
+            }
+            i++;
+        }
+    }
+    /* 残りの誘導弾(左上) */
+    for (i = 0; i < mis_left; i++) mis_rect((i8)(1 + i * 3), 1, 2, 4, C_YELLOW);
+}
+
+/* ---------------------------------------------------------------------------
+ * スクリプト
+ * --------------------------------------------------------------------------- */
 /* 命令が敵を呼ぶ・警告を出す向き(1 前 / -1 後ろ / 0 なし) */
 static i8 ev_side(const Event *ev)
 {
@@ -566,13 +721,19 @@ static void player_update(void)
     if (in & IN_UP)    aim_y = (aim_y > step) ? aim_y - step : 0;
     if (in & IN_DOWN)  aim_y = (aim_y + step < GAME_ROWS * 4 - 1) ? aim_y + step : GAME_ROWS * 4 - 1;
 
-    /* 振り向き: B ボタンでトグル(押した瞬間のみ)。8 フレームで 180 度、回転中は射撃不可 */
+    /* 誘導弾: 照準の下の敵をロックし、A を押しながら B で撃つ */
+    mis_lock();
+    /* 振り向き: B ボタンでトグル(押した瞬間のみ)。8 フレームで 180 度、回転中は射撃不可。A を押している間の B は誘導弾 */
     if (turning) {
         look += 0x1000;
         if (--turning == 0) look = facing ? 0x8000 : 0;
     } else if (edge & IN_B) {
-        facing ^= 1;
-        turning = 8;
+        if (in & IN_A) {
+            mis_fire();
+        } else {
+            facing ^= 1;
+            turning = 8;
+        }
     }
 
     if (fire_cd) fire_cd--;
@@ -695,9 +856,9 @@ static void draw_enemy(u8 id)
     md = (e->type == ET_E02 && (e->anim & 4)) ? &model_e02b : &models[e->type];
     g_dm_rects = md->r;
     g_dm_n = md->n;
-    /* 縁取りのルール: 敵・敵弾は白、救急箱は黄。宝箱と分岐の獣人(文字で示す)は縁取りしない */
+    /* 縁取りのルール: 敵・敵弾は白、救急箱と誘導弾の箱は黄。宝箱と分岐の獣人(文字で示す)は縁取りしない */
     if (!e->flash && e->type != ET_TREASURE && !IS_SIGN(e->type)) {
-        g_dm_flash = (e->type == ET_MEDKIT || e->type == ET_CRATE) ? C_YELLOW : C_WHITE;
+        g_dm_flash = (e->type == ET_MEDKIT || e->type == ET_CRATE || e->type == ET_MISBOX) ? C_YELLOW : C_WHITE;
         g_dm_hit = 0;
         g_dm_grow = 1;
         draw_model(&e->c);
@@ -795,6 +956,7 @@ static void draw_hud(void)
         text_draw(1, 14, "T", C_YELLOW, 1);
         num_draw(7, 14, g_perf_ticks, 2, C_YELLOW);
     }
+    mis_draw();
     if (!ctrl) { g_spr_attr[0] = 209; g_spr_attr[4] = 209; return; }
     {
         u8 hi;
@@ -904,6 +1066,7 @@ u8 game_run(const Stage *st, u8 first)
     aim_x = 128; aim_y = 92; aim_hold = 0;
     in_prev = 0xFF;                      /* タイトルで押したボタンを射撃と見なさない */
     fire_cd = 0; hitmark = 0;
+    mis_left = MIS_START; lock_n = 0; fly_n = 0;
     if (first) { life = g_cfg.life; g_score = 0; }
     attack_dir = DIR_NONE;
     boss_alive = 0;
@@ -926,7 +1089,7 @@ u8 game_run(const Stage *st, u8 first)
             if (en[i].type != ET_NONE) update_enemy(&en[i]);
             }
         g_perf_logic[3] = timer_read() - tl;
-        if (g_dbg_fire) { g_dbg_fire = 0; pcm_fire(voice_fire, voice_fire_len); }   /* (調べ用)「FIRE」を鳴らす */
+        if (g_dbg_fire) { g_dbg_fire = 0; pcm_fire_voice(); }   /* (調べ用)「FIRE」を鳴らす */
         render();
         present();
         if (!life) { over = 1; break; }

@@ -75,7 +75,8 @@ proc bot {} {
         # 警告と逆を向いていたら振り向く
         set dir [peek8 [sym _attack_dir]]
         set fc [peek8 [sym _facing]]
-        if {($dir == 2 && $fc == 0) || ($dir == 1 && $fc == 1)} { tap 4 0x04 }
+        # (A を押したままの B は誘導弾なので、A を離して押す)
+        if {($dir == 2 && $fc == 0) || ($dir == 1 && $fc == 1)} { keymatrixup 8 0x01; set ::fire 0; tap 4 0x04 }
         set b [peek8 [sym _boss_alive]]
         if {$b && !$::boss_seen} { set ::boss_seen 1; incr ::bosses; after time 3.0 [list shot boss$::bosses] }
         if {!$b} { set ::boss_seen 0 }

@@ -118,12 +118,12 @@ $(BUILD)/ressyms.rel: $(BUILD)/ressyms.s
 	$(AS) -l -o $@ $<
 
 # 地形モジュール(マッパーのセグメント 5 に置く)
-$(BUILD)/envmod.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env.rel $(BUILD)/ressyms.rel
-	$(CC) $(MODFLAGS) --code-loc 0x8006 -o $@ $^
+$(BUILD)/envmod.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env.rel $(BUILD)/voice_fire.rel $(BUILD)/ressyms.rel
+	$(CC) $(MODFLAGS) --code-loc 0x8008 -o $@ $^
 
 # ステージごとのゲームモジュール(ページ2 = セグメント 1 に、ステージの始めに読み込む)
 STG     = src/stage
-$(BUILD)/game%.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models.rel $(BUILD)/stage%.rel $(BUILD)/voice_fire.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
+$(BUILD)/game%.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models.rel $(BUILD)/stage%.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
 	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
 
 $(BUILD)/stage1.rel: $(STG)/stage1_cave.c $(HDRS) Makefile | $(BUILD)

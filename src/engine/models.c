@@ -49,6 +49,10 @@ static const MRect m_medkit[] = {       /* 救急箱(撃つと耐久が戻る = 
     { -5, 0, 5, 8, C_WHITE, 0 }, { -1, 1, 1, 7, C_RED, 0 }, { -4, 3, 4, 5, C_RED, 0 },
     { -2, 8, 2, 9, C_BLACK, 0 },
 };
+static const MRect m_misbox[] = {       /* 誘導弾の箱(撃つと誘導弾が 1 発増える)・水色の箱に黄色の弾、黒い取っ手 */
+    { -5, 0, 5, 8, C_CYAN, 0 }, { -1, 1, 1, 7, C_YELLOW, 0 }, { -2, 6, 2, 7, C_YELLOW, 0 },
+    { -2, 8, 2, 9, C_BLACK, 0 },
+};
 static const MRect m_e03[] = {          /* キリン人(槍)・黄。首が長く、槍のリーチが長い */
     { -4,  0, -1, 12, C_YELLOW, 2 }, {  1,  0,  4, 12, C_YELLOW, 2 },
     { -5, 12,  5, 24, C_YELLOW, 0 }, { -3, 15, -1, 17, C_BROWN, 0 }, { 1, 19, 3, 21, C_BROWN, 0 },
@@ -126,7 +130,7 @@ const Model models[] = {
     { 0, 0 }, MODEL(m_e01), MODEL(m_e02a), MODEL(m_e03), MODEL(m_e04), MODEL(m_e05),
     MODEL(m_b01), MODEL(m_treasure), MODEL(m_medkit), MODEL(m_boss1), MODEL(m_rock),
     MODEL(m_arrow), MODEL(m_magic), MODEL(m_crate), MODEL(m_boss2), MODEL(m_b02),
-    MODEL(m_b03), MODEL(m_b04), MODEL(m_sign), MODEL(m_sign),
+    MODEL(m_b03), MODEL(m_b04), MODEL(m_sign), MODEL(m_sign), MODEL(m_misbox),
 };
 const Model model_e02b = MODEL(m_e02b);
 

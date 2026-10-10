@@ -21,6 +21,7 @@ enum { ET_NONE, ET_E01, ET_E02, ET_E03, ET_E04, ET_E05, ET_B01, ET_TREASURE, ET_
        ET_B04,       /* 亜人の王(自宅前のラスボス。キリン人系) */
        ET_SIGNL,     /* 分岐の合図: お腹に L と書かれた獣人(攻撃しない。撃つと左へ。L・R とも消える) */
        ET_SIGNR,     /* 同じく R(右へ) */
+       ET_MISBOX,    /* 誘導弾の箱(撃つと誘導弾が 1 発増える) */
        ET_COUNT };
 #define IS_BOSS(t) ((t) == ET_B01 || (t) == ET_BOSS1 || (t) == ET_BOSS2 || (t) == ET_B02 || \
                     (t) == ET_B03 || (t) == ET_B04)

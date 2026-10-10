@@ -1,5 +1,5 @@
 #!/bin/sh
-# 誘導弾の声「Fire!」を作り、src/engine/voice_fire.s(ゲームモジュールに入れる 8bit unsigned、3,996Hz)へ書く。
+# 誘導弾の声「Fire!」を作り、src/engine/voice_fire.s(地形モジュールに入れる 8bit unsigned、3,996Hz)へ書く。
 #   sh tools/gen_voice.sh
 #   mac の読み上げ(say)を使うので、生成したファイルはリポジトリに入れておく(ビルドのたびには作らない)。
 #   声は Junior、速さ 300(2026-10-10 にユーザーが選んだ。0.31 秒)。検証は tools/lineirq192/ と docs/検証記録.md
@@ -20,7 +20,7 @@ b = [max(1, min(255, int(round(128 + x * 127.0 / m)))) for x in s]   # 8bit unsi
 with open(sys.argv[2], 'w') as f:
     f.write('; voice_fire.s — 誘導弾の声「Fire!」(tools/gen_voice.sh が作る。手で直さない)\n')
     f.write(';   8bit unsigned(中心 0x80)、3,996Hz(走査線 3.9375 行ごと)、%d サンプル = %.2f 秒。\n' % (len(b), len(b) / 3996))
-    f.write(';   ゲームモジュールに入れる(割込みは BGM と同じく、ページ2をゲームのセグメントにして読む)\n')
+    f.write(';   地形モジュールに入れる(割込みは、ページ2を地形のセグメントにして読む。番地は modhead_env.s の 0x8006)\n')
     f.write('\t.module\tvoice_fire\n\t.area\t_CODE\n')
     f.write('_voice_fire_len::\n\t.dw\t%d\n' % len(b))
     f.write('_voice_fire::\n')

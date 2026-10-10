@@ -57,6 +57,13 @@ proc tap {row mask} {
     after time 0.15 [list keymatrixup $row $mask]
 }
 
+# 振り向く(A を押したままの B は誘導弾なので、A を離して押し、また押す)
+proc turn {} {
+    keymatrixup 8 0x01
+    tap 4 0x04
+    after time 0.3 [list keymatrixdown 8 0x01]
+}
+
 proc tick_log {} {
     state tick
     after time 1.0 [list tick_log]
@@ -85,14 +92,14 @@ proc step_run {} {
 }
 proc step_turn {} {
     shot 03_front
-    tap 4 0x04
+    turn
     after time 0.13 [list shot 04_turning]
     after time 1.0 [list shot 05_back]
     after time 12.0 [list step_turn2]
 }
 proc step_turn2 {} {
     shot 06_back_later
-    tap 4 0x04
+    turn
     after time 1.0 [list shot 07_front_again]
     after time 60.0 [list step_end]
 }
