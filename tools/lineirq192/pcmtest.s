@@ -46,6 +46,12 @@ NOLOG	= 0
 .ifndef FAST
 FAST	= 0
 .endif
+.ifndef OPT
+OPT	= 0
+.endif
+.ifndef SKIPGAP
+SKIPGAP	= 0
+.endif
 RAMCODE	= 0xD000		; プログラムと声を写す先(ROM では 0x5000〜。4KB まで)
 
 STEP	= 504		; 1 サンプルの行数(9.7)= 3.938 行 = 64 カウント相当(3,996Hz)
@@ -94,7 +100,11 @@ init:
 	ldir
 	ld	a, #0xC3
 	ld	(IM2ENT), a
+	.if	OPT
+	ld	hl, #isr_opt
+	.else
 	ld	hl, #isr
+	.endif
 	ld	(IM2ENT + 1), hl
 	ld	a, #>IM2TAB
 	ld	i, a
@@ -196,6 +206,7 @@ isr:
 	push	de
 	push	hl
 	in	a, (0x99)		; S#1: FH を落とす
+isr_s:
 	ld	a, (ACTIVE)
 	or	a, a
 	jr	nz, 20$
@@ -207,7 +218,7 @@ isr:
 	inc	(hl)
 	ld	a, (PEND)
 	or	a, a
-	jp	z, 90$			; 鳴らすものが無い: 2 行目を張ったまま
+	jp	z, isr_ret			; 鳴らすものが無い: 2 行目を張ったまま
 	xor	a, a
 	ld	(PEND), a
 	inc	a
@@ -221,8 +232,8 @@ isr:
 	call	feed
 	ld	a, (ACTIVE)
 	or	a, a
-	jp	z, 40$			; 鳴り終わった
-50$:
+	jp	z, isr_idle			; 鳴り終わった
+isr_adv:
 	; 次のサンプルの行と時刻。262 行を超えたら次のフレームへ(行から 262 を引き、TA を 1 フレーム進め、
 	; 時刻を行から出し直す。行の 3.9375 行と時刻の 64 カウントのわずかなずれを、フレームごとにそろえる)
 	ld	hl, (DUE)
@@ -267,18 +278,26 @@ isr:
 	ld	hl, (DLINE)
 	ld	de, #-((GAPLINE - 1) * 128 + 1)
 	add	hl, de
+	.if	SKIPGAP
+	jp	c, isr_adv		; (SKIPGAP)割込みが来ない行では待たない: 声を止めたまま行と時刻だけ進める
+	.else
 	jr	c, 60$
+	.endif
 	ld	hl, (DLINE)
 	ld	de, #127
 	add	hl, de
 	add	hl, hl
 	ld	a, h
 	cp	a, #3
+	.if	SKIPGAP
+	jp	c, isr_adv
+	.else
 	jr	c, 60$
+	.endif
 	out	(0x99), a
 	ld	a, #0x80 + 19
 	out	(0x99), a
-	jr	90$
+	jr	isr_ret
 55$:
 	; 飛ばす(声の長さは変えない)
 	ld	hl, (PTR)
@@ -291,10 +310,10 @@ isr:
 	ld	(LEFT), hl
 	ld	a, h
 	or	a, l
-	jr	nz, 50$
+	jr	nz, isr_adv
 	xor	a, a
 	ld	(ACTIVE), a
-	jr	40$
+	jr	isr_idle
 60$:
 	; その時刻まで待って出す
 	ld	de, (DUE)
@@ -307,20 +326,95 @@ isr:
 	call	feed
 	ld	a, (ACTIVE)
 	or	a, a
-	jp	nz, 50$
-40$:
+	jp	nz, isr_adv
+isr_idle:
 	; 鳴っていない: 基準の行を張る
 	ld	a, #ALINE
 	out	(0x99), a
 	ld	a, #0x80 + 19
 	out	(0x99), a
-90$:
+isr_ret:
 	pop	hl
 	pop	de
 	pop	bc
 	pop	af
 	ei
 	reti
+
+; 詰めた割込み(OPT = 1)。ふつうの場合(次の行が 3〜234)だけを、関数を呼ばずに 1 本の流れで処理する:
+;   出す → 位置と残りを進める → 次の行(切り上げ)を張る → 予定の時刻を進める。
+;   基準の行・鳴り終わり・割込みが来ない行・フレームの境目は、遅い道(isr)へ回す。遅れの判定はしない
+;   (割込みを止める区間があると外す。ゲームでは、止める区間を短くしてから使う)
+isr_opt:
+	push	af
+	push	hl
+	in	a, (0x99)		; S#1: FH を落とす
+	ld	a, (ACTIVE)
+	or	a, a
+	jr	z, 9$			; 基準の行 → 遅い道
+	ld	hl, (PTR)
+	ld	a, (hl)
+	out	(0xA4), a
+	inc	hl
+	ld	(PTR), hl
+	ld	hl, (LEFT)
+	dec	hl
+	ld	(LEFT), hl
+	ld	a, h
+	or	a, l
+	jr	z, 8$			; 鳴り終わった
+	push	de
+	ld	hl, (DLINE)
+	ld	de, #STEP
+	add	hl, de
+	ex	de, hl			; DE = 次の行
+	ld	hl, #-((GAPLINE - 1) * 128 + 1)
+	add	hl, de
+	jr	c, 7$			; 割込みが来ない行かフレームの境目 → 遅い道
+	ld	(DLINE), de
+	ld	hl, #127
+	add	hl, de
+	add	hl, hl
+	ld	a, h			; 張る行(切り上げ)
+	out	(0x99), a
+	ld	a, #0x80 + 19
+	out	(0x99), a
+	ld	hl, (DUE)
+	ld	de, #PERIOD
+	add	hl, de
+	ld	(DUE), hl
+	pop	de
+	pop	hl
+	pop	af
+	ei
+	reti
+7$:
+	; 遅い道へ(積む順を isr と同じ af, bc, de, hl にそろえる)。行と時刻はまだ進めていない
+	pop	de
+	pop	hl
+	push	bc
+	push	de
+	push	hl
+	jp	isr_adv
+8$:
+	xor	a, a
+	ld	(ACTIVE), a
+	ld	a, #0x80
+	out	(0xA4), a
+	ld	a, #ALINE
+	out	(0x99), a
+	ld	a, #0x80 + 19
+	out	(0x99), a
+	pop	hl
+	pop	af
+	ei
+	reti
+9$:
+	pop	hl
+	push	bc
+	push	de
+	push	hl
+	jp	isr_s
 
 ; HL = DLINE の行の時刻 = TA + D / 8 + D / 512(D = DLINE - 2 行、9.7。1 行 = 16.25 カウント = 128 × (1/8 + 1/512))。
 ;   D は 0〜33,000 ほど(符号つき 16bit を超える)か、負(次のフレームの 0〜1 行)。正なら符号なし、負なら符号つきでずらす
