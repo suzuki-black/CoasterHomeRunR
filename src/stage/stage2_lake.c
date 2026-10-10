@@ -106,6 +106,7 @@ static const Event lake_events[] = {
     { AT(118, EV_SPAWN),    ET_CRATE, 20, -10 },
     { AT(134, EV_SPAWN),    ET_E04, 24, 36 },
     { AT(134, EV_SPAWN),    ET_E04, 27, -36 },
+    { AT(134, EV_SPAWN),    ET_MISBOX, 20, 10 },   /* 誘導弾の箱(湖の主の前) */
     /* ---- 湖の主: 後ろから追ってくる(撃破までスクリプトは止まる) ---- */
     { AT(146, EV_DIR),      DIR_BACK, 0, 0 },     /* 湖の主は後ろから */
     { AT(146, EV_TEXT),     T_WARNING, 0, 0 },

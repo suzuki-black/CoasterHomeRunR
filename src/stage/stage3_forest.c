@@ -107,6 +107,7 @@ static const Event forest_events[] = {
     { S(34),   EV_SPAWN, ET_E03,      25,  10 },
     /* ---- 森の番人(撃破までスクリプトは止まる) ---- */
     { S(35.5),  EV_SPAWN, ET_E03,      22, -10 },
+    { S(36),   EV_SPAWN, ET_MISBOX,   18,  10 },   /* 誘導弾の箱(森の番人の前) */
     { S(36.5),  EV_SPAWN, ET_E05,      20,   8 },
     { S(38),   EV_TEXT,  T_WARNING,   0,   0 },
     { S(38),   EV_SPEED, 6,           0,   0 },

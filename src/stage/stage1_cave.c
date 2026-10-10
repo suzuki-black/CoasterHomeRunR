@@ -162,6 +162,7 @@ static const Event cave_events[] = {
     { AT(222, EV_SPAWN),                ET_E01, 24, 10 },
     { AT(232, EV_SPAWN),                ET_E01, 22, -10 },
     { AT(232, EV_SPAWN),                ET_E01, 24, 10 },
+    { AT(236, EV_SPAWN),                ET_MISBOX, 18, 10 },   /* 誘導弾の箱(中ボスの前) */
     /* ---- 中ボス: 大猿人の親方(撃破までスクリプトは止まる) ---- */
     { AT(242, EV_TEXT),                 T_WARNING, 0, 0 },
     { AT(242, EV_SPEED),                6, 0, 0 },
@@ -283,6 +284,7 @@ static const Event cave_events[] = {
     { AT(598, EV_DIR),                  DIR_FRONT, 0, 0 },
     { AT(598, EV_SPAWN),                ET_E01, 22, -10 },
     { AT(598, EV_SPAWN),                ET_E01, 24, 10 },
+    { AT(604, EV_SPAWN),                ET_MISBOX, 18, -10 },  /* 誘導弾の箱(大ボスの前) */
     /* ---- 大ボス: 遊園地の用心棒(岩を投げ、ときどき突進)。撃破後はクリアして坑道の入口へ ---- */
     { AT(610, EV_TEXT),                 T_WARNING, 0, 0 },
     { AT(610, EV_SPEED),                6, 0, 0 },

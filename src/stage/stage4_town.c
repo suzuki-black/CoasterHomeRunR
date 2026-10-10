@@ -80,6 +80,7 @@ static const Event town_events[] = {
     { S(13),   EV_SPAWN, ET_E04,      26,  22 },
     /* ---- 後ろから: コウモリ人・魔法使い・追ってくる猿人 ---- */
     { S(14.5),  EV_SPAWN, ET_E03,      22,  10 },
+    { S(14.5), EV_SPAWN, ET_MISBOX,   18, -10 },   /* 誘導弾の箱(山車の前。山車は後ろから来るので、振り向く前に) */
     { S(16),   EV_DIR,   DIR_BACK,    0,   0 },
     { S(16.5), EV_SPAWN, ET_E02,     -14,   6 },
     { S(16.5), EV_SPAWN, ET_E05,     -12,  -6 },

@@ -105,6 +105,7 @@ static const Event home_events[] = {
     { S(4),    EV_SPAWN, ET_E01,      22,  10 },
     { S(4),    EV_SPAWN, ET_E03,      24, -10 },
     { S(6),    EV_SPAWN, ET_E05,      20,   8 },
+    { S(6),    EV_SPAWN, ET_MISBOX,   18, -10 },   /* 誘導弾の箱(亜人の王の前) */
     { S(7),    EV_SPAWN, ET_MEDKIT,   16,   0 },
     /* ---- 亜人の王 ---- */
     { S(9),    EV_TEXT,  T_WARNING,   0,   0 },
