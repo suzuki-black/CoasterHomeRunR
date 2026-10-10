@@ -152,10 +152,15 @@ XF_CH	= 36			; 組 1 つの比べるコードのバイト数
 XF_STUB	= 0x9C00
 XF_ST	= 34			; 後始末 1 つのバイト数(192 個で 0x9C00-0xB57F)
 XF_LIST	= 0xC700		; 変わった組の番号の表(最大 192。0xC700-0xC7BF)
+XP_EVERY = 8			; 声を鳴らしている間、この組ごとに区切って割込みを受ける(1 回 約 0.09ms。16 組では約 3 行遅れることがあった)
+XP_NBRK	= XF_NCH / XP_EVERY - 1	; 区切りの数(8, 16, … 184 組目の頭。23 か所)
 
 	.area	_DATA
 xp_sp:		.ds	2	; 比べる間の SP の退避
 pp_s:		.ds	1	; いまの区間の最初の組
+xp_bsp:		.ds	2	; 区切りで割込みを受ける間の、比べる側の SP(描画バッファの中)
+xp_bp:		.ds	2	; 次の区切りの表の位置
+xp_tab:		.ds	XP_NBRK * 5	; 区切りごとに(組の頭の番地 2 バイト、書き換える前の 3 バイト)
 	.area	_CODE
 
 ; xfer_prep: A = ページ → 写しと比べて XF_CODE に転送のコードを書き、写しを新しくする。
@@ -193,6 +198,9 @@ _xfer_prep::
 	jp	z, xp_new
 	; ---- 比べる(IX = 変わった組の番号の書き先)
 	ld	ix, #XF_LIST
+	ld	a, (_pcm_mode)
+	or	a, a
+	call	nz, xp_arm		; 声を鳴らしている間は、比べる途中で割込みを受ける(pcm.s の走査線割込みが遅れないように)
 	ld	(xp_sp), sp
 	ld	a, (_g_buf_hi)
 	ld	h, a
@@ -201,6 +209,77 @@ _xfer_prep::
 	ld	sp, hl
 	or	a, a
 	jp	XF_PROG
+
+; 比べるコードの、8 組ごとの組の頭(23 か所)の 3 バイトを「jp xp_brk」に書き換え、元の 3 バイトを xp_tab に覚える。
+;   比べる間は割込みを止めて SP を描画バッファに向けるので、そのままでは割込みを受けられない(割込みが戻り番地をバッファに積む)。
+;   声を鳴らしている間、比べるのに約 2.2ms 割込みを止めると、その間のサンプルが出せなかった
+xp_arm:
+	ld	hl, #xp_tab
+	ld	(xp_bp), hl
+	ld	de, #XF_PROG + XP_EVERY * XF_CH
+	ld	b, #XP_NBRK
+1$:
+	ld	(hl), e
+	inc	hl
+	ld	(hl), d
+	inc	hl
+	ld	a, (de)
+	ld	(hl), a
+	inc	hl
+	ld	a, #0xC3		; jp xp_brk
+	ld	(de), a
+	inc	de
+	ld	a, (de)
+	ld	(hl), a
+	inc	hl
+	ld	a, #<xp_brk
+	ld	(de), a
+	inc	de
+	ld	a, (de)
+	ld	(hl), a
+	inc	hl
+	ld	a, #>xp_brk
+	ld	(de), a
+	push	hl
+	ld	hl, #XP_EVERY * XF_CH - 2
+	add	hl, de
+	ex	de, hl			; 次の区切りの組の頭
+	pop	hl
+	djnz	1$
+	ret
+
+; 区切り(比べるコードの組の頭から飛んでくる。割込みは止まっていて、SP はその組の頭を指す。生きているのは IX だけ)。
+;   ふつうのスタックに戻して一瞬だけ割込みを受け、書き換えた 3 バイトを戻して、その組の頭から続ける。
+;   スタックを使わない(SP は描画バッファの中)
+xp_brk:
+	ld	(xp_bsp), sp
+	ld	sp, (xp_sp)
+	ei
+	nop				; ここで割込みを受ける(EI の次の命令のあと)
+	di
+	ld	hl, (xp_bp)
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	inc	hl			; DE = その組の頭
+	ld	a, (hl)
+	ld	(de), a
+	inc	hl
+	inc	de
+	ld	a, (hl)
+	ld	(de), a
+	inc	hl
+	inc	de
+	ld	a, (hl)
+	ld	(de), a
+	inc	hl
+	ld	(xp_bp), hl
+	dec	de
+	dec	de
+	ex	de, hl
+	ld	sp, (xp_bsp)
+	or	a, a
+	jp	(hl)
 
 ; 比べ終わった(比べるコードの最後の jp): 変わった組の番号の並びから区間を作り、転送のコードを書く
 ;   HL = コードの書き先、DE = 番号の並び、B = 残りの数、C = いまの区間の最後の組

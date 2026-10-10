@@ -29,7 +29,7 @@ STEP	= 504			; 1 サンプルの行数(9.7)= 3.9375 行
 PERIOD	= 64			; 1 サンプルのカウント(システムタイマ 3.911µs × 64 = 250µs)
 FIRSTLINE = 3			; フレームの最初のサンプルの行
 TICKLINE = 234			; 合図の行(割込みが来る最後の行)
-LATE	= 40			; これ以上(カウント、約 2.5 行)遅れて入ったら張り直す
+LATE	= 24			; これ以上(カウント、約 1.5 行)遅れて入ったら張り直す(40 では、2 行ほど遅れたまま次の行を張り、張り終える前に過ぎることがあった)
 
 	.area	_DATA
 _pcm_mode::	.ds	1	; 0 = ふだん(垂直帰線の割込み) / 1 = 走査線割込みで鳴らしている
@@ -162,8 +162,11 @@ pcm_now::
 	jr	nz, pcm_now
 	ret
 
-; A = 行 → サンプルの行として張る
+; A = 行 → サンプルの行として張る。234 より後の行(割込みが来ない)は張らず、合図の行を張る
+;   (来ない行を張ると、声の形のまま割込みが二度と来ず、毎フレームの処理も止まって固まった)
 pcm_set:
+	cp	a, #TICKLINE + 1
+	jr	nc, pcm_set_tick
 	ld	(pcm_arm), a
 	out	(0x99), a
 	ld	a, #0x80 + 19
@@ -202,8 +205,16 @@ pcm_tick_do:
 	add	hl, de
 	ld	a, #FIRSTLINE
 	jr	nc, 2$
+	ld	a, h
+	or	a, a
+	ld	a, #FIRSTLINE
+	jr	nz, 2$			; 1 フレーム以上遅れた(見積もりが壊れている): 3 行目から
 	ld	a, l
 	add	a, #2
+	cp	a, #TICKLINE - 4
+	jr	c, 3$
+	ld	a, #FIRSTLINE
+3$:
 	cp	a, #FIRSTLINE
 	jr	nc, 2$
 	ld	a, #FIRSTLINE
