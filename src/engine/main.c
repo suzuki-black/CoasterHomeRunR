@@ -7,6 +7,7 @@
 #include "game.h"
 #include "hud.h"
 #include "sound.h"
+#include "pcm.h"
 
 u8 g_spr_attr[17];
 u8 g_perf_ticks;
@@ -75,6 +76,7 @@ void present(void)
 
 static void vdp_init(void)
 {
+    pcm_stop();                     /* VDP のレジスタを書き直すので、声(走査線割込み)を止めてふだんの割込みに戻す */
     static const u8 regs[] = {
         1, 0xA3,        /* 表示オフ、16K、M2(マルチカラー)、16×16、拡大 */
         0, 0x00,

@@ -11,6 +11,7 @@
 #include "sound.h"
 #include "trolley.h"
 #include "fx.h"
+#include "pcm.h"
 
 #define M(x)    ((u16)((x) * 64))               /* m → s 単位 */
 #define MPS(x)  ((i16)((x) * 546))              /* m/秒 → v 単位(30fps) */
@@ -404,20 +405,16 @@ static void kill_enemy(Enemy *e)
  * --------------------------------------------------------------------------- */
 /* 照準ブロックに重なる矩形のうち最も手前の、撃てる敵の番号(いなければ 0xFF)。*hi = その矩形の hits の番号。
  * トロッコの縁に隠れた所は撃てない。照準の色(hud)と射撃(fire)で同じ判定を使う */
+u8 aim_scan(u8 bx, u8 by);   /* aimhit.s: 照準ブロックに重なる最も手前の矩形の hits の番号(無ければ 0xFF) */
 static u8 aim_target(u8 *hi)
 {
     u8 bx = (u8)(aim_x >> 2), by = (u8)(aim_y >> 2);
-    u8 i, best = 0xFF;
-    i16 bz = 32767;
+    u8 i, best;
     if (trolley_covers(bx, by)) return 0xFF;
-    for (i = 0; i < n_hits; i++) {
-        HitRect *h = &hits[i];
-        if (bx >= h->x0 && bx < h->x1 && by >= h->y0 && by < h->y1 && h->z < bz) {
-            bz = h->z;
-            best = h->id;
-            *hi = i;
-        }
-    }
+    i = aim_scan(bx, by);
+    if (i == 0xFF) return 0xFF;
+    *hi = i;
+    best = hits[i].id;
     if (best >= MAX_EN) return 0xFF;
     if (en[best].type == ET_NONE || en[best].state == ST_DEAD) return 0xFF;
     return best;
@@ -929,6 +926,7 @@ u8 game_run(const Stage *st, u8 first)
             if (en[i].type != ET_NONE) update_enemy(&en[i]);
             }
         g_perf_logic[3] = timer_read() - tl;
+        if (g_dbg_fire) { g_dbg_fire = 0; pcm_fire(voice_fire, voice_fire_len); }   /* (調べ用)「FIRE」を鳴らす */
         render();
         present();
         if (!life) { over = 1; break; }

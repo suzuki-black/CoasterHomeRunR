@@ -23,6 +23,7 @@
 	.globl	_sound_tick
 	.globl	_g_spr_attr
 	.globl	_g_seg2
+	.globl	_pcm_mode, _pcm_req, _pcm_r0, _pcm_isr, _pcm_begin, _pcm_stop
 
 ; ページ2(0x8000-0xBFFF)のマッパーのセグメント(仕様書 7.3 のオーバーレイ)
 SEG_GAME = 1			; ゲームモジュール(ステージごとに読み込む。BGM のデータもここ)
@@ -99,7 +100,7 @@ _sys_install_isr::
 	ei
 	ret
 
-htimi:
+htimi::
 	ld	hl, (_g_tick)
 	inc	hl
 	ld	(_g_tick), hl
@@ -205,6 +206,9 @@ _sys_page0_ram::
 ;   裏レジスタは使わない(描画側が exx を使うため)
 isr0:
 	push	af
+	ld	a, (_pcm_mode)
+	or	a, a
+	jp	nz, _pcm_isr		; 声を鳴らしている間は走査線割込み(pcm.s)
 	in	a, (0x99)
 	rlca
 	jr	nc, 9$
@@ -214,6 +218,9 @@ isr0:
 	push	ix
 	push	iy
 	call	htimi
+	ld	a, (_pcm_req)
+	or	a, a
+	call	nz, _pcm_begin		; 声を頼まれていれば、ここから走査線割込みで鳴らす形に切り替える
 	pop	iy
 	pop	ix
 	pop	hl
@@ -335,12 +342,30 @@ _psg_write::
 ; ---------------------------------------------------------------------------
 ; turbo R システムタイマ(E6h/E7h、約 3.911µs/カウント)。処理時間の計測用
 ; ---------------------------------------------------------------------------
+;   タイマ自体は 0 に戻さない(書き込むと 0 に戻るが、声の割込み(pcm.s)が同じタイマで時刻の差を取るので、
+;   毎フレーム 0 に戻すと遅れを計算できなかった)。今の値を基準として覚え、timer_read は基準からの差を返す
+	.area	_DATA
+tmr_base:	.ds	2
+	.area	_CODE
 _timer_reset::
-	out	(0xE6), a
+	call	timer_raw
+	ld	(tmr_base), de
 	ret
 
-; u16 timer_read(void)
+; u16 timer_read(void) — timer_reset からのカウント
 _timer_read::
+	call	timer_raw
+	push	hl
+	ld	hl, (tmr_base)
+	ex	de, hl
+	or	a, a
+	sbc	hl, de
+	ex	de, hl
+	pop	hl
+	ret
+
+; DE = システムタイマの値
+timer_raw:
 	in	a, (0xE6)
 	ld	e, a
 	in	a, (0xE7)
@@ -381,6 +406,9 @@ _sys_install_loader::
 ; void mod_load(u8 bank)   A = 最初のバンク。bank と bank+1(16KB)を、いまページ2に出ているセグメントの 0x8000- へ写し、
 ;   モジュールの変数(0xBC00-0xBFFF)を 0 で埋める
 _mod_load::
+	push	af
+	call	_pcm_stop		; ゲームモジュール(声のデータもここ)を上書きし、ページ0を BIOS に戻すので、声を止める
+	pop	af
 	ld	hl, #0x4000
 	ld	(RL_LEN), hl
 	ld	de, #MOD_ADDR
@@ -395,6 +423,9 @@ _mod_load::
 ; void bios_font(u8 *dst) — BIOS のフォント(CGTABL の指す 2KB。ひらがなを含む)を dst(ページ2・3)へ写す。
 ;   エンディングの SCREEN 1 で使う。写す間だけページ0を BIOS に戻す
 _bios_font::
+	push	hl
+	call	_pcm_stop		; ページ0を BIOS に戻すので、声を止める
+	pop	hl
 	ex	de, hl
 	di
 	P0_TO_BIOS
@@ -486,7 +517,7 @@ _sys_z80x_init::
 	ld	(_g_z80x), a
 	ret
 
-; IE0 を止める / 戻す(割り込みを止めた状態で呼ぶ)
+; IE0 を止める / 戻す(割り込みを止めた状態で呼ぶ)。声を鳴らしている間(pcm.s)は CPU を切り替えないので、ここには来ない
 z80x_ie_off:
 	ld	a, (_g_vdp_r1)
 	and	a, #0xDF
