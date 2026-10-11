@@ -792,21 +792,11 @@ static void alt_mkn(const RailPt *p, const i16 *lat, u8 n, AltP *o)
     alt_mk_a(p, o);
 }
 
-/* 四角形 p0→p1→p2→p3。4 点とも手前なら投影済みの座標で塗る(手前で切る poly3 と同じ順・同じ値になる) */
-static void alt_q(const AltP *p0, const AltP *p1, const AltP *p2, const AltP *p3, u8 color)
-{
-    if (p0->in && p1->in && p2->in && p3->in) {
-        scr[0] = p0->s[0]; scr[1] = p0->s[1];
-        scr[2] = p1->s[0]; scr[3] = p1->s[1];
-        scr[4] = p2->s[0]; scr[5] = p2->s[1];
-        scr[6] = p3->s[0]; scr[7] = p3->s[1];
-        raster(4, color);
-    } else {
-        V3 q[4];
-        q[0] = p0->v; q[1] = p1->v; q[2] = p2->v; q[3] = p3->v;
-        poly3(q, 4, color);
-    }
-}
+/* 四角形 g_aq[0]→[1]→[2]→[3] を色 A で: 4 点とも手前なら投影済みの座標で塗り、そうでなければ頂点のポインタのまま poly3p で
+ * 切って塗る(手前で切る poly3 と同じ順・同じ値になる)。aimhit.s の alt_qa(C で書くと 1 回 約 480 サイクルかかっていた) */
+extern const AltP *g_aq[4];
+void alt_qa(u8 color);
+#define alt_q(p0, p1, p2, p3, color) do { g_aq[0] = (p0); g_aq[1] = (p1); g_aq[2] = (p2); g_aq[3] = (p3); alt_qa(color); } while (0)
 
 /* 枕木の端(±180)とレールの両端(±128、±102)。区間ごとに、手前の点(a)の 6 つと枕木の奥の端 2 つだけを新しく求め、
  * 奥の点(b)のレールの 4 つは前の区間で求めたものを使う(1 フレーム 132 点 → 約 86 点)。

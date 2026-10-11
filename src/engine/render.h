@@ -22,6 +22,7 @@ void render_set_camera(i16 x, i16 y, i16 z, u16 yaw, i8 pitch);
 void xform(i16 wx, i16 wy, i16 wz, V3 *o);
 /* 凸多角形(n ≤ 6)をカメラ空間で描く。ニアクリップ→投影→塗り */
 void poly3(const V3 *v, u8 n, u8 color);
+void poly3p(const V3 *const *pv, u8 n, u8 color);   /* 同じで、頂点をポインタの並びで渡す(raster.s) */
 /* 画面座標(12.4)の矩形をクリップして g_rx.. に設定。空なら 0 */
 u8 rect_clip(i16 x0, i16 y0, i16 x1, i16 y1);
 

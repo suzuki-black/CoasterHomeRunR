@@ -2029,6 +2029,7 @@ _rquad_a::
 
 ; ---------------------------------------------------------------------------
 ; void poly3(const V3 *v, u8 n, u8 color)   HL = v、スタックに n・color(戻るときに捨てる)
+; void poly3p(const V3 *const *pv, u8 n, u8 color)   同じで、頂点をポインタの並びで渡す(分岐の線路: 頂点を写さずに済む)
 ;   ニアクリップ(Sutherland-Hodgman、z >= NEAR_Z を残す)して投影し、raster で塗る。
 ;   辺 a→b ごとに、a と b の片方だけが手前なら交点(a + (b - a) * (NEAR_Z - a.z) / (b.z - a.z)、muldiv)を、
 ;   b が手前なら b を出す。もと render.c の C 版と同じ計算・同じ順(C だと 1 回 約 3,100 サイクルかかっていた)
@@ -2038,6 +2039,8 @@ P3_NEAR	= 128			; NEAR_Z(render.h)
 
 	.area	_DATA
 p3_cv:	.ds	6 * 10		; 切った後の頂点(V3)
+p3_pl:	.ds	2 * 8		; poly3 の頂点のポインタの並び
+p3_pp:	.ds	2		; 次の終点のポインタの位置
 p3_a:	.ds	2		; 辺の始点
 p3_b:	.ds	2		; 辺の終点
 p3_o:	.ds	2		; 書き先
@@ -2053,22 +2056,45 @@ _poly3::
 	pop	de
 	pop	bc			; C = n、B = color
 	push	de
+	; 頂点のポインタの並びを作る
+	ld	de, #p3_pl
+	push	bc
+	ld	b, c
+21$:
+	ld	a, l
+	ld	(de), a
+	inc	de
+	ld	a, h
+	ld	(de), a
+	inc	de
+	push	bc
+	ld	bc, #6
+	add	hl, bc
+	pop	bc
+	djnz	21$
+	pop	bc
+	ld	hl, #p3_pl
+	jr	p3_core
+_poly3p::
+	pop	de
+	pop	bc			; C = n、B = color
+	push	de
+p3_core:
 	ld	a, b
 	ld	(p3_col), a
 	ld	a, c
 	ld	(p3_k), a
-	ld	(p3_b), hl		; b = v
+	ld	(p3_pp), hl		; 終点は並びの頭から
 	dec	a
+	add	a, a
 	ld	e, a
 	ld	d, #0
-	ex	de, hl			; HL = n - 1、DE = v
-	ld	c, l
-	ld	b, h
-	add	hl, hl
-	add	hl, bc
-	add	hl, hl
 	add	hl, de
-	ld	(p3_a), hl		; a = &v[n - 1]
+	ld	a, (hl)
+	inc	hl
+	ld	h, (hl)
+	ld	l, a
+	ld	(p3_a), hl		; a = 並びの最後
 	ld	de, #p3_cv
 	ld	(p3_o), de
 	xor	a, a
@@ -2076,7 +2102,12 @@ _poly3::
 	call	p3_inz
 	ld	(p3_in), a
 1$:
-	ld	hl, (p3_b)
+	ld	hl, (p3_pp)
+	ld	a, (hl)
+	inc	hl
+	ld	h, (hl)
+	ld	l, a
+	ld	(p3_b), hl
 	call	p3_inz
 	ld	c, a			; C = b が手前か
 	ld	a, (p3_in)
@@ -2139,9 +2170,10 @@ _poly3::
 6$:
 	ld	hl, (p3_b)
 	ld	(p3_a), hl
-	ld	de, #6
-	add	hl, de
-	ld	(p3_b), hl
+	ld	hl, (p3_pp)
+	inc	hl
+	inc	hl
+	ld	(p3_pp), hl
 	ld	hl, #p3_k
 	dec	(hl)
 	jp	nz, 1$
