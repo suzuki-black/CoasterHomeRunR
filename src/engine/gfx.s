@@ -362,8 +362,11 @@ _pset::
 _g_bt_src::	.ds	2
 _g_bt_x::	.ds	1
 _g_bt_y::	.ds	1
+bt_odd:		.ds	1	; 1 = 2 ブロックずつ写した後に 1 ブロック残る
 
 	.area	_CODE
+;   描き先は 1 バイトに横 2 ブロック(上位 = 偶数の列)なので、偶数の列からは 2 ブロックずつまとめて写す
+;   (両方不透明ならそのまま書き、片方だけなら半分だけ、両方透過なら書かない)。振り向き中の乗り物で使う
 _blit_trans::
 	or	a, a
 	ret	z
@@ -376,44 +379,87 @@ _blit_trans::
 	ex	de, hl			; DE = 描き先、L = 残り
 	ld	c, l
 	ld	hl, (_g_bt_src)
-	; B = 列(偶奇を見る)、C = 残り、HL = 元、DE = 描き先
-1$:
+	; 奇数の列から始まるなら、1 ブロックだけ下位に写して次のバイトへ
+	bit	0, b
+	jr	z, 1$
 	ld	a, (hl)
 	inc	hl
 	and	a, #0x0F
-	jr	z, 3$
-	bit	0, b
-	jr	nz, 2$
-	add	a, a
-	add	a, a
-	add	a, a
-	add	a, a
-	push	bc
-	ld	c, a
-	ld	a, (de)
-	and	a, #0x0F
-	or	a, c
-	ld	(de), a
-	pop	bc
-	jr	3$
-2$:
-	push	bc
-	ld	c, a
+	jr	z, 2$
+	ld	b, a
 	ld	a, (de)
 	and	a, #0xF0
-	or	a, c
+	or	a, b
 	ld	(de), a
-	pop	bc
-3$:
-	bit	0, b
-	jr	z, 4$
-	ld	a, e			; 奇数の列を描いたら次のバイトへ(+8)
+2$:
+	ld	a, e
 	add	a, #8
 	ld	e, a
-4$:
-	inc	b
 	dec	c
-	jr	nz, 1$
+	ret	z
+1$:
+	; C = 2 ブロックの組の数、bt_odd = 残りの 1 ブロック
+	ld	a, c
+	and	a, #1
+	ld	(bt_odd), a
+	srl	c
+	jr	z, 8$
+3$:
+	ld	a, (hl)			; 左(上位)
+	inc	hl
+	add	a, a
+	add	a, a
+	add	a, a
+	add	a, a
+	ld	b, a			; B = 左 << 4
+	ld	a, (hl)			; 右(下位)
+	inc	hl
+	and	a, #0x0F
+	jr	z, 5$
+	or	a, b
+	inc	b
+	dec	b
+	jr	z, 4$
+	ld	(de), a			; 両方不透明
+	jr	7$
+4$:
+	ld	b, a			; 右だけ
+	ld	a, (de)
+	and	a, #0xF0
+	or	a, b
+	ld	(de), a
+	jr	7$
+5$:
+	inc	b
+	dec	b
+	jr	z, 7$			; 両方透過
+	ld	a, (de)			; 左だけ
+	and	a, #0x0F
+	or	a, b
+	ld	(de), a
+7$:
+	ld	a, e
+	add	a, #8
+	ld	e, a
+	dec	c
+	jr	nz, 3$
+8$:
+	; 残りの 1 ブロック(偶数の列 = 上位)
+	ld	a, (bt_odd)
+	or	a, a
+	ret	z
+	ld	a, (hl)
+	and	a, #0x0F
+	ret	z
+	add	a, a
+	add	a, a
+	add	a, a
+	add	a, a
+	ld	b, a
+	ld	a, (de)
+	and	a, #0x0F
+	or	a, b
+	ld	(de), a
 	ret
 
 ; ---------------------------------------------------------------------------
