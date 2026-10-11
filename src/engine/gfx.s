@@ -797,3 +797,146 @@ glx7:
 	ld	l, a
 	inc	e
 	ret
+
+; ---------------------------------------------------------------------------
+; void char_big(void) — 倍率 g_cb_s の字形 g_cb_g(3 × 5、行ごとに 3bit)を (g_cb_x, g_cb_y) に g_color で描く(hud.c の char_draw)
+;   列ごと(左から)に、縦につながった点(上から)を 1 つの長方形にして、画面(64 × 48)に切り詰めて塗る。
+;   切り詰めは、もと hud.c の box と同じ(座標は符号つき 8bit、足し算は 8bit で桁あふれ)
+; ---------------------------------------------------------------------------
+	.area	_DATA
+_g_cb_g::	.ds	2
+_g_cb_x::	.ds	1
+_g_cb_y::	.ds	1
+_g_cb_s::	.ds	1
+cb_cx:		.ds	1	; 今の列の左
+cb_bits:	.ds	1	; 今の列のビット(4 → 2 → 1)
+
+	.area	_CODE
+_char_big::
+	ld	a, (_g_cb_x)
+	ld	(cb_cx), a
+	ld	a, #4
+	ld	(cb_bits), a
+1$:
+	ld	hl, (_g_cb_g)
+	ld	c, #0			; C = 行
+2$:
+	ld	a, c
+	cp	a, #5
+	jr	nc, 8$
+	ld	a, (cb_bits)
+	and	a, (hl)
+	jr	nz, 3$
+	inc	hl
+	inc	c
+	jr	2$
+3$:
+	ld	b, c			; B = つながりの始まりの行
+4$:
+	inc	hl
+	inc	c
+	ld	a, c
+	cp	a, #5
+	jr	nc, 5$
+	ld	a, (cb_bits)
+	and	a, (hl)
+	jr	nz, 4$
+5$:
+	push	hl
+	push	bc
+	call	cb_box
+	pop	bc
+	pop	hl
+	jr	2$
+8$:
+	ld	a, (_g_cb_s)
+	ld	b, a
+	ld	a, (cb_cx)
+	add	a, b
+	ld	(cb_cx), a
+	ld	a, (cb_bits)
+	srl	a
+	ld	(cb_bits), a
+	jr	nz, 1$
+	ret
+
+; cb_box: B = 始まりの行、C = 終わりの行(含まない)→ 列 cb_cx、幅 g_cb_s の長方形を切り詰めて塗る
+cb_box:
+	ld	a, (_g_cb_s)
+	ld	e, a			; E = 倍率
+	ld	a, c
+	sub	a, b
+	ld	d, a			; D = 行数
+	xor	a, a
+	inc	b
+	jr	12$
+11$:
+	add	a, e
+12$:
+	djnz	11$			; A = 始まりの行 × 倍率
+	ld	hl, #_g_cb_y
+	add	a, (hl)
+	ld	l, a			; L = y
+	xor	a, a
+	ld	b, d
+	inc	b
+	jr	14$
+13$:
+	add	a, e
+14$:
+	djnz	13$			; A = 高さ
+	add	a, l
+	ld	d, a			; D = y1
+	ld	a, (cb_cx)
+	ld	c, a			; C = x
+	add	a, e
+	ld	b, a			; B = x1
+	; x < 0 → 0、y < 0 → 0、x1 > 64 → 64、y1 > 48 → 48(符号つき: 上位ビットを反転して符号なしで比べる)
+	bit	7, c
+	jr	z, 21$
+	ld	c, #0
+21$:
+	bit	7, l
+	jr	z, 22$
+	ld	l, #0
+22$:
+	ld	a, b
+	xor	a, #0x80
+	cp	a, #0xC1		; x1 > 64
+	jr	c, 23$
+	ld	b, #64
+23$:
+	ld	a, d
+	xor	a, #0x80
+	cp	a, #0xB1		; y1 > 48
+	jr	c, 24$
+	ld	d, #48
+24$:
+	; x >= x1 か y >= y1 なら塗らない
+	ld	a, c
+	xor	a, #0x80
+	ld	h, a
+	ld	a, b
+	xor	a, #0x80
+	cp	a, h
+	ret	c
+	ret	z
+	ld	a, l
+	xor	a, #0x80
+	ld	h, a
+	ld	a, d
+	xor	a, #0x80
+	cp	a, h
+	ret	c
+	ret	z
+	ld	a, c
+	ld	(_g_rx), a
+	ld	a, b
+	sub	a, c
+	ld	(_g_rw), a
+	ld	a, l
+	ld	(_g_ry), a
+	ld	a, d
+	sub	a, l
+	ld	(_g_rh), a
+	jp	_rect_fill

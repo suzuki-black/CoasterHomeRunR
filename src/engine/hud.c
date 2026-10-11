@@ -1,24 +1,15 @@
 /* hud.c — 描画バッファへの文字・ゲージの上書き */
 #include "hud.h"
 
-/* 横 w × 縦 h ブロックの長方形を、画面(64 × 48)に切り詰めて塗る */
-static void box(i8 x, i8 y, u8 w, u8 h, u8 color)
-{
-    i8 x1 = x + (i8)w, y1 = y + (i8)h;
-    if (x < 0) x = 0;
-    if (y < 0) y = 0;
-    if (x1 > 64) x1 = 64;
-    if (y1 > 48) y1 = 48;
-    if (x >= x1 || y >= y1) return;
-    g_rx = (u8)x; g_ry = (u8)y; g_rw = (u8)(x1 - x); g_rh = (u8)(y1 - y); g_color = color;
-    rect_fill();
-}
-
 void glyph1(const u8 *g);    /* gfx.s: 倍率 1 の字形を g_rx, g_ry に描く */
+extern const u8 *g_cb_g;     /* gfx.s の char_big: 字形・左上・倍率(色は g_color) */
+extern i8 g_cb_x, g_cb_y;
+extern u8 g_cb_s;
+void char_big(void);
 
 static void char_draw(i8 x, i8 y, char ch, u8 color, u8 scale)
 {
-    u8 n, r, bits, c;
+    u8 n;
     const u8 *g;
     if (ch < 0x20 || ch > 0x7F) return;
     n = font35_map[ch - 0x20];
@@ -29,15 +20,10 @@ static void char_draw(i8 x, i8 y, char ch, u8 color, u8 scale)
         glyph1(g);
         return;
     }
-    /* 拡大した字は、列ごとに縦につながった点を 1 つの長方形で塗る(点ごとに塗ると「WARNING!」で 1 フレーム十数 ms かかっていた) */
-    for (c = 0; c < 3; c++) {
-        bits = 4 >> c;
-        for (r = 0; r < 5; r++) {
-            u8 r0 = r;
-            while (r < 5 && (g[r] & bits)) r++;
-            if (r > r0) box(x + c * scale, y + r0 * scale, scale, (u8)((r - r0) * scale), color);
-        }
-    }
+    /* 拡大した字は、列ごとに縦につながった点を 1 つの長方形で塗る(点ごとに塗ると「WARNING!」で 1 フレーム十数 ms かかっていた)。
+     * 塗るのは gfx.s の char_big(C で書くと「WARNING!」で 1 フレーム約 3ms かかっていた) */
+    g_cb_g = g; g_cb_x = x; g_cb_y = y; g_cb_s = scale; g_color = color;
+    char_big();
 }
 
 void text_draw(i8 x, i8 y, const char *s, u8 color, u8 scale)
