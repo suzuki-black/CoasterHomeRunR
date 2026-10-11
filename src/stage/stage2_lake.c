@@ -77,14 +77,18 @@ static const u8 bgm_bass[] = {                           /* 8 分のオクター
 static const Event lake_events[] = {
     { S(0),    EV_DIR,   DIR_NONE,    0,   0 },
     { S(0),    EV_BGM,   1,           0,   0 },
-    /* ---- 坑道: 1 面から追ってきたコウモリ人 ---- */
-    { AT(2, EV_DIR),        DIR_BACK, 0, 0 },
-    { AT(4, EV_SPAWN),      ET_E02, -14, 6 },
-    { AT(4, EV_SPAWN),      ET_E02, -16, -6 },
-    /* ---- 地底湖 → 筏 ---- */
-    { AT(16, EV_SPAWN),     ET_E02, -14, -6 },
+    /* ---- 坑道 → 地底湖 → 筏: まずどんなステージかを見せる(湖が見えるまでは敵を出さない)。演出は少し大げさに ---- */
+    { AT(18, EV_FX),        SE_TRAIN, 3, 0 },     /* 湖が見えて、ガクンと速度を落とす */
+    { AT(18, EV_SPEED),     10, 0, 0 },           /* 2.5m/秒で湖を見せる */
     { AT(20, EV_TEXT),      T_LAKE, 0, 0 },
-    { AT(26, EV_SPAWN),     ET_E02, -15, 6 },
+    /* ---- 前からコウモリ人(1 面から追ってきた群れが、湖の上で回り込んでくる)。「A LAKE?!」の文字が消えたらすぐ ---- */
+    { AT(23, EV_DIR),       DIR_FRONT, 0, 0 },
+    { AT(23, EV_SPAWN),     ET_E02, 20, 6 },
+    { AT(23, EV_SPAWN),     ET_E02, 22, -6 },
+    { AT(24, EV_SPEED),     0, 0, 0 },
+    { AT(27, EV_SPAWN),     ET_E02, 20, -6 },
+    { AT(27, EV_SPAWN),     ET_E02, 22, 6 },
+    { AT(28, EV_FX),        SE_TRAIN, 6, 0 },     /* レールが途切れ、筏に乗り移る衝撃 */
     { AT(30, EV_TEXT),      T_RAFT, 0, 0 },
     /* ---- 岩棚の弓兵(前)と、水に浮いた木箱の救急箱 ---- */
     { AT(40, EV_DIR),       DIR_FRONT, 0, 0 },
