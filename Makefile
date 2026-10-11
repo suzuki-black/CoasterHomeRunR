@@ -73,7 +73,7 @@ HDRS = $(wildcard $(ENG)/*.h)
 
 ROM = $(BUILD)/TrolleyHomeRun.rom
 
-.PHONY: all fpsrom vdpbench run test flow slotcheck perf pcprof machine clean
+.PHONY: all fpsrom vdpbench run test flow slotcheck perf pcprof overdraw machine clean
 
 all: $(ROM)
 
@@ -211,6 +211,17 @@ pcprof: $(ROM)
 	TH_NOI=$(abspath $(BUILD)/engine.noi) TH_OUT=$(abspath $(RUNDIR)) PROF_SYMS=$(abspath $(BUILD)/prof_syms.txt) \
 	  timeout $(TIMEOUT) $(OPENMSX_ROM) -script $(abspath $(RUNDIR))/pcprof.tcl >/dev/null 2>&1 || true
 	@head -40 $(RUNDIR)/pcprof.txt
+
+# 重ね塗りの計測(tools/overdraw.tcl)。STAGE=3 のように面を選ぶ
+STAGE ?= 3
+overdraw: $(ROM)
+	@mkdir -p $(RUNDIR)
+	$(PYTHON) $(TOOLS)/prof_syms.py $(BUILD) $(BUILD)/prof_syms.txt
+	cp $(TOOLS)/overdraw.tcl $(RUNDIR)/
+	TH_NOI=$(abspath $(BUILD)/engine.noi) TH_OUT=$(abspath $(RUNDIR)) PROF_SYMS=$(abspath $(BUILD)/prof_syms.txt) \
+	  PROF_STAGE=$(STAGE) OD_FRAMES="60 900 20" ALT_DRAW=$$(awk '/DEF _alt_draw/ {print $$3}' $(BUILD)/game$(STAGE).noi) \
+	  timeout $(TIMEOUT) $(OPENMSX_ROM) -script $(abspath $(RUNDIR))/overdraw.tcl >/dev/null 2>&1 || true
+	@head -20 $(RUNDIR)/od.txt
 
 clean:
 	rm -rf $(BUILD)
