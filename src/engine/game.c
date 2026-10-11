@@ -780,10 +780,13 @@ static void trolley_update(void)
 /* 変換と投影を済ませた点(隣の区間・同じ区間の四角形どうしで使い回す)。in = 0 なら手前に無い(投影していない) */
 typedef struct { V3 v; i16 s[2]; u8 in; } AltP;
 
-/* 点を求めるのは geom.s の alt_mk_a: レールの点 p から、横位置の並び g_al_lat(g_al_n 個)の点を変換・投影して o に並べる */
+/* 点を求めるのは aimhit.s: alt_cen はレールの点の中心をカメラ空間へ、alt_mk_a は中心 g_al_cp(g_al_cp2 があれば
+ * そこへ 1/8 進んだ点)から横位置の並び g_al_lat(g_al_n 個)の点を求めて投影し、o に並べる(向きはレールの点 p のヨー) */
 extern const i16 *g_al_lat;
-extern u8 g_al_n;
+extern u8 g_al_n, g_al_dv;
 extern i16 g_al_fy;
+extern const V3 *g_al_cp, *g_al_cp2;
+void alt_cen(const RailPt *p, V3 *o);
 void alt_mk_a(const RailPt *p, AltP *o);
 static void alt_mkn(const RailPt *p, const i16 *lat, u8 n, AltP *o)
 {
@@ -809,42 +812,40 @@ void alt_qa(u8 color);
  * 分岐を過ぎた直後で 1 フレーム約 5ms 軽くなる。絵の違いは 1 枚あたり最大 2 ブロック) */
 #define ALT_TIE_Z 2048
 static const i16 ALT_LAT[6] = { -180, 180, -128, -102, 102, 128 };
-static const i16 alt_zero = 0;
 static AltP alt_p0[6], alt_p1[6];
 static u8 alt_side[ALT_N];
-static i16 alt_cz[ALT_N];          /* レールの点の中心のカメラ空間の z */
+static V3 alt_cv[ALT_N];           /* レールの点の中心(カメラ空間) */
 
 void alt_draw(void)
 {
     u8 i, sa, sb, bok;
     AltP *pa = alt_p0, *pb = alt_p1, *pt;
-    AltP mm[2], c;
+    AltP mm[2];
+    const RailPt *rp;
+    const V3 *cv;
     u16 f = rail_fork_m() << 6;
     if (!g_alt_n || cam_s + M(40) < f || cam_s > f + M(30)) return;
     g_al_fy = FLOOR_Y;
-    for (i = 0; i < g_alt_n; i++) {
-        alt_mkn(&g_alt[i], &alt_zero, 1, &c);
-        alt_cz[i] = c.v.z;
-        alt_side[i] = (c.v.z < -ALT_MARGIN) ? 1 : (c.v.x + c.v.z < -ALT_MARGIN) ? 2 : (c.v.x - c.v.z > ALT_MARGIN) ? 3 : 0;
+    g_al_dv = 0;                                     /* カメラが変わったので、横の向きを求め直させる */
+    for (i = 0, rp = g_alt, cv = alt_cv; i < g_alt_n; i++, rp++, cv++) {
+        alt_cen(rp, (V3 *)cv);
+        alt_side[i] = (cv->z < -ALT_MARGIN) ? 1 : (cv->x + cv->z < -ALT_MARGIN) ? 2 : (cv->x - cv->z > ALT_MARGIN) ? 3 : 0;
     }
     bok = 0;                                         /* pb(奥の点のレールの 4 つ)を求めてあるか */
-    for (i = g_alt_n - 1; i > 0; i--) {                /* 奥から */
-        const RailPt *a = &g_alt[i - 1], *b = &g_alt[i];
-        RailPt m;                                    /* 枕木: 区間の頭から 1/8 */
+    for (i = g_alt_n - 1, rp = &g_alt[i], cv = &alt_cv[i]; i > 0; i--, rp--, cv--) {   /* 奥から。区間は rp - 1 〜 rp */
         sa = alt_side[i - 1];
         sb = alt_side[i];
         if (sa && sa == sb) { bok = 0; continue; }     /* 区間ごと画面の外 */
-        if (!bok) alt_mkn(b, &ALT_LAT[2], 4, &pb[2]);
-        m.x = a->x + ((b->x - a->x) >> 3);
-        m.y = a->y + ((b->y - a->y) >> 3);
-        m.z = a->z + ((b->z - a->z) >> 3);
-        m.yaw = a->yaw;
-        if (alt_cz[i - 1] < ALT_TIE_Z) {
-            alt_mkn(a, ALT_LAT, 6, pa);
-            alt_mkn(&m, ALT_LAT, 2, mm);           /* 枕木の奥の端(-180、180) */
+        g_al_cp2 = 0;
+        if (!bok) { g_al_cp = cv; alt_mkn(rp, &ALT_LAT[2], 4, &pb[2]); }
+        g_al_cp = cv - 1;
+        if ((cv - 1)->z < ALT_TIE_Z) {
+            alt_mkn(rp - 1, ALT_LAT, 6, pa);
+            g_al_cp2 = cv;                           /* 枕木: 区間の頭から 1/8 の奥の端(-180、180) */
+            alt_mkn(rp - 1, ALT_LAT, 2, mm);
             alt_q(&pa[0], &pa[1], &mm[1], &mm[0], 9);
         } else {
-            alt_mkn(a, &ALT_LAT[2], 4, &pa[2]);    /* レールの 4 つだけ */
+            alt_mkn(rp - 1, &ALT_LAT[2], 4, &pa[2]);   /* レールの 4 つだけ */
         }
         alt_q(&pa[2], &pa[3], &pb[3], &pb[2], 10);
         alt_q(&pa[4], &pa[5], &pb[5], &pb[4], 10);
