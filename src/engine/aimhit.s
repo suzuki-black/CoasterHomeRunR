@@ -56,3 +56,24 @@ _aim_scan::
 9$:
 	ld	a, #0xFF
 	ret
+
+; ---------------------------------------------------------------------------
+; void ce_load(Enemy *e) / void ce_store(Enemy *e)   HL = e
+;   敵の更新の写し g_ce(game.c)との間で、カメラ座標 c を除く頭の 19 バイトを写す(敵の更新は c を触らない)。
+;   R800 の LDIR は 1 バイト 7 サイクルなので LDI を並べる
+; ---------------------------------------------------------------------------
+	.globl	_g_ce
+CE_N	= 19
+_ce_load::
+	ld	de, #_g_ce
+	.rept	CE_N
+	ldi
+	.endm
+	ret
+_ce_store::
+	ex	de, hl
+	ld	hl, #_g_ce
+	.rept	CE_N
+	ldi
+	.endm
+	ret

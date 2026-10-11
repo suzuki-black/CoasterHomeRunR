@@ -175,88 +175,95 @@ static void damage_player(void)
 }
 
 
-static void move_enemy(Enemy *e)
+/* 更新中の敵の写し。敵の更新(update_enemy から呼ぶ関数)は、en[i] をポインタで触る代わりにこの写しを番地で直接触る
+ * (SDCC はポインタ経由のフィールドを IX の相対で何度も読み直すので遅い。動きは同じ) */
+Enemy g_ce;                          /* aimhit.s の ce_load / ce_store が写す */
+#define ce g_ce
+void ce_load(Enemy *e);              /* en[i] → g_ce(カメラ座標 c を除く 19 バイト。c は更新で触らない) */
+void ce_store(Enemy *e);             /* g_ce → en[i] */
+
+static void move_enemy(void)
 {
-    i16 v = e->v;
-    u16 lo = (u16)e->sub + (u8)v;
-    e->sub = (u8)lo;
-    e->s += (u16)((v >> 8) + (i16)(lo >> 8));
-    if (e->lat < e->lat_t) {
-        e->lat += 20;
-        if (e->lat > e->lat_t) e->lat = e->lat_t;
-    } else if (e->lat > e->lat_t) {
-        e->lat -= 20;
-        if (e->lat < e->lat_t) e->lat = e->lat_t;
+    i16 v = ce.v;
+    u16 lo = (u16)ce.sub + (u8)v;
+    ce.sub = (u8)lo;
+    ce.s += (u16)((v >> 8) + (i16)(lo >> 8));
+    if (ce.lat < ce.lat_t) {
+        ce.lat += 20;
+        if (ce.lat > ce.lat_t) ce.lat = ce.lat_t;
+    } else if (ce.lat > ce.lat_t) {
+        ce.lat -= 20;
+        if (ce.lat < ce.lat_t) ce.lat = ce.lat_t;
     }
 }
 
 /* 敵弾を撃つ(e の位置から、カメラへ向かって飛ぶ) */
-static void shoot(Enemy *e, u8 type, i16 d, i16 up)
+static void shoot(u8 type, i16 d, i16 up)
 {
-    Enemy *r = spawn(type, (i8)(d >> 6), (i8)(e->lat >> 5));
+    Enemy *r = spawn(type, (i8)(d >> 6), (i8)(ce.lat >> 5));
     if (!r) return;
-    r->s = (d > 0) ? e->s - M(0.5) : e->s + M(0.5);
+    r->s = (d > 0) ? ce.s - M(0.5) : ce.s + M(0.5);
     r->up = up;
-    r->lat = e->lat;
+    r->lat = ce.lat;
     r->lat_t = 0;
     r->state = ST_APPROACH;
-    e->flash = 2;
+    ce.flash = 2;
 }
 
 static i16 iabs(i16 v) { return v < 0 ? -v : v; }
 
 /* 攻撃の 1 フレーム(表 edef の wind / fire / gap / burst / period) */
-static void attack(Enemy *e, const EDef *f, i16 d)
+static void attack(const EDef *f, i16 d)
 {
-    u8 t = ++e->timer, k;
+    u8 t = ++ce.timer, k;
     if (t >= f->wind && t < f->fire) {
-        e->flash = (t & 2) ? 1 : 0;                  /* 予備動作 */
+        ce.flash = (t & 2) ? 1 : 0;                  /* 予備動作 */
     } else if (t >= f->fire) {
         k = t - f->fire;
         if (k % f->gap == 0 && k / f->gap < f->burst) {
             if (f->atk == AT_MELEE) damage_player();
-            else shoot(e, f->shot, d, e->up + ((i16)f->sh << 4));
+            else shoot(f->shot, d, ce.up + ((i16)f->sh << 4));
         }
     }
-    if (t >= f->period) { e->timer = 0; e->attacks++; }
+    if (t >= f->period) { ce.timer = 0; ce.attacks++; }
 }
 
 /* ボスの突進(3 回に 1 回): 3m まで寄ったら予備動作の後に殴り、また下がる */
-static void lunge(Enemy *e, i16 d)
+static void lunge(i16 d)
 {
     if (iabs(d) > (i16)M(3)) return;
-    if (e->timer < 60) e->timer = 60;
-    e->timer++;
-    if (e->timer < 75) e->flash = (e->timer & 2) ? 1 : 0;
-    else if (e->timer == 75) damage_player();
-    else if (e->timer >= 100) { e->timer = 0; e->attacks++; e->flash = 0; }
+    if (ce.timer < 60) ce.timer = 60;
+    ce.timer++;
+    if (ce.timer < 75) ce.flash = (ce.timer & 2) ? 1 : 0;
+    else if (ce.timer == 75) damage_player();
+    else if (ce.timer >= 100) { ce.timer = 0; ce.attacks++; ce.flash = 0; }
 }
 
-static void update_enemy(Enemy *e)
+static void update_ce(void)
 {
-    const EDef *f = &edef[e->type];
-    i16 d = (i16)(e->s - cam_s);
+    const EDef *f = &edef[ce.type];
+    i16 d = (i16)(ce.s - cam_s);
     i16 keep = (i16)f->keep << 4;                    /* 1/4m → 1/64m */
-    e->anim++;
-    if (e->flash && e->state != ST_ATTACK) e->flash--;
-    if (f->sway) e->lat_t = (e->anim & f->swaym) ? ((i16)f->sway << 4) : -((i16)f->sway << 4);
-    if (f->bob) e->up = ((i16)f->up << 4) + ((e->anim & f->bobm) ? f->bob : 0);
+    ce.anim++;
+    if (ce.flash && ce.state != ST_ATTACK) ce.flash--;
+    if (f->sway) ce.lat_t = (ce.anim & f->swaym) ? ((i16)f->sway << 4) : -((i16)f->sway << 4);
+    if (f->bob) ce.up = ((i16)f->up << 4) + ((ce.anim & f->bobm) ? f->bob : 0);
 
-    switch (e->state) {
+    switch (ce.state) {
     case ST_DEAD:
-        e->up -= 24;
-        move_enemy(e);
-        if (++e->timer >= 12) {
-            if (IS_BOSS(e->type)) boss_alive = 0;
-            e->type = ET_NONE;
+        ce.up -= 24;
+        move_enemy();
+        if (++ce.timer >= 12) {
+            if (IS_BOSS(ce.type)) boss_alive = 0;
+            ce.type = ET_NONE;
         }
         return;
     case ST_GRAB:
         /* 宝箱がカメラへ飛んできて消える(オープニング) */
-        e->v = (d < 0) ? (i16)cam_v + MPS(4) : (i16)cam_v - MPS(4);
-        if (e->up < F88(-0.6)) e->up += 20;
+        ce.v = (d < 0) ? (i16)cam_v + MPS(4) : (i16)cam_v - MPS(4);
+        if (ce.up < F88(-0.6)) ce.up += 20;
         if (d > -(i16)M(0.8) && d < (i16)M(0.8)) {
-            e->type = ET_NONE;
+            ce.type = ET_NONE;
             se_play(SE_HEAL);
             return;
         }
@@ -264,52 +271,52 @@ static void update_enemy(Enemy *e)
     case ST_CHASE:
         /* 後ろから走って追ってくる(歩く敵)。2m まで近づいたら殴る */
         if (d >= -(i16)M(2)) {
-            e->v = (i16)cam_v;
-            attack(e, f, d);
+            ce.v = (i16)cam_v;
+            attack(f, d);
         } else {
             /* トロッコより少し速く走って必ず追いつく(置いていかれたまま残って、やさしい進行を止めないように) */
-            e->v = (i16)cam_v + MPS(1.2);
-            e->flash = 0;
-            e->timer = 0;
+            ce.v = (i16)cam_v + MPS(1.2);
+            ce.flash = 0;
+            ce.timer = 0;
         }
         break;
     case ST_IDLE:
         if (f->mv == MV_WALK && d > 0 && d < (i16)M(14)) {
-            e->state = ST_APPROACH;
-            e->v = -MPS(2.5);
-            e->lat_t = e->side ? F88(-0.35) : F88(0.35);
+            ce.state = ST_APPROACH;
+            ce.v = -MPS(2.5);
+            ce.lat_t = ce.side ? F88(-0.35) : F88(0.35);
         } else if (f->mv == MV_STAND && iabs(d) > (i16)M(6) && iabs(d) < (i16)M(24)) {
-            attack(e, f, d);                         /* 立ったまま撃つ(弓兵) */
+            attack(f, d);                         /* 立ったまま撃つ(弓兵) */
         }
         break;
     case ST_APPROACH:
         switch (f->mv) {
         case MV_WALK:
-            if (d > 0 && d <= keep) { e->state = ST_ATTACK; e->timer = 0; }
+            if (d > 0 && d <= keep) { ce.state = ST_ATTACK; ce.timer = 0; }
             break;
         case MV_HOVER:
-            if (d < -keep) e->v = (i16)cam_v + MPS(3);
-            else if (d > keep) e->v = (i16)cam_v - MPS(3);
-            else { e->state = ST_ATTACK; e->timer = 0; }
+            if (d < -keep) ce.v = (i16)cam_v + MPS(3);
+            else if (d > keep) ce.v = (i16)cam_v - MPS(3);
+            else { ce.state = ST_ATTACK; ce.timer = 0; }
             break;
         case MV_KEEP:
             /* ボス: keep の距離(負 = 後ろ)まで寄ってくる */
             if (keep > 0 ? d > keep : d < keep) {
-                e->v = (i16)cam_v + (keep > 0 ? -MPS(2) : MPS(2));
+                ce.v = (i16)cam_v + (keep > 0 ? -MPS(2) : MPS(2));
             } else {
-                e->state = ST_ATTACK; e->timer = 0; e->attacks = 0;
+                ce.state = ST_ATTACK; ce.timer = 0; ce.attacks = 0;
             }
             break;
         case MV_SHOT:
             /* 敵弾: カメラへ向かってまっすぐ飛ぶ。手前 0.8m に来たら当たる */
             {
                 i16 sv = (i16)f->keep * 546;
-                e->v = (d > 0) ? (i16)cam_v - sv : (i16)cam_v + sv;
+                ce.v = (d > 0) ? (i16)cam_v - sv : (i16)cam_v + sv;
             }
-            if (e->up > F88(-0.3)) e->up -= 12;
+            if (ce.up > F88(-0.3)) ce.up -= 12;
             if (d < (i16)M(0.8) && d > -(i16)M(0.8)) {
                 damage_player();
-                e->type = ET_NONE;
+                ce.type = ET_NONE;
                 return;
             }
             break;
@@ -317,36 +324,43 @@ static void update_enemy(Enemy *e)
         break;
     case ST_ATTACK:
         if (f->mv == MV_WALK) {
-            e->v = (i16)cam_v;                        /* 張り付いて殴る。2 回殴ったら置いていかれる */
-            attack(e, f, d);
-            if (e->attacks >= 2) { e->state = ST_PASS; e->v = 0; e->flash = 0; }
+            ce.v = (i16)cam_v;                        /* 張り付いて殴る。2 回殴ったら置いていかれる */
+            attack(f, d);
+            if (ce.attacks >= 2) { ce.state = ST_PASS; ce.v = 0; ce.flash = 0; }
             break;
         }
         {
             i16 tgt = keep;
             u8 n = 1;
             if (f->mv == MV_HOVER && d < 0) tgt = -keep;
-            if (f->atk == AT_CYCLE && e->attacks % 3 == 2) tgt = (keep > 0) ? (i16)M(2.5) : -(i16)M(2.5);
-            e->v = (i16)cam_v + ((tgt - d) << f->gain);
-            if (e->type == ET_B04 && e->hp < 50) n = 2;          /* 亜人の王: 耐久が半分を切ると 2 倍の速さ */
+            if (f->atk == AT_CYCLE && ce.attacks % 3 == 2) tgt = (keep > 0) ? (i16)M(2.5) : -(i16)M(2.5);
+            ce.v = (i16)cam_v + ((tgt - d) << f->gain);
+            if (ce.type == ET_B04 && ce.hp < 50) n = 2;          /* 亜人の王: 耐久が半分を切ると 2 倍の速さ */
             while (n--) {
-                if (f->atk == AT_CYCLE && e->attacks % 3 == 2) lunge(e, d);
-                else attack(e, f, d);
+                if (f->atk == AT_CYCLE && ce.attacks % 3 == 2) lunge(d);
+                else attack(f, d);
             }
             /* 大猿人の親方: ときどき子分の猿人を呼ぶ */
-            if (e->type == ET_B01 && (e->anim & 127) == 0) spawn(ET_E01, 14, (e->anim & 128) ? 10 : -10);
+            if (ce.type == ET_B01 && (ce.anim & 127) == 0) spawn(ET_E01, 14, (ce.anim & 128) ? 10 : -10);
         }
         break;
     }
-    move_enemy(e);
+    move_enemy();
 
     /* カメラの後方へ抜けた敵を消す(追跡型・張り付く敵・ボス・演出中の宝箱を除く) */
-    if (e->state == ST_CHASE) {
-        if (d < -(i16)M(24)) e->type = ET_NONE;
-    } else if (f->mv != MV_HOVER && f->mv != MV_KEEP && e->type != ET_TREASURE) {
-        if (d < -(i16)M(3)) e->type = ET_NONE;
+    if (ce.state == ST_CHASE) {
+        if (d < -(i16)M(24)) ce.type = ET_NONE;
+    } else if (f->mv != MV_HOVER && f->mv != MV_KEEP && ce.type != ET_TREASURE) {
+        if (d < -(i16)M(3)) ce.type = ET_NONE;
     }
-    if (d > (i16)M(60) || d < -(i16)M(40)) e->type = ET_NONE;
+    if (d > (i16)M(60) || d < -(i16)M(40)) ce.type = ET_NONE;
+}
+
+static void update_enemy(Enemy *e)
+{
+    ce_load(e);
+    update_ce();
+    ce_store(e);
 }
 
 /* 分岐の側を決める(分岐点の手前でだけ。違う側ならレールを分岐点から作り直す)。L・R の獣人は両方消える */
