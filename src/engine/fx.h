@@ -13,6 +13,9 @@ void debris_start(void);
 void debris_draw(void);
 /* 分岐点から先の、選ばれていない側の線路(game.c が rail_sample で g_alt に入れる) */
 #define ALT_N 12
+/* 実際に描く点の数(2m おき)。分岐点から 16m まで(16m より先は画面で 1〜2 ブロックにしかならず、省いても絵の違いは
+ * 1 枚あたり最大 2 ブロック。分岐を過ぎた直後で 1 フレーム約 4.6ms 軽くなる。2026-10-11 ユーザーと相談して決めた) */
+#define ALT_DRAW_N 9
 extern RailPt g_alt[ALT_N];
 extern u8 g_alt_n;
 void alt_draw(void);              /* 描く処理はゲームモジュール(game.c) */

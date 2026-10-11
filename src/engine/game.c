@@ -372,7 +372,7 @@ static void branch_pick(u8 dir)
         if (dir != route) {
             route = dir;
             rail_refork(stage->branch[dir], stage->tail);
-            g_alt_n = rail_sample(stage->branch[dir ^ 1], g_alt, ALT_N);
+            g_alt_n = rail_sample(stage->branch[dir ^ 1], g_alt, ALT_DRAW_N);
         }
     }
     for (i = 0; i < MAX_EN; i++)
@@ -1060,7 +1060,7 @@ u8 game_run(const Stage *st, u8 first)
         rail_add(st->branch[route]);
         rail_add(st->tail);
         branch_open = !g_cfg.route;
-        g_alt_n = rail_sample(st->branch[route ^ 1], g_alt, ALT_N);
+        g_alt_n = rail_sample(st->branch[route ^ 1], g_alt, ALT_DRAW_N);
     }
     {   /* 地形の区間と乱数の種を常駐部へ写してから、地形モジュールで作る(モジュールからはこのステージのデータが見えない) */
         const u8 *z = st->zones;
