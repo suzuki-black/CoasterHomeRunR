@@ -11,7 +11,6 @@ i8  cam_pitch;
 i16 cam_psin, cam_pcos;
 i16 cam_sin, cam_cos;
 
-static V3  clip_v[10];
 extern u8 g_xf_ok;
 
 void render_set_camera(i16 x, i16 y, i16 z, u16 yaw, i8 pitch)
@@ -48,33 +47,7 @@ u8 project(const V3 *v, i16 *sx, i16 *sy)
     return 1;
 }
 
-void poly3(const V3 *v, u8 n, u8 color)
-{
-    u8 i, m = 0, ain, bin;
-    const V3 *a = &v[n - 1], *b = v;
-    V3 *o = clip_v;
-    /* ニアクリップ(Sutherland-Hodgman、z >= NEAR_Z を残す)。辺 a→b ごとに交点と b を出す */
-    ain = a->z >= NEAR_Z;
-    for (i = 0; i < n; i++, a = b, b++) {
-        bin = b->z >= NEAR_Z;
-        if (ain != bin) {
-            i16 dz = b->z - a->z;
-            i16 t = NEAR_Z - a->z;
-            o->x = a->x + muldiv(b->x - a->x, t, dz);
-            o->y = a->y + muldiv(b->y - a->y, t, dz);
-            o->z = NEAR_Z;
-            o++; m++;
-        }
-        if (bin) {
-            o->x = b->x; o->y = b->y; o->z = b->z;
-            o++; m++;
-        }
-        ain = bin;
-    }
-    if (m < 3) return;
-    for (i = 0, o = clip_v; i < m; i++, o++) project2(o, &scr[i * 2]);
-    raster(m, color);
-}
+/* poly3(ニアクリップして塗る)は raster.s(アセンブラ) */
 
 u8 rect_clip(i16 x0, i16 y0, i16 x1, i16 y1)
 {

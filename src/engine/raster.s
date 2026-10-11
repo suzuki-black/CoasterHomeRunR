@@ -2026,3 +2026,198 @@ _rquad_a::
 	pop	hl
 	ret
 
+
+; ---------------------------------------------------------------------------
+; void poly3(const V3 *v, u8 n, u8 color)   HL = v、スタックに n・color(戻るときに捨てる)
+;   ニアクリップ(Sutherland-Hodgman、z >= NEAR_Z を残す)して投影し、raster で塗る。
+;   辺 a→b ごとに、a と b の片方だけが手前なら交点(a + (b - a) * (NEAR_Z - a.z) / (b.z - a.z)、muldiv)を、
+;   b が手前なら b を出す。もと render.c の C 版と同じ計算・同じ順(C だと 1 回 約 3,100 サイクルかかっていた)
+; ---------------------------------------------------------------------------
+	.globl	_muldiv
+P3_NEAR	= 128			; NEAR_Z(render.h)
+
+	.area	_DATA
+p3_cv:	.ds	6 * 10		; 切った後の頂点(V3)
+p3_a:	.ds	2		; 辺の始点
+p3_b:	.ds	2		; 辺の終点
+p3_o:	.ds	2		; 書き先
+p3_t:	.ds	2		; NEAR_Z - a.z
+p3_dz:	.ds	2		; b.z - a.z
+p3_k:	.ds	1		; 残りの辺
+p3_m:	.ds	1		; 切った後の頂点の数
+p3_in:	.ds	1		; 1 = a が手前
+p3_col:	.ds	1
+
+	.area	_CODE
+_poly3::
+	pop	de
+	pop	bc			; C = n、B = color
+	push	de
+	ld	a, b
+	ld	(p3_col), a
+	ld	a, c
+	ld	(p3_k), a
+	ld	(p3_b), hl		; b = v
+	dec	a
+	ld	e, a
+	ld	d, #0
+	ex	de, hl			; HL = n - 1、DE = v
+	ld	c, l
+	ld	b, h
+	add	hl, hl
+	add	hl, bc
+	add	hl, hl
+	add	hl, de
+	ld	(p3_a), hl		; a = &v[n - 1]
+	ld	de, #p3_cv
+	ld	(p3_o), de
+	xor	a, a
+	ld	(p3_m), a
+	call	p3_inz
+	ld	(p3_in), a
+1$:
+	ld	hl, (p3_b)
+	call	p3_inz
+	ld	c, a			; C = b が手前か
+	ld	a, (p3_in)
+	cp	a, c
+	jr	z, 5$
+	; 交点: t = NEAR_Z - a.z、dz = b.z - a.z
+	push	bc
+	ld	hl, (p3_a)
+	ld	de, #4
+	add	hl, de
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)			; DE = a.z
+	ld	hl, #P3_NEAR
+	or	a, a
+	sbc	hl, de
+	ld	(p3_t), hl
+	ld	hl, (p3_b)
+	ld	bc, #4
+	add	hl, bc
+	ld	a, (hl)
+	inc	hl
+	ld	h, (hl)
+	ld	l, a			; HL = b.z
+	or	a, a
+	sbc	hl, de
+	ld	(p3_dz), hl
+	ld	c, #0
+	call	p3_lerp			; x
+	ld	c, #2
+	call	p3_lerp			; y
+	ld	hl, (p3_o)
+	ld	de, #4
+	add	hl, de
+	ld	(hl), #<P3_NEAR
+	inc	hl
+	ld	(hl), #>P3_NEAR
+	inc	hl
+	ld	(p3_o), hl
+	ld	hl, #p3_m
+	inc	(hl)
+	pop	bc
+5$:
+	ld	a, c
+	ld	(p3_in), a
+	or	a, a
+	jr	z, 6$
+	; b を写す
+	ld	hl, (p3_b)
+	ld	de, (p3_o)
+	ldi
+	ldi
+	ldi
+	ldi
+	ldi
+	ldi
+	ld	(p3_o), de
+	ld	hl, #p3_m
+	inc	(hl)
+6$:
+	ld	hl, (p3_b)
+	ld	(p3_a), hl
+	ld	de, #6
+	add	hl, de
+	ld	(p3_b), hl
+	ld	hl, #p3_k
+	dec	(hl)
+	jp	nz, 1$
+	ld	a, (p3_m)
+	cp	a, #3
+	ret	c
+	; 投影して塗る
+	ld	b, a
+	ld	hl, #p3_cv
+	ld	de, #_scr
+7$:
+	push	bc
+	push	hl
+	push	de
+	call	_project2		; HL = 点、DE = 出力
+	pop	hl
+	ld	de, #4
+	add	hl, de
+	ex	de, hl
+	pop	hl
+	ld	bc, #6
+	add	hl, bc
+	pop	bc
+	djnz	7$
+	ld	a, (p3_col)
+	ld	l, a
+	ld	a, (p3_m)
+	jp	_raster
+
+; p3_inz: HL = 頂点 → A = 1(z >= NEAR_Z)/ 0。符号つきの比較は上位ビットを反転して符号なしで比べる
+p3_inz:
+	ld	de, #4
+	add	hl, de
+	ld	a, (hl)
+	inc	hl
+	ld	h, (hl)
+	ld	l, a
+	ld	a, h
+	xor	a, #0x80
+	ld	h, a
+	ld	de, #P3_NEAR ^ 0x8000
+	or	a, a
+	sbc	hl, de
+	sbc	a, a			; 小さい = 0xFF
+	inc	a
+	ret
+
+; p3_lerp: C = 成分の位置(0 = x、2 = y)→ o の成分 = a + muldiv(b - a, t, dz)
+p3_lerp:
+	ld	b, #0
+	ld	hl, (p3_a)
+	add	hl, bc
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)			; DE = a の成分
+	push	de
+	push	bc
+	ld	hl, (p3_b)
+	add	hl, bc
+	ld	a, (hl)
+	inc	hl
+	ld	h, (hl)
+	ld	l, a
+	or	a, a
+	sbc	hl, de			; HL = b - a
+	ld	de, (p3_dz)
+	push	de			; muldiv の 3 つ目(muldiv が捨てる)
+	ld	de, (p3_t)
+	call	_muldiv			; DE = (b - a) * t / dz
+	pop	bc
+	pop	hl
+	add	hl, de
+	ex	de, hl
+	ld	hl, (p3_o)
+	add	hl, bc
+	ld	(hl), e
+	inc	hl
+	ld	(hl), d
+	ret
