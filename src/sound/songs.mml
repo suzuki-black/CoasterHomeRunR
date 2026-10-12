@@ -100,27 +100,29 @@ R V14,13,12,12,9 [bh8 h8 sh8 h8 bh8 h8 sh8 h16 h16]7 bh8 h8 sh8 h8 bc8 s8 s8 s8 
 R [bh8 h8 sh8 h8 bh8 h8 sh8 h16 h16]7 bc4 s8 s8 bc4 r4
 
 @song STAGE4 loop
-# ステージ 4「町」(オッフェンバック『天国と地獄』序曲とシュトラウス『トリッチ・トラッチ・ポルカ』をイメージ)。ハ長調、t150。
-#   跳ねるトランペットとズンチャッの伴奏。後半は同じ音を 16 分音符で連打する
+# ステージ 4「町」(オッフェンバック『天国と地獄』序曲とシュトラウス『トリッチ・トラッチ・ポルカ』の駆け足をイメージ)。
+#   祭りの山車に追われる場面なので、遊園地のような明るさを避けてハ短調でシリアスに(2026-10-12 ユーザーの指定)。t150。
+#   暗めの金管の旋律、弦の短い裏打ち、オクターブで刻むベース。後半は同じ音の 16 分音符の連打で、14 小節目に D♭(ナポリの和音)
 @tempo 150
-@voice 22 61 1C 05 C3 B2 14 15   # オリジナル音色 0: アコーディオン風(倍音 2 倍とビブラート)
-@voice 07 01 1A 02 F5 F6 43 46   # オリジナル音色 1: 木琴風(連打の 9〜16 小節)
-A @0 @v0 v14 q5
-A o5 l8 g g a g o6 c4 o5 b4 | o5 l8 a a b a o6 d4 c4 | o5 l8 b b o6 c o5 b o6 e d c o5 b | o5 a4 g4 o6 c4 r4 |
-A o5 l8 g g a g o6 c4 o5 b4 | o5 l8 a a b a o6 d4 c4 | o6 l8 e d c o5 b o6 c o5 a g f | o5 e4 d4 c4 r4 |
-A @v1 o5 l16 e e e e g g g g o6 c c c c o5 g g g g | o5 l16 f f f f a a a a o6 d d d d o5 a a a a |
-A o5 l16 g g g g b b b b o6 d d d d f f f f | o6 e8 c8 o5 g8 e8 c4 r4 |
-A o5 l16 e e e e g g g g o6 c c c c o5 g g g g | o5 l16 f f f f a a a a o6 d d d d o5 a a a a |
-A o5 l16 g g g g a a a a b b b b o6 d d d d | o6 c4 o5 g4 o6 c4 r4 |
-B @6 v11 q8 o4 e2 g2 | f2 a2 | d2 g2 | f2 e2 | e2 g2 | f2 a2 | e2 d2 | e2 c2 |
-B e2 g2 | f2 a2 | d2 f2 | e2 g2 | e2 g2 | f2 a2 | d2 f2 | e2 c2 |
-C @3 v10 q4 o4 l8 [r g]4 | [r f]4 | [r g]4 | [r f]4 | [r g]4 | [r f]4 | [r g]4 | [r g]4 |
-C [r g]4 | [r a]4 | [r b]4 | [r g]4 | [r g]4 | [r a]4 | [r b]4 | [r g]4 |
-D @3 v9 q4 o4 l8 [r e]4 | [r d]4 | [r d]4 | [r c]4 | [r e]4 | [r d]4 | [r e]4 | [r e]4 |
-D [r e]4 | [r f]4 | [r g]4 | [r e]4 | [r e]4 | [r f]4 | [r g]4 | [r e]4 |
-E @14 v14 q5 o2 l4 c g c g | d a d a | g d g d | f c c g | c g c g | d a d a | c g g d | c g c r |
-E c g c g | f c f c | g d g d | c g c g | c g c g | f c f c | g d g d | c g c r |
-R V14,13,12,13,9 [b8 h8 s8 h8 b8 h8 s8 h8]8 | bc8 h8 s8 h8 b8 h8 s8 h8 [b8 h8 s8 h8 b8 h8 s8 h8]6 b8 h8 s8 s8 bc4 r4
+@voice 21 21 1C 06 A3 82 14 16   # オリジナル音色 0: 暗めの金管(1〜8 小節)
+@voice 61 61 18 06 F2 F3 13 16   # オリジナル音色 1: 鋭く刻む弦(連打の 9〜16 小節)
+A @0 @v0 v14 q6
+A o5 l8 g g a- g o6 c4 o5 b4 | o5 l8 a- a- b- a- o6 d4 c4 | o5 l8 b b o6 c o5 b o6 e- d c o5 b | o5 a-4 g4 o6 c4 r4 |
+A o5 l8 g g a- g o6 c4 o5 b4 | o5 l8 a- a- b- a- o6 d4 c4 | o6 l8 e- d c o5 b o6 c o5 a- g f | o5 e-4 d4 c4 r4 |
+A @v1 q5 o5 l16 e- e- e- e- g g g g o6 c c c c o5 g g g g | o5 l16 f f f f a- a- a- a- o6 c c c c o5 a- a- a- a- |
+A o5 l16 g g g g b b b b o6 d d d d f f f f | o6 e-8 c8 o5 g8 e-8 c4 r4 |
+A o5 l16 e- e- e- e- g g g g o6 c c c c o5 g g g g | o5 l16 f f f f a- a- a- a- o6 d- d- d- d- o5 a- a- a- a- |
+A o5 l16 g g g g a- a- a- a- b b b b o6 d d d d | o6 c4 o5 g4 o6 c4 r4 |
+B @9 v11 q8 o4 e-2 g2 | f2 a-2 | d2 g2 | f2 e-2 | e-2 g2 | f2 a-2 | e-2 d2 | e-2 c2 |
+B e-2 g2 | f2 a-2 | d2 f2 | e-2 g2 | e-2 g2 | f2 a-2 | d2 f2 | e-2 c2 |
+C @1 v9 q3 o4 l8 [r g]4 | [r a-]4 | [r g]4 | [r a-]4 | [r g]4 | [r a-]4 | [r g]4 | [r g]4 |
+C [r g]4 | [r a-]4 | [r b]4 | [r g]4 | [r g]4 | [r a-]4 | [r b]4 | [r g]4 |
+D @1 v8 q3 o4 l8 [r e-]4 | [r f]4 | [r d]4 | [r f]4 | [r e-]4 | [r f]4 | [r e-]4 | [r e-]4 |
+D [r e-]4 | [r f]4 | [r d]4 | [r e-]4 | [r e-]4 | [r f]4 | [r d]4 | [r e-]4 |
+E @14 v14 q6 o2 l8 [c > c <]4 | [f > f <]4 | [g > g <]4 | [f > f <]2 [c > c <]2 | [c > c <]4 | [f > f <]4 | [c > c <]2 [f > f <]2 | [g > g <]2 [c > c <]2 |
+E [c > c <]4 | [f > f <]4 | [g > g <]4 | [c > c <]4 | [c > c <]4 | [d- > d- <]4 | [g > g <]4 | c > c < c > c < c4 r4 |
+R V15,13,13,12,9 [b8 h8 s8 h8 b8 b8 s8 h8]7 b8 h8 s8 h8 t16 t16 t16 t16 s8 s8 |
+R [b8 h8 s8 h8 b8 b8 s8 h8]6 b8 h8 s8 h8 t16 t16 t16 t16 s8 s8 | bc8 h8 s8 h8 t16 t16 t16 t16 bc4
 
 @song STAGE5 loop
 # ステージ 5「王」(ネッケ『クシコス・ポスト』とカバレフスキー『道化師のギャロップ』をイメージ)。イ短調、t150。
