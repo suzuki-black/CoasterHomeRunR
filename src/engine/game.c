@@ -95,6 +95,7 @@ static u8  aim_hold;
 static u8  in_prev;
 static u8  fire_cd;
 static u8  hitmark;
+static u8  shotfx;               /* 1 = このフレームに撃った(照準の真ん中に閃光を重ねる) */
 static u8  blink;
 static u8  shake;                /* 被弾でトロッコを揺らす残りフレーム */
 static const Event *sc_ev;
@@ -464,6 +465,7 @@ static void fire(void)
 {
     u8 hi, best;
     se_play(SE_SHOT);
+    shotfx = 1;
     best = aim_target(&hi);
     if (best == 0xFF) return;
     {
@@ -985,8 +987,11 @@ static void draw_hud(void)
         /* 撃てる敵に重なっていれば赤 */
         set_sprite(0, (i16)aim_x - 16, (i16)aim_y - 16, 0, aim_target(&hi) != 0xFF ? C_RED : C_WHITE);
     }
+    /* 当たったら当たりの印、当たらなくても撃ったフレームは閃光(ふつうの弾は描かないので、撃ったことを照準で見せる) */
     if (hitmark) set_sprite(1, (i16)aim_x - 16, (i16)aim_y - 16, 4, C_YELLOW);
+    else if (shotfx) set_sprite(1, (i16)aim_x - 16, (i16)aim_y - 16, 8, C_YELLOW);
     else g_spr_attr[4] = 209;
+    shotfx = 0;
 }
 
 static void render(void)
@@ -1089,7 +1094,7 @@ u8 game_run(const Stage *st, u8 first)
     ctrl = 1; spd_over = 0; cap_id = 0; cap_time = 0; warn_prev = 0; warn_time = 0; pitch_cur = 0;
     aim_x = 128; aim_y = 92; aim_hold = 0;
     in_prev = 0xFF;                      /* タイトルで押したボタンを射撃と見なさない */
-    fire_cd = 0; hitmark = 0;
+    fire_cd = 0; hitmark = 0; shotfx = 0;
     mis_left = MIS_START; lock_n = 0; fly_n = 0; box_n = 0;
     for (i = 0; i < MAX_EN; i++) box_x0[i] = 0xFF;
     if (first) { life = g_cfg.life; g_score = 0; }
