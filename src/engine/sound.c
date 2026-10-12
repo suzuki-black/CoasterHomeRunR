@@ -44,8 +44,11 @@ static volatile u8 se_req;
 static const u8 *se_ptr;
 static u8 se_cur;
 
+extern u8 g_fmw_n;                       /* sys.s の fm_write の待ちのループの回数 */
+
 void sound_init(void)
 {
+    g_fmw_n = 50;                        /* R800 で値を書いた後 約 28µs(sys.s の FMW_WAIT) */
     u8 r;
     for (r = 0; r < 14; r++) psg_write(r, 0);
     psg_write(7, 0xBF);          /* トーン・ノイズとも止める(効果音が ch C を使うときだけ開ける)。bit7=1 bit6=0 */
