@@ -58,7 +58,7 @@ static const u8 ending_text[] = {
 
 static const Event home_events[] = {
     { S(0),    EV_DIR,   DIR_NONE,    0,   0 },
-    { S(0),    EV_BGM,   1,           0,   0 },
+    { S(0),    EV_BGM,   SONG_STAGE5, 0,   0 },
     { S(1),    EV_TEXT,  T_SEE,       0,   0 },
     { S(2),     EV_DIR,  DIR_FRONT,   0,   0 },
     { S(2),     EV_SPAWN, ET_E01,      22, -10 },

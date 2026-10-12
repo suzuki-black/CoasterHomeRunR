@@ -97,6 +97,7 @@ static const Event cave_events[] = {
     { S(0),    EV_CTRL,  0,           0,   0 },
     { S(0),    EV_DIR,   DIR_NONE,    0,   0 },
     { S(0),    EV_GO,    0,           0,   0 },
+    { S(0),    EV_BGM,   SONG_OPENING, 0,  0 },
     { S(0.3),  EV_TEXT,  T_GOTBACK,   0,   0 },
     { AT(22, EV_TEXT),   T_GATE,      0,   0 },
     { AT(33, EV_TEXT),   T_HANG,      0,   0 },
@@ -111,7 +112,7 @@ static const Event cave_events[] = {
     { AT(86, EV_SPAWN),                 ET_E01, -14, 0 },
     { AT(86, EV_CTRL),                  1, 0, 0 },
     { AT(86, EV_DIR),                   DIR_BACK, 0, 0 },
-    { AT(86, EV_BGM),                   1, 0, 0 },
+    { AT(86, EV_BGM),                   SONG_STAGE1, 0, 0 },
     /* ---- 柵沿い: 前から猿人、柵の上から弓兵 ---- */
     { AT(108, EV_DIR),                  DIR_FRONT, 0, 0 },
     { AT(108, EV_SPAWN),                ET_E01, 22, 10 },

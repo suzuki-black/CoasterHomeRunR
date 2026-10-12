@@ -54,7 +54,7 @@ static const Caption lake_captions[] = {
 
 static const Event lake_events[] = {
     { S(0),    EV_DIR,   DIR_NONE,    0,   0 },
-    { S(0),    EV_BGM,   1,           0,   0 },
+    { S(0),    EV_BGM,   SONG_STAGE2, 0,   0 },
     /* ---- 坑道 → 地底湖 → 筏: まずどんなステージかを見せる(湖が見えるまでは敵を出さない)。演出は少し大げさに ---- */
     { AT(18, EV_FX),        SE_TRAIN, 3, 0 },     /* 湖が見えて、ガクンと速度を落とす */
     { AT(18, EV_SPEED),     10, 0, 0 },           /* 2.5m/秒で湖を見せる */

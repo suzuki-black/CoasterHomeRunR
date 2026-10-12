@@ -679,8 +679,7 @@ static void script_update(void)
             if (facing != ev->a) { facing = ev->a; turning = 8; }
             break;
         case EV_BGM:
-            if (ev->a) bgm_play(stage->bgm);
-            else bgm_stop();
+            bgm_play(ev->a);                 /* 0 なら止まる */
             break;
         case EV_FX:
             if (ev->a) se_play(ev->a);

@@ -292,6 +292,27 @@ def compile_rhythm(text, tempo, name):
     return out
 
 
+def stream_ticks(b, rhythm):
+    """チャンネルのバイト列の長さ(ティック)。ループで戻る所の前後を問わず全部"""
+    t = 0
+    i = 0
+    while i < len(b):
+        x = b[i]
+        if x < 0x80:
+            t += b[i + 1]
+            i += 2
+        elif x in (0x80, 0x85):
+            t += b[i + 1]
+            i += 2
+        elif x in (0x81, 0x82):
+            i += 2
+        elif x == 0x84:
+            i += 4
+        else:
+            i += 1
+    return t
+
+
 def main(src, out_bin, out_h):
     songs = []          # (名前, loop, tempo, {ch: text}, 順)
     cur = None
@@ -331,6 +352,15 @@ def main(src, out_bin, out_h):
         if 'R' in sg['ch']:
             rhy = compile_rhythm(sg['ch']['R'], sg['tempo'], sg['name'] + ':R') + [0xFF if sg['loop'] else 0xFE]
         blobs.append((sg['name'], chans, rhy))
+
+    # くり返す曲は、どのチャンネルも同じ長さ(か、短い方が何回かまわってそろう長さ)でないと、回るたびにずれる
+    for name, chans, rhy in blobs:
+        lens = [stream_ticks(c, False) for c in chans] + ([stream_ticks(rhy, True)] if rhy else [])
+        sg = next(x for x in songs if x['name'] == name)
+        if sg['loop'] and any(max(lens) % n for n in lens):
+            raise SystemExit('gen_music: %s: チャンネルの長さ(ティック)がそろっていない(短い方が何回かで割り切れること): %s'
+                             % (name, lens))
+        print('  %-10s %s ティック(%.1f 秒)' % (name, lens[0] if len(set(lens)) == 1 else lens, max(lens) / TICKS))
 
     # 配置: 頭に曲の表、続けて曲ごとの見出しとチャンネル
     head = 1 + 2 * len(blobs)

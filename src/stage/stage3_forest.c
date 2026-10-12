@@ -50,7 +50,7 @@ static const Event forest_events[] = {
     /* ---- 森へ ---- */
     { S(0),    EV_DIR,   DIR_NONE,    0,   0 },
     { S(1),    EV_TEXT,  T_FOREST,    0,   0 },
-    { S(0),    EV_BGM,   1,           0,   0 },
+    { S(0),    EV_BGM,   SONG_STAGE3, 0,   0 },
     /* ---- 前からキリン人(槍のリーチが長い)と魔法使い ---- */
     { S(2.5),   EV_DIR,   DIR_FRONT,   0,   0 },
     { S(2.5),   EV_SPAWN, ET_E03,      22, -10 },

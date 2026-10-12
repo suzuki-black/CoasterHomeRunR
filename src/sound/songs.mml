@@ -1,15 +1,49 @@
 # songs.mml — 曲(FM 音源)。tools/gen_music.py が音のモジュールにする。書き方は tools/gen_music.py の冒頭
 # まずは PSG で鳴らしていた曲を、音符はそのままで移したもの(%ティック)。これから 1 曲ずつ作り直す
 
+@song OPENING once
+# オープニング: 遊園地から飛び出す場面(チャイコフスキーのピアノ協奏曲第 1 番の冒頭をイメージ)。t120 で 1 小節 2 秒
+#   0〜5 秒 ホルンの呼びかけ(変ロ短調)、5〜10.5 秒 巻き上げで和音が高まる、10.5 秒 飛び出す前の一撃(A♭7)、
+#   11 秒 レールを壊して飛び出す所で主題(変ニ長調)をピアノの重い和音に乗せる、15 秒 着地の和音
+#   (FS-A1ST で 0 秒 宝を取り返す、3 秒 ゲート、5.4 秒 巻き上げ、10.6 秒 JUMP、11.2 秒 飛び出す、14.9 秒 着地、16.3 秒 ステージ 1 の曲へ)
+@tempo 120
+A @9 v15 q7 o4 b-4. a-8 g-4 f4 | a-2. r4 | b-4. a-8 g-4 f4 | g-2 a-2 | b-2 > c2 < |
+A > e-2 < @1 v15 q8 a-4 f8 a-8 | > d-2 < b-4 a-8 g-8 | g-4 e-4 f2 | f1
+B @9 v12 q7 o4 f4. f8 d-4 d-4 | f2. r4 | f4. f8 d-4 d-4 | d-2 e-2 | g-2 a2 |
+B > c2 < @1 v12 q8 f4 d-8 f8 | a-2 g-4 f8 e-8 | e-4 c4 d-2 | d-1
+C @3 v13 q8 o4 f2 r2 | a-2 r2 | f2 r2 | l8 b- b- b- b- > c c c c < | v14 b- b- b- b- > c c c c < |
+C v15 l4 > e-2 < a-4 a-4 | a-4 a-4 b-4 b-4 | > c4 c4 < a-4 a-4 | a-1
+D @3 v12 q8 o4 d-2 r2 | f2 r2 | d-2 r2 | l8 g- g- g- g- a- a- a- a- | v13 g- g- g- g- a a a a |
+D v14 l4 c2 f4 f4 | f4 f4 g-4 g-4 | g-4 g-4 f4 f4 | f1
+E @3 v12 q8 o3 b-2 r2 | > d-2 < r2 | b-2 r2 | l8 > d- d- d- d- e- e- e- e- < | v13 > e- e- e- e- f f f f < |
+E v14 l4 a-2 > d-4 d-4 < | > d-4 d-4 d-4 d-4 < | > e-4 e-4 d-4 d-4 < | > d-1 <
+F @14 v14 q7 o2 b-2 r2 | > d-2 < r2 | b-2 r2 | > g-2 a-2 < | > e-2 f2 < |
+F > a-2 d-2 < | > d-2 g-2 < | > a-2 d-2 < | > d-1 <
+R V15,12,14,13,9 bt4 r4 r2 | bt4 r4 r2 | bt4 r4 r2 | l8 t r t r t r t r | l16 [s]16 |
+R btc4 r4 bc4 r4 | bt4 h4 b4 h4 | bt4 h4 bc4 h4 | btc1
+
 @song STAGE1 loop
+# ステージ 1「逃走」(リムスキー=コルサコフの『熊蜂の飛行』をイメージ)。イ短調、t150 で 16 分音符 = 6 ティック。
+#   半音で上下する 16 分音符の「羽音」をバイオリンに、クラリネットが長い音で追い、ハープシコードの裏打ちとベースで急き立てる
 @tempo 150
-A @3 v13 q6 n74%12 n74%12 n69%12 n74%12 n77%24 n76%12 n74%12 n72%36 n70%12 n69%24 n67%24 n67%12
-A n69%12 n70%12 n72%12 n76%24 n72%24 n69%48 n73%24 n76%24 n74%12 n74%12 n69%12 n74%12
-A n77%12 n79%12 n81%24 n82%24 n81%12 n79%12 n77%24 n74%24 n76%12 n77%12 n79%12 n76%12
-A n72%24 n76%24 n81%24 n79%12 n77%12 n76%24 n73%24
-B @14 v12 q5 n38%12 n50%12 n38%12 n50%12 n38%12 n50%12 n38%12 n50%12 n34%12 n46%12 n34%12 n46%12
-B n34%12 n46%12 n34%12 n46%12 n36%12 n48%12 n36%12 n48%12 n36%12 n48%12 n36%12 n48%12
-B n33%12 n45%12 n33%12 n45%12 n33%12 n45%12 n40%12 n43%12
+A @1 v14 q7 o5 l16
+A e d+ d c+ c d d+ e e d+ d c+ c < b > c c+ | d d+ e f e d+ d c+ c < b a+ a g+ a b > c |
+A < g+ a a+ b > c c+ d d+ e d+ d c+ c < b a+ a | g+ a b > c d e f e d c < b a g+ f+ g+ a+ > |
+A f e d+ d c+ d d+ e f e f f+ g f+ f e | e d+ d c+ c d d+ e e d+ d c+ c < b > c c+ |
+A < b a+ a g+ a a+ b > c d c < b a g+ a b > c | < a1 > |
+A f e d+ e f f+ g g+ a g+ g f+ f e d+ e | g f+ f e d e f f+ g f+ f e d c+ d e |
+A e d+ d c+ c d d+ e e d+ d c+ c < b > c c+ | c < b a+ a g+ a a+ b > c c+ d d+ e d c < b > |
+A f e d+ d c+ d d+ e f e f f+ g f+ f e | g+ a g+ g f+ g g+ a a+ b > c c+ d c+ c < b > |
+A e d+ d c+ c d d+ e e d+ d c+ c < b > c c+ | < b a+ a g+ a a+ b > c c+ d d+ e f e d c |
+B @5 v11 q7 o4 a2 > c2 | e1 | < b2 g+2 | e1 | a2 f2 | e2 a2 | g+2 b2 | a1 |
+B > c2 < a2 | b2 > d2 | e1 | c2 < a2 | > d2 f2 | e2 d2 | c2 < b2 | g+1 |
+C @11 v10 q4 o4 l8 [r e r e]2 | [r e r e]2 | [r d r d]2 | [r d r d]2 | [r f r f]2 | [r e r e]2 | [r d r d]2 | [r e r e]2 |
+C [r f r f]2 | [r g r g]2 | [r g r g]2 | [r e r e]2 | [r f r f]2 | [r g+ r g+]2 | [r e r e]2 | [r d r d]2 |
+D @11 v9 q4 o4 l8 [r c r c]2 | [r c r c]2 | [r < b > r < b >]2 | [r < b > r < b >]2 | [r d r d]2 | [r c r c]2 | [r < b > r < b >]2 | [r c r c]2 |
+D [r c r c]2 | [r d r d]2 | [r < b > r < b >]2 | [r c r c]2 | [r d r d]2 | [r d r d]2 | [r c r c]2 | [r < b > r < b >]2 |
+E @14 v14 q6 o2 l8 [a a > a < a]2 | [a a > a < a]2 | [e e > e < e]2 | [e e > e < e]2 | [d d > d < d]2 | [a a > a < a]2 | [e e > e < e]2 | [a a > a < a]2 |
+E [f f > f < f]2 | [g g > g < g]2 | [e e > e < e]2 | [a a > a < a]2 | [d d > d < d]2 | [e e > e < e]2 | [a a > a < a]2 | [e e > e < e]2 |
+R V14,13,12,12,9 l8 [bh h sh h bh bh sh h]15 bh h sh h sh s16 s16 s s
 
 @song STAGE2 loop
 @tempo 150

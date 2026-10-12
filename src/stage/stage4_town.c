@@ -45,7 +45,7 @@ static const Caption town_captions[] = {
 
 static const Event town_events[] = {
     { S(0),    EV_DIR,   DIR_NONE,    0,   0 },
-    { S(0),    EV_BGM,   1,           0,   0 },
+    { S(0),    EV_BGM,   SONG_STAGE4, 0,   0 },
     { S(2),    EV_TEXT,  T_WHY,       0,   0 },
     /* ---- 前から混成(弓兵は屋根の上) ---- */
     { S(2.5),   EV_DIR,   DIR_FRONT,   0,   0 },
