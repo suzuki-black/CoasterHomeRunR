@@ -47,6 +47,8 @@ void sys_install_isr(void);
 void wait_tick(void);
 u8   input_raw(void);
 void psg_write(u8 reg, u8 val);
+void fm_write(u8 reg, u8 val);       /* FM 音源(MSX-MUSIC)のレジスタ(書くたびに YM2413 の分だけ待つ) */
+extern u8 g_seg2;                    /* ページ2のいまのセグメント(sys.s) */
 void timer_reset(void);
 u16  timer_read(void);
 u8   sys_cpu_status(void);          /* S1990 レジスタ 6(bit5 = 0 で R800、bit6 = 0 で DRAM モード) */

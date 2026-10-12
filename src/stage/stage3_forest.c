@@ -45,29 +45,6 @@ static const Caption forest_captions[] = {
     { "FOREST CLEAR!", C_YELLOW, 1 },
 };
 
-/* BGM「森の小道」: 140BPM のト長調(G → C → D → G)。8 分音符 = 13 ティック。軽快 */
-#define E8 13
-#define Q  26
-#define DQ 39
-#define H  52
-static const u8 bgm_melody[] = {
-    67,E8, 71,E8, 74,Q,  71,E8, 74,E8, 79,Q,             /* G */
-    76,Q,  72,E8, 76,E8, 79,Q,  76,Q,                    /* C */
-    74,E8, 76,E8, 78,E8, 74,E8, 81,Q,  78,Q,             /* D */
-    79,DQ, 78,E8, 79,H,                                  /* G */
-    83,E8, 81,E8, 79,E8, 81,E8, 83,Q,  79,Q,             /* G */
-    84,E8, 83,E8, 81,E8, 79,E8, 76,Q,  72,Q,             /* C */
-    74,E8, 78,E8, 81,E8, 78,E8, 74,Q,  76,E8, 78,E8,     /* D */
-    79,Q,  74,Q,  79,Q,  0,Q,                            /* G */
-    0xFF, 0,
-};
-static const u8 bgm_bass[] = {                           /* 4 分のズンチャッ */
-    43,Q, 50,Q, 43,Q, 50,Q,
-    36,Q, 43,Q, 36,Q, 43,Q,
-    38,Q, 45,Q, 38,Q, 45,Q,
-    43,Q, 50,Q, 47,Q, 50,Q,
-    0xFF, 0,
-};
 
 static const Event forest_events[] = {
     /* ---- 森へ ---- */
@@ -124,7 +101,7 @@ const Stage stage_data = {
     2,
     0,
     0,          /* 演出は飛ばさない(走りながら始まる) */
-    bgm_melody, bgm_bass,
+    SONG_STAGE3,
     forest_zones, 0x7A3C,
     "STAGE 3", "THE FOREST",
 };

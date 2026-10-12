@@ -1,6 +1,6 @@
 /* sound.c — PSG 効果音ドライバ(仕様書 7.8)
  *
- * ch A/B は BGM、ch C は効果音専用。効果音は 1 フレーム 4 バイト:
+ * BGM は FM 音源(下の bgm_)、PSG は効果音だけ(ch C)。効果音は 1 フレーム 4 バイト:
  *   周期(下位, 上位)、音量(0-15、0xFF で終端)、ノイズ周期(0xFF = ノイズなし)。周期 0 = トーンなし。
  * 優先度: 被弾 > 体当たり(予備) > 敵撃破 > 警告 > 射撃・命中・ロック > 救急箱。低い音は高い音を上書きしない。
  * PSG は割り込み側だけが書く。本体は se_play で予約するだけ。
@@ -37,59 +37,8 @@ static const u8 * const se_tab[SE_COUNT] = {
 /* 優先度(大きいほど強い)。ロックは射撃と同じ */
 static const u8 se_pri[SE_COUNT] = { 0, 1, 2, 2, 3, 4, 5, 6, 2 };
 
-/* ---------------------------------------------------------------------------
- * BGM(ch A = メロディ、ch B = ベース)
- *   音の頭で音量を上げ、ティックごとに少しずつ下げる(減衰)。最後の 2 ティックは切って刻みを出す
- * --------------------------------------------------------------------------- */
-extern const u16 psg_period[72];         /* MIDI 24〜95 */
-
-typedef struct {
-    const u8 *top, *p;
-    u8 wait, len, vol, peak, reg;
-} BgmCh;
-static BgmCh bgm[2];
-static volatile u8 bgm_on;
-
-void bgm_play(const u8 *melody, const u8 *bass)
-{
-    bgm_on = 0;
-    bgm[0].top = bgm[0].p = melody; bgm[0].wait = 1; bgm[0].peak = 12; bgm[0].reg = 0; bgm[0].vol = 0;
-    bgm[1].top = bgm[1].p = bass;   bgm[1].wait = 1; bgm[1].peak = 11; bgm[1].reg = 2; bgm[1].vol = 0;
-    bgm_on = 1;
-}
-
-void bgm_stop(void)
-{
-    bgm_on = 0;
-    psg_write(8, 0);
-    psg_write(9, 0);
-}
-
-static void bgm_tick(void)
-{
-    u8 c;
-    for (c = 0; c < 2; c++) {
-        BgmCh *b = &bgm[c];
-        if (--b->wait == 0) {
-            u8 note = b->p[0];
-            if (note == 0xFF) { b->p = b->top; note = b->p[0]; }
-            b->wait = b->len = b->p[1];
-            b->p += 2;
-            if (note) {
-                u16 per = psg_period[note - 24];
-                psg_write(b->reg, (u8)per);
-                psg_write(b->reg + 1, (u8)(per >> 8));
-                b->vol = b->peak;
-            } else {
-                b->vol = 0;
-            }
-        } else {
-            if (b->wait <= 2 && b->len > 4) b->vol = 0;          /* 音の終わりを切る */
-            else if (b->vol > b->peak - 4 && !(b->wait & 3)) b->vol--;   /* ゆるい減衰 */
-        }
-        psg_write(8 + c, b->vol);
-    }
-}
+/* BGM は FM 音源(sndfm.s のアセンブラ。割り込みからは下の sound_tick → fm_bgm_tick) */
+void fm_bgm_tick(void);
 
 static volatile u8 se_req;
 static const u8 *se_ptr;
@@ -99,9 +48,9 @@ void sound_init(void)
 {
     u8 r;
     for (r = 0; r < 14; r++) psg_write(r, 0);
-    psg_write(7, 0xBF & ~0x03);  /* ch A/B のトーン(BGM)。bit7=1 bit6=0 */
+    psg_write(7, 0xBF);          /* トーン・ノイズとも止める(効果音が ch C を使うときだけ開ける)。bit7=1 bit6=0 */
     se_req = 0; se_ptr = 0; se_cur = 0;
-    bgm_on = 0;
+    bgm_stop();
 }
 
 void se_play(u8 id)
@@ -114,7 +63,7 @@ void se_play(u8 id)
 void sound_tick(void)
 {
     u8 req = se_req;
-    if (bgm_on) bgm_tick();
+    fm_bgm_tick();
     if (req) {
         se_req = 0;
         if (!se_ptr || se_pri[req] >= se_pri[se_cur]) {
@@ -123,7 +72,7 @@ void sound_tick(void)
         }
     }
     if (se_ptr) {
-        u8 mix = 0xBF & ~0x03;          /* A/B トーンは BGM 用に開けておく */
+        u8 mix = 0xBF;
         if (se_ptr[2] == 0xFF) {
             psg_write(10, 0);
             psg_write(7, mix);

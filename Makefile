@@ -40,7 +40,7 @@ MACHINE ?= TH_turboR_dev
 # (下の sound.rel。Z80 は MULUB / MULUW を実行できず、黙って結果が壊れる。Z80 向けと R800 向けのオブジェクトは
 # SDCC のリンカが混ぜられないので、Z80 向けにコンパイルする手は取れない)
 CPORT   = -mr800
-CFLAGS  = $(CPORT) --std-c11 -I$(ENG) --opt-code-speed --max-allocs-per-node 100000 $(EXTRA_CFLAGS)
+CFLAGS  = $(CPORT) --std-c11 -I$(ENG) -I$(BUILD) --opt-code-speed --max-allocs-per-node 100000 $(EXTRA_CFLAGS)
 # WebMSX 用のコピーの名前(マッパーの種類をファイル名で指定する)
 ROMNAME ?= TrolleyHomeRun
 # 常駐部のコードは RAM ページ1 0x4000-0x7FFF、変数は 0xCC00-0xDFFF(仕様書 7.3)。
@@ -50,7 +50,7 @@ ROMNAME ?= TrolleyHomeRun
 LDFLAGS = -mr800 --no-std-crt0 --code-loc 0x4008 --data-loc 0xCC00 -Wl-b_PAGE0=0x1A00 -Wl-j -Wl-m -Wl-u
 P0FLAGS = --constseg PAGE0
 
-ASM_SRCS = $(ENG)/crt0.s $(ENG)/sys.s $(ENG)/vdp.s $(ENG)/gfx.s $(ENG)/math.s $(ENG)/raster.s $(ENG)/geom.s $(ENG)/pcm.s
+ASM_SRCS = $(ENG)/crt0.s $(ENG)/sys.s $(ENG)/vdp.s $(ENG)/gfx.s $(ENG)/math.s $(ENG)/raster.s $(ENG)/geom.s $(ENG)/pcm.s $(ENG)/sndfm.s
 C_SRCS   = $(ENG)/main.c $(ENG)/render.c $(ENG)/rail.c $(ENG)/shared.c \
            $(ENG)/hud.c $(ENG)/sound.c $(ENG)/trolley.c $(ENG)/menu.c $(ENG)/fx.c $(ENG)/vdpbench.c
 # モジュールのリンク: 0x8000 に先頭(modhead)、変数は 0xBC00-0xBFFF。常駐部のシンボルは ressyms(engine.noi から生成)で渡す
@@ -69,7 +69,7 @@ ifdef BENCH
 endif
 
 
-HDRS = $(wildcard $(ENG)/*.h)
+HDRS = $(wildcard $(ENG)/*.h) $(BUILD)/songs.h
 
 ROM = $(BUILD)/TrolleyHomeRun.rom
 
@@ -82,6 +82,10 @@ $(BUILD):
 
 $(BUILD)/gen_data.c: $(TOOLS)/gen_data.py | $(BUILD)
 	$(PYTHON) $< $@
+
+# FM 音源の曲(src/sound/songs.mml)→ 音のモジュール(ROM のバンク 16-17)と曲の番号(songs.h)
+$(BUILD)/sndmod.bin $(BUILD)/songs.h: src/sound/songs.mml $(TOOLS)/gen_music.py | $(BUILD)
+	$(PYTHON) $(TOOLS)/gen_music.py src/sound/songs.mml $(BUILD)/sndmod.bin $(BUILD)/songs.h
 
 $(BUILD)/gen_data.rel: $(BUILD)/gen_data.c $(HDRS) Makefile
 	$(CC) $(CFLAGS) $(P0FLAGS) -c -o $@ $<
@@ -149,10 +153,10 @@ $(BUILD)/boot.ihx: $(BUILD)/boot.rel
 
 GAMES = $(foreach n,1 2 3 4 5,$(BUILD)/game$(n).ihx)
 
-$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/envmod.ihx $(GAMES) $(TOOLS)/mkrom.py
+$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/envmod.ihx $(GAMES) $(BUILD)/sndmod.bin $(TOOLS)/mkrom.py
 	$(PYTHON) $(TOOLS)/mkrom.py $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/engine.noi $@ \
 	  $(BUILD)/envmod.ihx $(BUILD)/envmod.noi \
-	  $(foreach n,1 2 3 4 5,$(BUILD)/game$(n).ihx $(BUILD)/game$(n).noi)
+	  $(foreach n,1 2 3 4 5,$(BUILD)/game$(n).ihx $(BUILD)/game$(n).noi) $(BUILD)/sndmod.bin
 	cp $@ "$(BUILD)/$(ROMNAME) [ASCII8].rom"
 
 # 計測用 ROM(fps 表示、タイトルに CPU の状態)。オブジェクトが混ざらないよう build/fps に分けてビルドする

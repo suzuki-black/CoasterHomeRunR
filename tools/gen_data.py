@@ -9,7 +9,6 @@
 - recip9      : 9bit 仮数の逆数表(多角形の辺の傾きを割り算なしで求める)
 - coaster_front / coaster_back : 画面下部に重ねるコースターの車両(64×13、前を向いたとき / 後ろを向いたとき)と、
                 壊れ具合の点(coaster_dmg_front / coaster_dmg_back。ライフ(耐久)が減ると現れる)
-- psg_period  : PSG の音程表(MIDI の音番号 24〜95)
 """
 import math
 import sys
@@ -306,12 +305,6 @@ def main(out):
     dfront = damage_bytes(coaster_damage(True))
     dback = damage_bytes(coaster_damage(False))
 
-    # PSG の音程表: MIDI の音番号 24(C1)〜95(B6)の周期 = 3579545 / (16 * 周波数)
-    ptab = []
-    for n in range(24, 96):
-        f = 440.0 * 2 ** ((n - 69) / 12)
-        ptab.append(min(4095, round(3579545 / (16 * f))))
-
     # 逆数表: m = 256..511 について round(2^24 / m)(m=256 は 65535 に丸める)。raster.s の傾き計算
     rtab = [min(65535, round((1 << 24) / m)) for m in range(256, 512)]
 
@@ -331,7 +324,6 @@ def main(out):
         f.write(carray('coaster_back', 'u8', cback) + '\n\n')
         f.write(carray('coaster_dmg_front', 'u8', dfront) + '\n\n')
         f.write(carray('coaster_dmg_back', 'u8', dback) + '\n\n')
-        f.write(carray('psg_period', 'u16', ptab) + '\n')
 
 
 if __name__ == '__main__':

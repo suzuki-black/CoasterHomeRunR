@@ -1,4 +1,4 @@
-/* sound.h — PSG サウンド(仕様書 7.8)。ch A/B = BGM、ch C = 効果音 */
+/* sound.h — サウンド(仕様書 7.8)。BGM = FM 音源(MSX-MUSIC)、効果音 = PSG の ch C */
 #ifndef SOUND_H
 #define SOUND_H
 #include "engine.h"
@@ -9,8 +9,9 @@ void sound_init(void);
 void se_play(u8 id);
 void sound_tick(void);   /* 割り込みから 60Hz で呼ばれる */
 
-/* BGM: 1 チャンネル = (音, 長さ[ティック])の並び。音 = MIDI の音番号(24〜95)、0 = 休み、0xFF = 先頭へ戻る */
-void bgm_play(const u8 *melody, const u8 *bass);
+/* BGM: FM 音源の曲(src/sound/songs.mml を tools/gen_music.py が音のモジュールにする)。番号は songs.h の SONG_、0 = 無し */
+#include "songs.h"
+void bgm_play(u8 song);
 void bgm_stop(void);
 
 #endif

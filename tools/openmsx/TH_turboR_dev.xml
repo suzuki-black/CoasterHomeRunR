@@ -59,6 +59,20 @@
           </rom>
         </ROM>
       </secondary>
+      <secondary slot="2">
+        <!-- FS-A1ST と同じく MSX-MUSIC(FM 音源、YM2413)を内蔵。BGM を FM で鳴らす(src/engine/sound.c) -->
+        <MSX-MUSIC id="C-BIOS MSX-MUSIC">
+          <mem base="0x4000" size="0x4000"/>
+          <io base="0x7C" num="2" type="O"/>
+          <rom>
+            <sha1>5c5eb001e6a1fe29edb7abd428a3967bb388e5db</sha1>
+            <filename>cbios_music.rom</filename>
+          </rom>
+          <sound>
+            <volume>9000</volume>
+          </sound>
+        </MSX-MUSIC>
+      </secondary>
     </primary>
 
     <S1990 id="S1990">

@@ -5,6 +5,7 @@
  * ステージデータは定数だけで書き、読み込み先(0xB400)に合わせて単独でリンクする(stage1_cave.c と同じ)。
  */
 #include "game.h"
+#include "sound.h"
 #include "env.h"
 
 #define S(sec) ((u16)((sec) * 60))
@@ -41,23 +42,6 @@ static const Caption town_captions[] = {
     { "VILLAGE IS NEAR", C_YELLOW, 1 },
 };
 
-/* BGM「町」: 150BPM のハ長調(C → Am → F → G)。8 分音符 = 12 ティック。にぎやか */
-#define E8 12
-#define Q  24
-static const u8 bgm_melody[] = {
-    72,E8, 76,E8, 79,E8, 76,E8, 84,Q,  79,Q,             /* C  */
-    81,E8, 79,E8, 76,E8, 72,E8, 69,Q,  72,Q,             /* Am */
-    77,E8, 76,E8, 74,E8, 72,E8, 74,Q,  77,Q,             /* F  */
-    79,Q,  74,E8, 76,E8, 77,Q,  71,Q,                    /* G  */
-    0xFF, 0,
-};
-static const u8 bgm_bass[] = {                           /* 4 分の歩くベース */
-    48,Q, 52,Q, 55,Q, 52,Q,
-    45,Q, 48,Q, 52,Q, 48,Q,
-    41,Q, 45,Q, 48,Q, 45,Q,
-    43,Q, 47,Q, 50,Q, 47,Q,
-    0xFF, 0,
-};
 
 static const Event town_events[] = {
     { S(0),    EV_DIR,   DIR_NONE,    0,   0 },
@@ -114,7 +98,7 @@ const Stage stage_data = {
     2,
     0,
     0,          /* 演出は飛ばさない(走りながら始まる) */
-    bgm_melody, bgm_bass,
+    SONG_STAGE4,
     town_zones, 0x3C71,
     "STAGE 4", "THE TOWN",
 };

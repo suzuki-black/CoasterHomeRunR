@@ -49,28 +49,6 @@ static const Caption lake_captions[] = {
     { "SUNLIGHT!",      C_WHITE,  1 },
 };
 
-/* BGM「地底湖」: 180BPM のホ短調(Em → C → D → B)。8 分音符 = 10 ティック。疾走感 */
-#define E8 10
-#define Q  20
-#define H  40
-static const u8 bgm_melody[] = {
-    76,E8, 79,E8, 83,Q,  81,E8, 79,E8, 78,E8, 79,E8,     /* Em */
-    76,Q,  72,E8, 74,E8, 76,Q,  79,Q,                    /* C  */
-    78,E8, 76,E8, 74,E8, 76,E8, 78,Q,  81,Q,             /* D  */
-    83,H,  78,Q,  75,Q,                                  /* B  */
-    88,E8, 86,E8, 83,E8, 86,E8, 88,Q,  83,Q,             /* Em */
-    84,E8, 83,E8, 81,E8, 79,E8, 76,Q,  79,Q,             /* C  */
-    81,E8, 83,E8, 81,E8, 79,E8, 78,Q,  74,Q,             /* D  */
-    75,Q,  78,Q,  83,Q,  71,Q,                           /* B  */
-    0xFF, 0,
-};
-static const u8 bgm_bass[] = {                           /* 8 分のオクターブ刻み(駆け足) */
-    40,E8, 52,E8, 40,E8, 52,E8, 40,E8, 52,E8, 40,E8, 52,E8,
-    36,E8, 48,E8, 36,E8, 48,E8, 36,E8, 48,E8, 36,E8, 48,E8,
-    38,E8, 50,E8, 38,E8, 50,E8, 38,E8, 50,E8, 38,E8, 50,E8,
-    35,E8, 47,E8, 35,E8, 47,E8, 35,E8, 47,E8, 39,E8, 42,E8,
-    0xFF, 0,
-};
 
 #define AT(m, cmd) (m), (cmd) | EV_AT
 
@@ -153,10 +131,10 @@ const Stage stage_data = {
     2,          /* 坑道の途中から */
     0,
     0,          /* 演出は飛ばさない(走りながら始まる) */
-    bgm_melody, bgm_bass,
+    SONG_STAGE2,
     lake_zones, 0x2B1D,
     "STAGE 2", "THE LAKE",
-    0, 0, 0,
+    0, 0,
     { 0, 0 }, 0, 0,
     1,          /* やさしい進行 */
 };

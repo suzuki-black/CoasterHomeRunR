@@ -68,16 +68,14 @@ typedef struct {
     u8  start_m;              /* 開始位置[m] */
     u8  start_back;           /* 1 = 後ろを向いて始まる(オープニング) */
     u16 skip_tick;            /* 演出中に A を押したらこの時刻まで飛ばす(0 = 飛ばせない) */
-    const u8 *bgm_melody;     /* BGM(sound.h の形式) */
-    const u8 *bgm_bass;
+    u8  bgm;                  /* BGM の曲の番号(songs.h の SONG_。src/sound/songs.mml) */
     const u8 *zones;          /* 地形の区間(env.h の env_build) */
     u16 seed;                 /* 地形の乱数の種 */
     const char *name;         /* ステージの始めに出す名前(2 行目は title2) */
     const char *title2;
     /* 最後のステージだけ: エンディング(SCREEN 1、BIOS のフォント)の文と BGM */
     const u8 *ending;         /* (行, 桁, 文字コード…, 0) の並び、0xFF で終わり。クリアすれば必ずこの文 */
-    const u8 *end_melody;
-    const u8 *end_bass;
+    u8  end_bgm;              /* エンディングの曲の番号(0 = 無し) */
     /* 分岐(無ければ 0): track は分岐点まで、branch[0/1] = 左 / 右(同じ長さで同じ合流点に戻る形にする)、tail = 合流後。
      * 分岐点より前で L・R の獣人のどちらかを撃つとそちらへ。撃たなければ branch_def の側 */
     const RailSeg *branch[2];
@@ -98,6 +96,8 @@ typedef struct {
 #define STAGE_COUNT  5
 #define SEG_GAME     1
 #define SEG_ENV      5
+#define SEG_SND      8   /* 音のモジュール(FM の曲。起動時に 1 回読み込む) */
+#define SND_BANK     16  /* 音のモジュールの ROM のバンク(16-17) */
 #define MOD_STAGE    (*(const Stage * const *)0x8003)
 typedef u8 (*GameRunFn)(const Stage *st, u8 first);
 #define MOD_GAME_RUN ((GameRunFn)0x8000)

@@ -8,6 +8,7 @@
  * ステージデータは定数だけで書き、読み込み先(0xB400)に合わせて単独でリンクする(stage1_cave.c と同じ)。
  */
 #include "game.h"
+#include "sound.h"
 #include "env.h"
 
 #define S(sec) ((u16)((sec) * 60))
@@ -36,45 +37,6 @@ static const Caption home_captions[] = {
     { "WARNING!",         C_RED,    2 },
     { "THE KING!",        C_RED,    2 },
     { "HOME AT LAST!",    C_YELLOW, 1 },
-};
-
-/* BGM「王」: 160BPM のイ短調(Am → F → Dm → E)。8 分音符 = 11 ティック。最後の戦い */
-#define E8 11
-#define Q  22
-static const u8 bgm_melody[] = {
-    69,E8, 69,E8, 72,E8, 69,E8, 76,Q,  75,Q,             /* Am */
-    77,E8, 76,E8, 74,E8, 72,E8, 74,Q,  71,Q,             /* F  */
-    74,E8, 74,E8, 77,E8, 74,E8, 81,Q,  80,Q,             /* Dm */
-    76,Q,  68,Q,  71,Q,  74,Q,                           /* E  */
-    0xFF, 0,
-};
-static const u8 bgm_bass[] = {
-    45,E8, 57,E8, 45,E8, 57,E8, 45,E8, 57,E8, 45,E8, 57,E8,
-    41,E8, 53,E8, 41,E8, 53,E8, 41,E8, 53,E8, 41,E8, 53,E8,
-    38,E8, 50,E8, 38,E8, 50,E8, 38,E8, 50,E8, 38,E8, 50,E8,
-    40,E8, 52,E8, 40,E8, 52,E8, 40,E8, 52,E8, 44,E8, 47,E8,
-    0xFF, 0,
-};
-#undef E8
-#undef Q
-
-/* エンディングの BGM「おしまい」: 100BPM のヘ長調(F → B♭ → C → F)。のどか */
-#define E8 18
-#define Q  36
-#define H  72
-static const u8 end_melody[] = {
-    72,Q,  69,E8, 72,E8, 77,H,                           /* F  */
-    74,Q,  77,E8, 74,E8, 70,H,                           /* B♭ */
-    72,Q,  74,E8, 76,E8, 79,Q,  76,Q,                    /* C  */
-    77,H,  72,Q,  0,Q,                                   /* F  */
-    0xFF, 0,
-};
-static const u8 end_bass[] = {
-    41,Q, 48,Q, 45,Q, 48,Q,
-    46,Q, 53,Q, 50,Q, 53,Q,
-    48,Q, 55,Q, 52,Q, 55,Q,
-    41,Q, 48,Q, 41,H,
-    0xFF, 0,
 };
 
 /* エンディングの文(仕様書 5.2)。(行, 桁, MSX の文字コード…, 0)、0xFF で終わり。
@@ -124,8 +86,8 @@ const Stage stage_data = {
     2,
     0,
     0,
-    bgm_melody, bgm_bass,
+    SONG_STAGE5,
     home_zones, 0x4D9E,
     "STAGE 5", "THE VILLAGE",
-    ending_text, end_melody, end_bass,
+    ending_text, SONG_ENDING,
 };

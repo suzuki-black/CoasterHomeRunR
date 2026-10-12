@@ -163,7 +163,7 @@ static void ending_run(const Stage *st)
     vdp_out((const u8 *)num, 5);
     vdp_out((const u8 *)"0", 1);
     vdp_wreg(1, 0xE2);                                 /* 表示オン、垂直帰線割り込み */
-    if (st->end_melody) bgm_play(st->end_melody, st->end_bass);
+    if (st->end_bgm) bgm_play(st->end_bgm);
     for (t = 0; t < 480; t++) {
         wait_tick();
         in = input_raw();
@@ -228,6 +228,8 @@ void main(void)
     cfg_defaults();
     sys_seg2(SEG_ENV);               /* 地形モジュールをセグメント 5 へ(以後ページ2はふだんゲームのセグメント) */
     mod_load(ENV_BANK);
+    sys_seg2(SEG_SND);               /* 音のモジュール(FM の曲)をセグメント 8 へ */
+    mod_load(SND_BANK);
     sys_seg2(SEG_GAME);
 #ifdef BENCH
     bench_run();
