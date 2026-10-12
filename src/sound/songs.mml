@@ -57,19 +57,19 @@ R V14,13,12,12,9 l8 [bh h sh h bh bh sh h]15 bh h sh h sh s16 s16 s s
 @voice 61 21 18 07 C4 A2 13 15   # オリジナル音色 1: ビブラートつきのシンセ金管(9〜16 小節)
 A @0 @v0 v14 q6
 A o5 e8 e16 e16 e8 e16 e16 e8 e16 e16 g8 b8 | o6 e8 e16 e16 e8 e16 e16 d8 o5 b8 g8 e8 |
-A o5 f+8 f+16 f+16 f+8 f+16 f+16 f+8 f+16 f+16 a8 b8 | o5 b4 a4 f+4 r4 |
+A o5 f+8 f+16 f+16 f+8 f+16 f+16 f+8 f+16 f+16 a8 b8 | o5 b4 a8 g8 f+4 r4 |
 A o5 e8 e16 e16 e8 e16 e16 e8 e16 e16 g8 b8 | o6 e8 e16 e16 e8 e16 e16 g8 f+8 e8 d+8 |
 A o6 e8 d8 c8 o5 b8 a8 g8 f+8 d+8 | o5 e4 o4 b4 o5 e4 r4 |
 A @v1 o5 g8 g16 g16 g8 g16 g16 g8 g16 g16 b8 o6 d8 | o6 g4 f+8 e8 d4 c8 o5 b8 |
 A o5 a8 a16 a16 a8 a16 a16 a8 a16 a16 o6 c8 e8 | o6 f+4 e8 d8 c4 o5 b4 |
 A o5 e8 e16 e16 e8 e16 e16 e8 e16 e16 g8 b8 | o6 e8 e16 e16 e8 e16 e16 g8 f+8 a8 g8 |
 A o6 f+8 e8 d+8 e8 f+8 g8 a8 b8 | o7 e4 o6 b4 o7 e4 r4 |
-B @9 v11 q8 o4 g2 b2 | g2 e2 | f+2 a2 | f+2 d+2 | g2 b2 | g2 b2 | a2 b2 | g2 e2 |
-B b2 g2 | b2 a2 | a2 o5 c2 | o4 a2 g2 | g2 b2 | g2 e2 | o3 b1 o4 | g2 e2 |
-C @1 v9 q5 o4 l8 [b]8 | [b]8 | [a]8 | [a]8 | [b]8 | [b]8 | [a]8 | [b]8 | o5 [d]8 | [d]8 | [c]8 | [d]8 | o4 [b]8 | [b]8 | [a]8 | [b]8 |
-D @1 v8 q5 o4 l8 [g]8 | [g]8 | [f+]8 | [f+]8 | [g]8 | [g]4 [b]4 | [e]4 [d+]4 | [g]8 | [b]8 | [a]8 | [a]8 | [a]8 | [g]8 | [g]4 [e]4 | [b]8 | [g]8 |
-E @14 v14 q6 o2 l8 [e > e <]4 | [e > e <]4 | [b > b <]4 | [b > b <]4 | [e > e <]4 | [e > e <]2 [b > b <]2 | [a > a <]2 [b > b <]2 | [e > e <]4 |
-E [g > g <]4 | [g > g <]2 [d > d <]2 | [a > a <]4 | [d > d <]2 [g > g <]2 | [e > e <]4 | [e > e <]4 | [b > b <]4 | [e > e <]4 |
+B @9 v11 q8 o4 g2 b2 | g2 e2 | f+2 a2 | f+2 d+2 | g2 b2 | g2 e2 | a2 f+2 | g2 e2 |
+B b2 g2 | b2 a2 | a2 o5 c2 | o4 a2 g2 | g2 b2 | g2 e2 | a2 f+2 | g2 e2 |
+C @1 v9 q5 o4 l8 [b]8 | [b]8 | [a]8 | [a]8 | [b]8 | [b]8 | [a]8 | [b]8 | o5 [d]8 | [d]8 | [c]8 | [c]8 | o4 [b]8 | [b]8 | [a]8 | [b]8 |
+D @1 v8 q5 o4 l8 [g]8 | [g]8 | [f+]8 | [f+]8 | [g]8 | [g]8 | [f+]8 | [g]8 | [b]8 | [a]8 | [a]8 | [a]8 | [g]8 | [g]8 | [f+]8 | [g]8 |
+E @14 v14 q6 o2 l8 [e > e <]4 | [e > e <]4 | [b > b <]4 | [b > b <]4 | [e > e <]4 | [e > e <]4 | [a > a <]2 [b > b <]2 | [e > e <]4 |
+E [g > g <]4 | [g > g <]2 [d > d <]2 | [a > a <]4 | [d > d <]2 [g > g <]2 | [e > e <]4 | [e > e <]4 | [a > a <]2 [b > b <]2 | [e > e <]4 |
 R V14,13,12,12,9 [bh8 s16 s16 bh8 s16 s16 bh8 s16 s16 bh8 sh8]7 bh8 s16 s16 bh8 s16 s16 bc8 s8 s8 s8 |
 R [bh8 s16 s16 bh8 s16 s16 bh8 s16 s16 bh8 sh8]7 bc4 s8 s8 bc4 r4
 
@@ -101,28 +101,27 @@ R [bh8 h8 sh8 h8 bh8 h8 sh8 h16 h16]7 bc4 s8 s8 bc4 r4
 
 @song STAGE4 loop
 # ステージ 4「町」(オッフェンバック『天国と地獄』序曲とシュトラウス『トリッチ・トラッチ・ポルカ』の駆け足をイメージ)。
-#   祭りの山車に追われる場面なので、遊園地のような明るさを避けてハ短調でシリアスに(2026-10-12 ユーザーの指定)。t150。
-#   暗めの金管の旋律、弦の短い裏打ち、オクターブで刻むベース。後半は同じ音の 16 分音符の連打で、14 小節目に D♭(ナポリの和音)
+#   祭りの山車に追われる場面なので、遊園地のような明るさを避けてシリアスに(2026-10-12 ユーザーの指定)。イ短調、t150。
+#   旋律は拍の頭に和音の音を置く素直な線にし、増 2 度(A♭→B のような跳躍)やナポリの和音は使わない(外れた音に聞こえる)。
+#   和音は Am・Dm・E と F・G・C だけ。暗めの金管の旋律、低いピアノの短い裏打ち、ホルンの長い音、オクターブで刻むベース
 @tempo 150
 @voice 21 21 1C 06 A3 82 14 16   # オリジナル音色 0: 暗めの金管(1〜8 小節)
-@voice 21 21 18 06 F2 F3 13 16   # オリジナル音色 1: 鋭く刻む弦(連打の 9〜16 小節。音程が揺れて聞こえないようビブラートなし)
+@voice 21 21 16 07 C3 A2 14 15   # オリジナル音色 1: 太い金管(9〜16 小節)
 A @0 @v0 v14 q6
-A o5 l8 g g a- g o6 c4 o5 b4 | o5 l8 a- a- b- a- o6 d4 o5 b4 | o5 l8 b b o6 c o5 b o6 e- d c o5 b | o5 a-4 g4 o6 c4 r4 |
-A o5 l8 g g a- g o6 c4 o5 b4 | o5 l8 a- a- b- a- o6 d4 o5 b4 | o6 l8 e- d c o5 b o6 c o5 a- g f | o5 e-4 d4 c4 r4 |
-A @v1 q5 o5 l16 e- e- e- e- g g g g o6 c c c c o5 g g g g | o5 l16 f f f f a- a- a- a- o6 c c c c o5 a- a- a- a- |
-A o5 l16 g g g g b b b b o6 d d d d f f f f | o6 e-8 c8 o5 g8 e-8 c4 r4 |
-A o5 l16 e- e- e- e- g g g g o6 c c c c o5 g g g g | o5 l16 f f f f a- a- a- a- o6 d- d- d- d- o5 a- a- a- a- |
-A o5 l16 g g g g a- a- a- a- b b b b o6 d d d d | o6 c4 o5 g4 o6 c4 r4 |
-B @9 v11 q8 o4 e-2 g2 | a-2 g2 | d2 g2 | f4 e-2. | e-2 g2 | a-2 g2 | g2 f2 | o3 b2 o4 c2 |
-B e-2 g2 | f2 a-2 | d2 f2 | e-2 g2 | e-2 g2 | f2 a-2 | d2 f2 | e-2 c2 |
-C @2 v10 q3 o4 l8 [r g]4 | [r a-]2 [r b]2 | [r g]4 | [r a-]1 [r g]3 | [r g]4 | [r a-]2 [r b]2 | [r g]2 [r a-]2 | [r g]4 |
-C [r g]4 | [r a-]4 | [r b]4 | [r g]4 | [r g]4 | [r a-]4 | [r b]4 | [r g]4 |
-D @2 v9 q3 o4 l8 [r e-]4 | [r f]4 | [r d]4 | [r f]1 [r e-]3 | [r e-]4 | [r f]4 | r g r g r f r c | [r f]2 [r e-]2 |
-D [r e-]4 | [r f]4 | [r d]4 | [r e-]4 | [r e-]4 | [r f]4 | [r d]4 | [r e-]4 |
-E @14 v14 q6 o2 l8 [c > c <]4 | [f > f <]2 [g > g <]2 | [g > g <]4 | f > f < [c > c <]3 | [c > c <]4 | [f > f <]2 [g > g <]2 | [c > c <]2 [f > f <]2 | [g > g <]2 [c > c <]2 |
-E [c > c <]4 | [f > f <]4 | [g > g <]4 | [c > c <]4 | [c > c <]4 | [d- > d- <]4 | [g > g <]4 | c > c < c > c < c4 r4 |
+A o5 l8 e e e e a4 e4 | o5 l8 c d e c o4 a4 o5 c4 | o5 l8 d d d d f4 d4 | o4 l8 b o5 c d o4 b g+4 e4 |
+A o5 l8 e e e e a4 o6 c4 | o6 l8 c o5 b a g+ a4 e4 | o5 l8 f e d f e g+ b g+ | o5 a4 e4 a4 r4 |
+A @v1 o5 l8 a a a a o6 c4 o5 a4 | o5 l8 b b b b o6 d4 o5 b4 | o6 l8 c c c c e4 c4 | o5 l8 b o6 c d o5 b g+4 e4 |
+A o5 l8 e e e e a4 o6 c4 | o6 l8 d c o5 a f d4 f4 | o5 l8 e d e g+ b4 g+4 | o5 a4 e4 a4 r4 |
+B @9 v11 q8 o4 c1 | c1 | f1 | g+1 | c1 | c1 | f2 g+2 | c1 |
+B a1 | b1 | e1 | g+1 | c1 | f1 | g+1 | c1 |
+C @3 v10 q3 o4 l8 [r e]4 | [r e]4 | [r f]4 | [r g+]4 | [r e]4 | [r e]4 | [r f]2 [r g+]2 | [r e]4 |
+C [r a]4 | [r b]4 | [r g]4 | [r g+]4 | [r e]4 | [r f]4 | [r g+]4 | [r e]4 |
+D @3 v9 q3 o4 l8 [r c]4 | [r c]4 | [r d]4 | [r e]4 | [r c]4 | [r c]4 | [r d]2 [r e]2 | [r c]4 |
+D [r f]4 | [r g]4 | [r e]4 | [r e]4 | [r c]4 | [r d]4 | [r e]4 | [r c]4 |
+E @14 v14 q6 o2 l8 [a > a <]4 | [a > a <]4 | [d > d <]4 | [e > e <]4 | [a > a <]4 | [a > a <]4 | [d > d <]2 [e > e <]2 | [a > a <]4 |
+E [f > f <]4 | [g > g <]4 | [c > c <]4 | [e > e <]4 | [a > a <]4 | [d > d <]4 | [e > e <]4 | a > a < a > a < a4 r4 |
 R V15,13,13,12,9 [b8 h8 s8 h8 b8 b8 s8 h8]7 b8 h8 s8 h8 t16 t16 t16 t16 s8 s8 |
-R [b8 h8 s8 h8 b8 b8 s8 h8]6 b8 h8 s8 h8 t16 t16 t16 t16 s8 s8 | bc8 h8 s8 h8 t16 t16 t16 t16 bc4
+R bc8 h8 s8 h8 b8 b8 s8 h8 [b8 h8 s8 h8 b8 b8 s8 h8]5 b8 h8 s8 h8 t16 t16 t16 t16 s8 s8 | b8 h8 s8 h8 bc4 r4
 
 @song STAGE5 loop
 # ステージ 5「王」(ネッケ『クシコス・ポスト』とカバレフスキー『道化師のギャロップ』をイメージ)。イ短調、t150。
@@ -135,14 +134,14 @@ A o5 l8 a a o6 c o5 a o6 e4 d4 | o5 l8 g g b g o6 d4 c4 | o5 l8 f f a f o6 c o5 
 A o5 l8 a a o6 c o5 a o6 e4 d4 | o5 l8 g g b g o6 d e f d | o6 l8 e d c o5 b a g f e | o5 a2 r2 |
 A @v1 @0 v14 q7 o6 l16 e d+ d c+ c o5 b a+ a g+ a b o6 c d e f e | o6 l16 d c+ c o5 b a+ a g+ g f+ g a b o6 c d c o5 b |
 A o6 l16 e d+ d c+ c o5 b a+ a g+ a b o6 c d e f e | @v0 @0 q6 o5 l8 a e c e a4 r4 |
-A o5 l16 [a]4 [g+]4 [g]4 [f+]4 | o5 l16 [f]4 [e]4 [d+]4 [e]4 | o5 l8 a b o6 c d e d c o5 b | o6 a4 e4 o5 a4 r4 |
-B @1 v11 q8 o4 e2 a2 | d2 g2 | f2 e2 | e1 | e2 a2 | d2 g2 | e2 d2 | a1 |
-B e2 g+2 | f2 g+2 | e1 | e1 | e2 e2 | d2 g+2 | e2 g+2 | e1 |
-C @11 v10 q4 o5 l8 [r c]4 | o4 [r b]2 o5 [r c]2 | o4 [r a]2 [r b]2 | o5 [r c]4 | [r c]4 | o4 [r b]4 | [r g]2 [r a]2 | o5 [r c]4 |
-C [r c]4 | o4 [r a]4 | o5 [r c]4 | [r c]4 | [r c]4 | o4 [r a]4 | o4 [r a]2 [r b]2 | o5 [r c]4 |
-D @11 v9 q4 o4 l8 [r a]4 | [r g]4 | [r f]2 [r e]2 | [r a]4 | [r a]4 | [r g]4 | [r e]2 [r d]2 | [r a]4 |
-D [r a]4 | [r f]4 | [r a]4 | [r a]4 | [r a]4 | [r f]4 | [r a]2 [r g+]2 | [r a]4 |
-E @14 v14 q6 o2 l8 [a > a <]4 | [g > g <]4 | [f > f <]2 [e > e <]2 | [a > a <]4 | [a > a <]4 | [g > g <]4 | [c > c <]2 [d > d <]2 | [a > a <]4 |
+A o5 l16 [a]4 [g+]4 [g]4 [f+]4 | o5 l16 [f]4 [e]4 [d+]4 [e]4 | o5 l8 a b o6 c d e f g+ a | o6 a4 e4 o5 a4 r4 |
+B @1 v11 q8 o4 e2 a2 | d2 g2 | f2 e2 | e1 | e2 a2 | d2 g2 | e2 g+2 | a1 |
+B e2 g+2 | f2 g+2 | e2 a2 | e1 | e2 e2 | f2 g+2 | e2 g+2 | e1 |
+C @11 v10 q4 o5 l8 [r c]4 | o4 [r b]4 | [r a]4 | o5 [r c]4 | [r c]4 | o4 [r b]4 | [r b]4 | o5 [r c]4 |
+C [r c]4 | o4 [r a]4 | o5 [r c]4 | [r c]4 | [r c]4 | o4 [r a]4 | [r b]4 | o5 [r c]4 |
+D @11 v9 q4 o4 l8 [r a]4 | [r g]4 | [r f]4 | [r a]4 | [r a]4 | [r g]4 | [r g+]4 | [r a]4 |
+D [r a]4 | [r f]4 | [r a]4 | [r a]4 | [r a]4 | [r f]4 | [r g+]4 | [r a]4 |
+E @14 v14 q6 o2 l8 [a > a <]4 | [g > g <]4 | [f > f <]2 [e > e <]2 | [a > a <]4 | [a > a <]4 | [g > g <]4 | [c > c <]2 [e > e <]2 | [a > a <]4 |
 E [a > a <]2 [e > e <]2 | [d > d <]2 [e > e <]2 | [a > a <]4 | [a > a <]4 | [a > a <]4 | [d > d <]2 [e > e <]2 | [a > a <]2 [e > e <]2 | [a > a <]4 |
 R V15,13,12,13,9 [bh8 sh8 bh8 sh8 bh8 sh8 bh8 sh8]8 | bc8 s8 bh8 s8 bh8 s8 bh8 s8 [bh8 sh8 bh8 sh8 bh8 sh8 bh8 sh8]6 bh8 s16 s16 s8 s8 bc4 r4
 
