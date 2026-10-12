@@ -386,7 +386,6 @@ static void branch_pick(u8 dir)
 #define MIS_MAX   5             /* 持てる弾数 */
 #define MIS_T     8             /* 撃ってから当たるまでのフレーム数 */
 #define MIS_BOSS  5             /* ボスに与える傷(ふつうの弾の数) */
-static u8 mis_left;                             /* 残りの誘導弾 */
 static u8 lock_n, lock_id[LOCK_MAX];            /* ロックした敵(古い順) */
 static u8 fly_n, fly_id[LOCK_MAX], fly_t[LOCK_MAX], fly_x[LOCK_MAX], fly_y[LOCK_MAX];   /* 飛んでいる誘導弾(位置はブロック) */
 static u8 box_x0[MAX_EN], box_y0[MAX_EN], box_x1[MAX_EN], box_y1[MAX_EN];             /* このフレームに描いた敵の外枠(0xFF = 無い) */
@@ -1052,6 +1051,82 @@ static void render(void)
 /* ---------------------------------------------------------------------------
  * 1 プレイ
  * --------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------
+ * ステージクリアの加算(悪魔城ドラキュラでボスを倒したときのように、数えながら足す)。ゲーム画面の上に重ねる。
+ *   ボーナス(表示で 5,000 × ステージ。1 面より 2 面、2 面より 3 面が高い)を「ピッ」を連打しながら得点へ移し、
+ *   ライフを 1 つずつ +2、誘導弾を 1 発ずつ +5(どちらも満タンで止める)。時間はティック(60Hz)で数える
+ * --------------------------------------------------------------------------- */
+#define TALLY_BONUS 500                  /* 1 ステージあたりのボーナス(g_score の単位 = 表示の 1/10) */
+static void clear_tally(void)
+{
+    u16 bonus = (u16)g_stage * TALLY_BONUS, t0 = g_tick, t, step = (u16)g_stage * 20, next = 0;
+    u8 phase = 0, add_life = 2, add_mis = 5;
+    ctrl = 0;
+    hold = 1;                            /* 乗り物はゆっくり止まる */
+    attack_dir = DIR_NONE;
+    cap_id = 0;
+    lock_n = 0;
+    bgm_play(SONG_CLEAR);
+    for (;;) {
+        t = g_tick - t0;
+        if (t >= next) {
+            switch (phase) {
+            case 0:                      /* STAGE CLEAR だけ見せる */
+                if (t >= 40) phase = 1;
+                break;
+            case 1:                      /* ボーナスを得点へ */
+                if (bonus) {
+                    u16 d = bonus < step ? bonus : step;
+                    bonus -= d;
+                    g_score += d;
+                    se_play(SE_TALLY);
+                    next = t + 1;
+                } else {
+                    phase = 2;
+                    next = t + 20;
+                }
+                break;
+            case 2:                      /* ライフ +2 */
+                if (add_life && life < 8) {
+                    life++;
+                    add_life--;
+                    se_play(SE_HEAL);
+                    next = t + 10;
+                } else {
+                    phase = 3;
+                    next = t + 15;
+                }
+                break;
+            case 3:                      /* 誘導弾 +5 */
+                if (add_mis && mis_left < MIS_MAX) {
+                    mis_left++;
+                    add_mis--;
+                    se_play(SE_LOCK);
+                    next = t + 8;
+                } else {
+                    phase = 4;
+                }
+                break;
+            default:                     /* クリアの曲(約 7.5 秒)が終わるまで見せる */
+                if (t >= 460) return;
+            }
+        }
+        trolley_update();
+        render();
+        g_rx = 8; g_ry = 7; g_rw = 48; g_rh = 30; g_color = C_BLACK;   /* 文字の後ろの黒い板(背景に埋もれないように) */
+        rect_fill();
+        text_center(10, "STAGE CLEAR", C_YELLOW, 1);
+        if (phase >= 1) {                /* 残りのボーナス(表示の単位。末尾の 0 は文字で) */
+            text_draw(12, 18, "BONUS", C_WHITE, 1);
+            num_draw(34, 18, bonus, 5, C_WHITE);
+            if (bonus) text_draw(54, 18, "0", C_WHITE, 1);
+        }
+        if (phase >= 2) text_draw(12, 24, "LIFE +2", C_WHITE, 1);
+        if (phase >= 3) text_draw(12, 30, "MISSILE +5", C_WHITE, 1);
+        present();
+    }
+}
+
 u8 game_run(const Stage *st, u8 first)
 {
     u8 i, over = 0;
@@ -1094,9 +1169,9 @@ u8 game_run(const Stage *st, u8 first)
     aim_x = 128; aim_y = 92; aim_hold = 0;
     in_prev = 0xFF;                      /* タイトルで押したボタンを射撃と見なさない */
     fire_cd = 0; hitmark = 0; shotfx = 0;
-    mis_left = MIS_START; lock_n = 0; fly_n = 0; box_n = 0;
+    lock_n = 0; fly_n = 0; box_n = 0;
     for (i = 0; i < MAX_EN; i++) box_x0[i] = 0xFF;
-    if (first) { life = g_cfg.life; g_score = 0; }
+    if (first) { life = g_cfg.life; g_score = 0; mis_left = MIS_START; }   /* 誘導弾もライフと同じく持ち越す */
     attack_dir = DIR_NONE;
     boss_alive = 0;
     blink = 0;
@@ -1125,6 +1200,7 @@ u8 game_run(const Stage *st, u8 first)
         if (sc_end && !boss_alive) break;
     }
 
+    if (!over) clear_tally();
     g_spr_attr[0] = 209;
     g_spr_attr[4] = 209;
     bgm_stop();

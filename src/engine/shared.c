@@ -14,6 +14,7 @@ u16 cam_s, cam_v;
 u8  facing;
 u16 aim_x, aim_y;
 u8  life;
+u8  mis_left;                    /* 誘導弾の残り(ステージをまたいで持ち越す。ゲームの始めに 3 発) */
 u8  attack_dir, boss_alive;
 u16 sc_tick;
 u8  route;

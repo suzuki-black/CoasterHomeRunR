@@ -3,7 +3,7 @@
 #define SOUND_H
 #include "engine.h"
 
-enum { SE_NONE, SE_HEAL, SE_SHOT, SE_HIT, SE_ALARM, SE_KILL, SE_TRAIN, SE_DAMAGE, SE_LOCK, SE_COUNT };
+enum { SE_NONE, SE_HEAL, SE_SHOT, SE_HIT, SE_ALARM, SE_KILL, SE_TRAIN, SE_DAMAGE, SE_LOCK, SE_TALLY, SE_COUNT };
 
 void sound_init(void);
 void se_play(u8 id);

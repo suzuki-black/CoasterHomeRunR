@@ -107,6 +107,7 @@ typedef u8 (*GameRunFn)(const Stage *st, u8 first);
 u8 game_run(const Stage *st, u8 first);
 extern u16 g_score;          /* スコア / 10 */
 extern u8  life;
+extern u8  mis_left;
 extern u8  g_stage;
 
 /* ゲームの状態のうち、常駐部(描画・テスト・メイン)からも見るもの。実体は shared.c(常駐) */

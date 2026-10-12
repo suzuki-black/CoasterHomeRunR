@@ -32,10 +32,13 @@ static const u8 se_damage[] = {
 static const u8 se_lock[] = {           /* 誘導弾のロック: 「ピピ」 */
     0x30, 0, 13, 0xFF,  0x30, 0, 12, 0xFF,  0, 0, 0, 0xFF,  0x30, 0, 13, 0xFF,  0x30, 0, 11, 0xFF,  0, 0, 0xFF, 0 };
 
+static const u8 se_tally[] = {          /* ステージクリアの加算: 短い「ピッ」(連打して「とぅるるる」) */
+    0x50, 0, 11, 0xFF,  0x50, 0, 7, 0xFF,  0, 0, 0xFF, 0 };
+
 static const u8 * const se_tab[SE_COUNT] = {
-    0, se_heal, se_shot, se_hit, se_alarm, se_kill, se_train, se_damage, se_lock };
+    0, se_heal, se_shot, se_hit, se_alarm, se_kill, se_train, se_damage, se_lock, se_tally };
 /* 優先度(大きいほど強い)。ロックは射撃と同じ */
-static const u8 se_pri[SE_COUNT] = { 0, 1, 2, 2, 3, 4, 5, 6, 2 };
+static const u8 se_pri[SE_COUNT] = { 0, 1, 2, 2, 3, 4, 5, 6, 2, 1 };
 
 /* BGM は FM 音源(sndfm.s のアセンブラ。割り込みからは下の sound_tick → fm_bgm_tick) */
 void fm_bgm_tick(void);
