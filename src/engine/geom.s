@@ -895,3 +895,167 @@ dm_grow1:
 	inc	(hl)
 	ret
 
+
+; ---------------------------------------------------------------------------
+; void rail_add(const RailSeg *segs)   HL = segs(RailSeg: u8 len、i16 dyaw、i8 dy、u8 spd の 5 バイト。len = 0 で終わり)
+;   区間ごとに len / 2 個の点(2m ごと)を rail[rb_n] から足す(RAIL_MAX まで)。もと rail.c の C と同じ計算:
+;   点 = (rb_x, rb_y, rb_z, rb_yaw)、rail_spd = spd。次へ: rb_yaw += dyaw / steps(0 へ切り捨て)、
+;   rb_x += sin(rb_yaw の上位) × 2、rb_z += cos(…) × 2、rb_y += dy × 32。最後に rail_len = rb_n × 2。
+;   C だと分岐を選んだフレームで約 190 点を作り直すのに 13ms かかっていた
+; ---------------------------------------------------------------------------
+	.globl	_rail_len
+RA_PT0	= 0xE100		; rail(rail.h)
+RA_MAXN	= 400			; RAIL_MAX
+RA_SPD0	= 0xE100 + 8 * 400	; rail_spd
+	.area	_DATA
+_rb_n::		.ds	2
+_rb_x::		.ds	2	; rb_x, rb_y, rb_z, rb_yaw は RailPt と同じ並び(点へそのまま写す)
+_rb_y::		.ds	2
+_rb_z::		.ds	2
+_rb_yaw::	.ds	2
+ra_dyaw:	.ds	2
+ra_dy:		.ds	2
+ra_spd:		.ds	1
+	.area	_CODE
+_rail_add::
+	push	ix
+	push	hl
+	pop	ix			; IX = 区間
+1$:
+	ld	a, 0 (ix)
+	or	a, a
+	jp	z, 9$
+	srl	a
+	jp	z, 8$			; 点が 0 個
+	ld	c, a			; C = steps
+	ld	l, 1 (ix)
+	ld	h, 2 (ix)
+	call	ra_div			; HL = dyaw / steps
+	ld	(ra_dyaw), hl
+	ld	a, 3 (ix)
+	ld	l, a
+	rlca
+	sbc	a, a
+	ld	h, a			; HL = dy(符号つき)
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	ld	(ra_dy), hl
+	ld	a, 4 (ix)
+	ld	(ra_spd), a
+	ld	b, c
+2$:
+	ld	hl, (_rb_n)
+	ld	de, #RA_MAXN
+	or	a, a
+	sbc	hl, de
+	jp	nc, 8$			; RAIL_MAX まで
+	add	hl, de			; HL = rb_n
+	push	bc
+	ld	de, #RA_SPD0
+	push	hl
+	add	hl, de
+	ld	a, (ra_spd)
+	ld	(hl), a
+	pop	hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	ld	de, #RA_PT0
+	add	hl, de
+	ex	de, hl			; DE = &rail[rb_n]
+	ld	hl, #_rb_x
+	ldi
+	ldi
+	ldi
+	ldi
+	ldi
+	ldi
+	ldi
+	ldi
+	ld	hl, (_rb_n)
+	inc	hl
+	ld	(_rb_n), hl
+	ld	hl, (_rb_yaw)
+	ld	de, (ra_dyaw)
+	add	hl, de
+	ld	(_rb_yaw), hl
+	ld	l, h
+	ld	h, #0
+	add	hl, hl
+	ld	de, #_sin_tab
+	add	hl, de			; HL = &sin_tab[h]
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	push	hl
+	ex	de, hl
+	add	hl, hl
+	ld	de, (_rb_x)
+	add	hl, de
+	ld	(_rb_x), hl
+	pop	hl
+	ld	de, #127
+	add	hl, de			; HL = &sin_tab[h + 64]
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	ex	de, hl
+	add	hl, hl
+	ld	de, (_rb_z)
+	add	hl, de
+	ld	(_rb_z), hl
+	ld	hl, (_rb_y)
+	ld	de, (ra_dy)
+	add	hl, de
+	ld	(_rb_y), hl
+	pop	bc
+	dec	b
+	jp	nz, 2$
+8$:
+	ld	bc, #5
+	add	ix, bc
+	jp	1$
+9$:
+	ld	hl, (_rb_n)
+	add	hl, hl
+	ld	(_rail_len), hl
+	pop	ix
+	ret
+
+; ra_div: HL(符号つき)/ C(1〜127)→ HL(0 へ向けて切り捨て。C の i16 / u8 と同じ)
+ra_div:
+	ld	a, h
+	push	af			; 符号
+	bit	7, h
+	jr	z, 1$
+	xor	a, a
+	sub	a, l
+	ld	l, a
+	sbc	a, a
+	sub	a, h
+	ld	h, a
+1$:
+	ld	b, #16
+	xor	a, a
+2$:
+	add	hl, hl
+	rla
+	cp	a, c
+	jr	c, 3$
+	sub	a, c
+	inc	l
+3$:
+	djnz	2$
+	pop	af
+	bit	7, a
+	ret	z
+	xor	a, a
+	sub	a, l
+	ld	l, a
+	sbc	a, a
+	sub	a, h
+	ld	h, a
+	ret

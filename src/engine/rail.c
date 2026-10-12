@@ -6,8 +6,9 @@
 #include "rail.h"
 
 u16 rail_len;                    /* 長さ[m](点の数 × 2) */
-static u16 rb_n, rb_yaw;         /* 次に置く点の番号と、そのときの向き・位置 */
-static i16 rb_x, rb_y, rb_z;
+/* 次に置く点の番号と、そのときの向き・位置(geom.s。rail_add がそこで使う) */
+extern u16 rb_n, rb_yaw;
+extern i16 rb_x, rb_y, rb_z;
 static u16 fk_n, fk_yaw;         /* 分岐点の状態 */
 static i16 fk_x, fk_y, fk_z;
 
@@ -18,27 +19,7 @@ void rail_begin(void)
     rail_len = 0;
 }
 
-void rail_add(const RailSeg *segs)
-{
-    u8 i, steps;
-    for (; segs->len; segs++) {
-        steps = segs->len >> 1;
-        {
-            i16 dyaw = segs->dyaw / steps;
-            for (i = 0; i < steps && rb_n < RAIL_MAX; i++) {
-                RailPt *p = &rail[rb_n];
-                p->x = rb_x; p->y = rb_y; p->z = rb_z; p->yaw = rb_yaw;
-                rail_spd[rb_n] = segs->spd;
-                rb_n++;
-                rb_yaw += dyaw;
-                rb_x += SIN(rb_yaw >> 8) << 1;
-                rb_z += COS(rb_yaw >> 8) << 1;
-                rb_y += (i16)segs->dy << 5;
-            }
-        }
-    }
-    rail_len = rb_n << 1;
-}
+/* rail_add は geom.s(アセンブラ。C だと分岐を選んだフレームで約 190 点を作り直すのに 13ms かかっていた) */
 
 void rail_fork(void)
 {
