@@ -7,10 +7,12 @@
 #   11 秒 レールを壊して飛び出す所で主題(変ニ長調)をピアノの重い和音に乗せる、15 秒 着地の和音
 #   (FS-A1ST で 0 秒 宝を取り返す、3 秒 ゲート、5.4 秒 巻き上げ、10.6 秒 JUMP、11.2 秒 飛び出す、14.9 秒 着地、16.3 秒 ステージ 1 の曲へ)
 @tempo 120
-A @9 v15 q7 o4 b-4. a-8 g-4 f4 | a-2. r4 | b-4. a-8 g-4 f4 | g-2 a-2 | b-2 > c2 < |
-A > e-2 < @1 v15 q8 a-4 f8 a-8 | > d-2 < b-4 a-8 g-8 | g-4 e-4 f2 | f1
-B @9 v12 q7 o4 f4. f8 d-4 d-4 | f2. r4 | f4. f8 d-4 d-4 | d-2 e-2 | g-2 a2 |
-B > c2 < @1 v12 q8 f4 d-8 f8 | a-2 g-4 f8 e-8 | e-4 c4 d-2 | d-1
+@voice 21 21 1E 05 85 72 13 16   # オリジナル音色 0: 柔らかい金管(ホルンの呼びかけ)
+@voice 61 61 1E 06 72 61 25 16   # オリジナル音色 1: ビブラートつきの柔らかい弦(飛び出す所からの主題)
+A @0 @v0 v15 q7 o4 b-4. a-8 g-4 f4 | a-2. r4 | b-4. a-8 g-4 f4 | g-2 a-2 | b-2 > c2 < |
+A > e-2 < @v1 @0 v15 q8 a-4 f8 a-8 | > d-2 < b-4 a-8 g-8 | g-4 e-4 f2 | f1
+B @0 v12 q7 o4 f4. f8 d-4 d-4 | f2. r4 | f4. f8 d-4 d-4 | d-2 e-2 | g-2 a2 |
+B > c2 < @0 v12 q8 f4 d-8 f8 | a-2 g-4 f8 e-8 | e-4 c4 d-2 | d-1
 C @3 v13 q8 o4 f2 r2 | a-2 r2 | f2 r2 | l8 b- b- b- b- > c c c c < | v14 b- b- b- b- > c c c c < |
 C v15 l4 > e-2 < a-4 a-4 | a-4 a-4 b-4 b-4 | > c4 c4 < a-4 a-4 | a-1
 D @3 v12 q8 o4 d-2 r2 | f2 r2 | d-2 r2 | l8 g- g- g- g- a- a- a- a- | v13 g- g- g- g- a a a a |
@@ -26,12 +28,14 @@ R btc4 r4 bc4 r4 | bt4 h4 b4 h4 | bt4 h4 bc4 h4 | btc1
 # ステージ 1「逃走」(リムスキー=コルサコフの『熊蜂の飛行』をイメージ)。イ短調、t150 で 16 分音符 = 6 ティック。
 #   半音で上下する 16 分音符の「羽音」をバイオリンに、クラリネットが長い音で追い、ハープシコードの裏打ちとベースで急き立てる
 @tempo 150
-A @1 v14 q7 o5 l16
+@voice 61 21 14 07 F3 E2 13 14   # オリジナル音色 0: ビブラートつきの明るいのこぎり波のリード(羽音)
+@voice 32 21 1C 06 D4 E2 24 15   # オリジナル音色 1: 鼻にかかったオーボエ風(9〜16 小節)
+A @0 @v0 v14 q7 o5 l16
 A e d+ d c+ c d d+ e e d+ d c+ c < b > c c+ | d d+ e f e d+ d c+ c < b a+ a g+ a b > c |
 A < g+ a a+ b > c c+ d d+ e d+ d c+ c < b a+ a | g+ a b > c d e f e d c < b a g+ f+ g+ a+ > |
 A f e d+ d c+ d d+ e f e f f+ g f+ f e | e d+ d c+ c d d+ e e d+ d c+ c < b > c c+ |
 A < b a+ a g+ a a+ b > c d c < b a g+ a b > c | < a1 > |
-A f e d+ e f f+ g g+ a g+ g f+ f e d+ e | g f+ f e d e f f+ g f+ f e d c+ d e |
+A @v1 f e d+ e f f+ g g+ a g+ g f+ f e d+ e | g f+ f e d e f f+ g f+ f e d c+ d e |
 A e d+ d c+ c d d+ e e d+ d c+ c < b > c c+ | c < b a+ a g+ a a+ b > c c+ d d+ e d c < b > |
 A f e d+ d c+ d d+ e f e f f+ g f+ f e | g+ a g+ g f+ g g+ a a+ b > c c+ d c+ c < b > |
 A e d+ d c+ c d d+ e e d+ d c+ c < b > c c+ | < b a+ a g+ a a+ b > c c+ d d+ e f e d c |
@@ -49,12 +53,14 @@ R V14,13,12,12,9 l8 [bh h sh h bh bh sh h]15 bh h sh h sh s16 s16 s s
 # ステージ 2「地底湖」(ロッシーニ『ウィリアム・テル』序曲の終結部「スイス軍の行進」をイメージ)。ホ短調、t150。
 #   トランペットが「タタタン」(8 分 + 16 分 2 つ)の駆け足で進み、ホルンが長い和音、弦の刻みとベースのオクターブで走る
 @tempo 150
-A @7 v14 q6
+@voice 21 21 1A 07 A4 92 13 15   # オリジナル音色 0: 立ち上がりの遅い金管(トランペット)
+@voice 61 21 18 07 C4 A2 13 15   # オリジナル音色 1: ビブラートつきのシンセ金管(9〜16 小節)
+A @0 @v0 v14 q6
 A o5 e8 e16 e16 e8 e16 e16 e8 e16 e16 g8 b8 | o6 e8 e16 e16 e8 e16 e16 d8 o5 b8 g8 e8 |
 A o5 f+8 f+16 f+16 f+8 f+16 f+16 f+8 f+16 f+16 a8 b8 | o5 b4 a8 g8 f+4 r4 |
 A o5 e8 e16 e16 e8 e16 e16 e8 e16 e16 g8 b8 | o6 e8 e16 e16 e8 e16 e16 g8 f+8 e8 d+8 |
 A o6 e8 d8 c8 o5 b8 a8 g8 f+8 d+8 | o5 e4 o4 b4 o5 e4 r4 |
-A o5 g8 g16 g16 g8 g16 g16 g8 g16 g16 b8 o6 d8 | o6 g4 f+8 e8 d4 c8 o5 b8 |
+A @v1 o5 g8 g16 g16 g8 g16 g16 g8 g16 g16 b8 o6 d8 | o6 g4 f+8 e8 d4 c8 o5 b8 |
 A o5 a8 a16 a16 a8 a16 a16 a8 a16 a16 o6 c8 e8 | o6 f+4 e8 d8 c4 o5 b4 |
 A o5 e8 e16 e16 e8 e16 e16 e8 e16 e16 g8 b8 | o6 e8 e16 e16 e8 e16 e16 g8 f+8 a8 g8 |
 A o6 f+8 e8 d+8 e8 f+8 g8 a8 b8 | o7 e4 o6 b4 o7 e4 r4 |
@@ -71,12 +77,14 @@ R [bh8 s16 s16 bh8 s16 s16 bh8 s16 s16 bh8 sh8]7 bc4 s8 s8 bc4 r4
 # ステージ 3「森の小道」(グリンカ『ルスランとリュドミラ』序曲をイメージ)。ニ長調、t150。
 #   バイオリンが 16 分音符で一気に駆け上がり駆け下り、ホルンの和音とピアノの裏打ちが追いかける。後半はロ短調
 @tempo 150
-A @1 v14 q7
+@voice 61 61 16 05 F4 F3 23 15   # オリジナル音色 0: 輪郭のはっきりした弦(駆け上がり)
+@voice 03 01 12 05 F2 F4 24 34   # オリジナル音色 1: 弾く音のクラビ風(ロ短調の 9〜16 小節)
+A @0 @v0 v14 q7
 A o5 l16 d c+ d e f+ e f+ g a g a b o6 c+ d e f+ | o6 l16 g f+ e d c+ d e c+ o5 a b o6 c+ o5 a f+ g a f+ |
 A o5 l8 d d f+ f+ a a o6 d d | o6 c+4 o5 a4 e4 c+4 |
 A o5 l16 d c+ d e f+ e f+ g a g a b o6 c+ d e f+ | o6 l16 g f+ e d c+ d e f+ g a g f+ e d c+ e |
 A o6 d8 o5 a8 f+8 a8 o6 d4 r4 | o4 l16 a b o5 c+ d e f+ g a b o6 c+ d e f+ g a b |
-A o5 l16 b a+ b o6 c+ d c+ d e f+ e d c+ o5 b a+ b o6 c+ | o6 l16 d c+ o5 b a g f+ e d c+ d e f+ g a b o6 c+ |
+A @v1 o5 l16 b a+ b o6 c+ d c+ d e f+ e d c+ o5 b a+ b o6 c+ | o6 l16 d c+ o5 b a g f+ e d c+ d e f+ g a b o6 c+ |
 A o5 l8 d f+ b o6 d o5 b f+ d o4 b | o5 c+4 e4 a4 o6 c+4 |
 A o5 l16 d c+ d e f+ e f+ g a g a b o6 c+ d e f+ | o6 l16 g f+ e d c+ d e f+ g a g f+ e d c+ e |
 A o5 l8 a a o6 d d o5 a a f+ f+ | o5 d4 o4 a4 f+4 d4 |
@@ -95,10 +103,12 @@ R [bh8 h8 sh8 h8 bh8 h8 sh8 h16 h16]7 bc4 s8 s8 bc4 r4
 # ステージ 4「町」(オッフェンバック『天国と地獄』序曲とシュトラウス『トリッチ・トラッチ・ポルカ』をイメージ)。ハ長調、t150。
 #   跳ねるトランペットとズンチャッの伴奏。後半は同じ音を 16 分音符で連打する
 @tempo 150
-A @7 v14 q5
+@voice 22 61 1C 05 C3 B2 14 15   # オリジナル音色 0: アコーディオン風(倍音 2 倍とビブラート)
+@voice 07 01 1A 02 F5 F6 43 46   # オリジナル音色 1: 木琴風(連打の 9〜16 小節)
+A @0 @v0 v14 q5
 A o5 l8 g g a g o6 c4 o5 b4 | o5 l8 a a b a o6 d4 c4 | o5 l8 b b o6 c o5 b o6 e d c o5 b | o5 a4 g4 o6 c4 r4 |
 A o5 l8 g g a g o6 c4 o5 b4 | o5 l8 a a b a o6 d4 c4 | o6 l8 e d c o5 b o6 c o5 a g f | o5 e4 d4 c4 r4 |
-A o5 l16 e e e e g g g g o6 c c c c o5 g g g g | o5 l16 f f f f a a a a o6 d d d d o5 a a a a |
+A @v1 o5 l16 e e e e g g g g o6 c c c c o5 g g g g | o5 l16 f f f f a a a a o6 d d d d o5 a a a a |
 A o5 l16 g g g g b b b b o6 d d d d f f f f | o6 e8 c8 o5 g8 e8 c4 r4 |
 A o5 l16 e e e e g g g g o6 c c c c o5 g g g g | o5 l16 f f f f a a a a o6 d d d d o5 a a a a |
 A o5 l16 g g g g a a a a b b b b o6 d d d d | o6 c4 o5 g4 o6 c4 r4 |
@@ -116,11 +126,13 @@ R V14,13,12,13,9 [b8 h8 s8 h8 b8 h8 s8 h8]8 | bc8 h8 s8 h8 b8 h8 s8 h8 [b8 h8 s8
 # ステージ 5「王」(ネッケ『クシコス・ポスト』とカバレフスキー『道化師のギャロップ』をイメージ)。イ短調、t150。
 #   トランペットの駆け足の旋律、後半はバイオリンが半音で駆け下り、蹄のような同じ音の連打で最後の戦いを急き立てる
 @tempo 150
-A @7 v14 q6
+@voice 21 21 0E 1F F2 F1 13 14   # オリジナル音色 0: 波形を半波に歪ませた鋭いリード
+@voice 61 61 13 06 F2 F2 13 15   # オリジナル音色 1: なめらかなのこぎり波(半音で駆け下りる 9〜11 小節)
+A @0 @v0 v14 q6
 A o5 l8 a a o6 c o5 a o6 e4 d4 | o5 l8 g g b g o6 d4 c4 | o5 l8 f f a f o6 c o5 b a g+ | o5 a2 e2 |
 A o5 l8 a a o6 c o5 a o6 e4 d4 | o5 l8 g g b g o6 d e f d | o6 l8 e d c o5 b a g f e | o5 a2 r2 |
-A @1 v14 q7 o6 l16 e d+ d c+ c o5 b a+ a g+ a b o6 c d e f e | o6 l16 d c+ c o5 b a+ a g+ g f+ g a b o6 c d c o5 b |
-A o6 l16 e d+ d c+ c o5 b a+ a g+ a b o6 c d e f e | @7 q6 o5 l8 a e c e a4 r4 |
+A @v1 @0 v14 q7 o6 l16 e d+ d c+ c o5 b a+ a g+ a b o6 c d e f e | o6 l16 d c+ c o5 b a+ a g+ g f+ g a b o6 c d c o5 b |
+A o6 l16 e d+ d c+ c o5 b a+ a g+ a b o6 c d e f e | @v0 @0 q6 o5 l8 a e c e a4 r4 |
 A o5 l16 [a]4 [g+]4 [g]4 [f+]4 | o5 l16 [f]4 [e]4 [d+]4 [e]4 | o5 l8 a b o6 c d e f g+ a | o6 a4 e4 o5 a4 r4 |
 B @1 v11 q8 o4 e2 a2 | d2 g2 | f2 e2 | e1 | e2 a2 | d2 g2 | e2 g+2 | a1 |
 B e2 g+2 | f2 g+2 | e2 a2 | e1 | e2 e2 | f2 g+2 | e2 g+2 | e1 |
@@ -135,14 +147,16 @@ R V15,13,12,13,9 [bh8 sh8 bh8 sh8 bh8 sh8 bh8 sh8]8 | bc8 s8 bh8 s8 bh8 s8 bh8 s
 @song CLEAR once
 # ステージクリア: ほっとするような曲調。ヘ長調、t96。フルートの旋律にビブラフォンの分散和音、ホルンの長い和音
 @tempo 96
+@voice 04 01 22 02 F3 F4 35 25   # オリジナル音色: 減衰する鐘・エレピ(分散和音)
 A @4 v14 q7 o5 l8 c f a o6 c o5 b-4 g4 | o5 l8 a b- o6 c d c4 o5 a4 | o5 f2. r4
-B @12 v11 q8 o4 l8 f a o5 c o4 a g b- o5 d o4 b- | o4 l8 f a o5 c o4 a e g o5 c o4 g | o4 f2. r4
+B @0 v11 q8 o4 l8 f a o5 c o4 a g b- o5 d o4 b- | o4 l8 f a o5 c o4 a e g o5 c o4 g | o4 f2. r4
 C @9 v9 q8 o4 a2 b-2 | a2 g2 | a2. r4
 D @14 v12 q7 o2 f2 c2 | f2 c2 | f2. r4
 
 @song ENDING loop
 @tempo 150
-A @3 v13 q6 n72%36 n69%18 n72%18 n77%72 n74%36 n77%18 n74%18 n70%72 n72%36 n74%18 n76%18 n79%36
+@voice 03 01 1C 02 F4 F4 33 35   # オリジナル音色: オルゴール風(旋律)
+A @0 v13 q6 n72%36 n69%18 n72%18 n77%72 n74%36 n77%18 n74%18 n70%72 n72%36 n74%18 n76%18 n79%36
 A n76%36 n77%72 n72%36 r%36
 B @14 v12 q5 n41%36 n48%36 n45%36 n48%36 n46%36 n53%36 n50%36 n53%36 n48%36 n55%36 n52%36 n55%36
 B n41%36 n48%36 n41%72

@@ -63,9 +63,13 @@ void se_play(u8 id)
     se_req = id;
 }
 
+/* スネアに重ねる PSG のノイズ(ch B。BGM が FM になって空いた)。FM のリズムがスネアを打つと sndfm.s が g_snr = 1 にする */
+u8 g_snr;
+static u8 snr_vol, snr_off;
+
 void sound_tick(void)
 {
-    u8 req = se_req;
+    u8 req = se_req, mix = 0xBF, se_noise = 0;
     fm_bgm_tick();
     if (req) {
         se_req = 0;
@@ -75,25 +79,36 @@ void sound_tick(void)
         }
     }
     if (se_ptr) {
-        u8 mix = 0xBF;
         if (se_ptr[2] == 0xFF) {
             psg_write(10, 0);
-            psg_write(7, mix);
             se_ptr = 0;
             se_cur = 0;
-            return;
+        } else {
+            if (se_ptr[0] | se_ptr[1]) {
+                psg_write(4, se_ptr[0]);
+                psg_write(5, se_ptr[1]);
+                mix &= ~0x04;
+            }
+            if (se_ptr[3] != 0xFF) {
+                psg_write(6, se_ptr[3]);
+                mix &= ~0x20;
+                se_noise = 1;
+            }
+            psg_write(10, se_ptr[2]);
+            se_ptr += 4;
         }
-        if (se_ptr[0] | se_ptr[1]) {
-            psg_write(4, se_ptr[0]);
-            psg_write(5, se_ptr[1]);
-            mix &= ~0x04;
-        }
-        if (se_ptr[3] != 0xFF) {
-            psg_write(6, se_ptr[3]);
-            mix &= ~0x20;
-        }
-        psg_write(7, mix);
-        psg_write(10, se_ptr[2]);
-        se_ptr += 4;
     }
+    /* スネアのノイズ: 強く鳴らして数ティックで消す。ノイズの周期は効果音と共有なので、効果音が使っていないときだけ書く */
+    if (g_snr) { g_snr = 0; snr_vol = 13; }
+    if (snr_vol) {
+        if (!se_noise) psg_write(6, 6);
+        mix &= ~0x10;
+        psg_write(9, snr_vol);
+        snr_vol = (snr_vol > 3) ? snr_vol - 3 : 0;
+        snr_off = 1;
+    } else if (snr_off) {
+        psg_write(9, 0);
+        snr_off = 0;
+    }
+    psg_write(7, mix);
 }

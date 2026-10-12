@@ -10,6 +10,11 @@ songs.h は曲の番号(SONG_名前。1 から。0 = 無し)。鳴らすのは s
   # から行末まではコメント
   @song 名前 loop|once      曲の始まり(once = 最後まで鳴らしたら止まる。ジングル)
   @tempo 150                 4 分音符 / 分(曲の途中で変えるときは本文に t150)
+  @voice 61 61 1E 06 72 61 25 16   オリジナル音色(音色 0、@0 で使う)。YM2413 のレジスタ 0x00〜0x07 の値(16 進)。
+                             内蔵の音色だけだと YM2413 らしい音になりがちなので、どの曲にも書き、どれかのパートで @0 を使う。
+                             何個でも書ける(書いた順に 0, 1, 2 …)。曲の始めは 0 番
+    @v1                      (本文)ここからオリジナル音色を 1 番に替える。同時に持てるのは 1 つなので、@0 を使っている
+                             全チャンネルの音色が替わる。場面の切れ目で替え、曲の頭に戻ったときのために旋律の頭に @v0 を置く
   A 〜 F で始まる行          メロディのチャンネル(出てきた順に FM の ch0〜5。同じ名前の行は続けて書ける)
   R で始まる行               リズム(FM の ch6〜8 をリズムモードで使う)
   本文(メロディ):
@@ -33,7 +38,8 @@ songs.h は曲の番号(SONG_名前。1 から。0 = 無し)。鳴らすのは s
 
 ■ データ(音のモジュール。番地は 0x8000 から)
   0x8000: db 曲の数、dw 曲 …
-  曲: db メロディのチャンネル数、db リズム(1/0)、dw チャンネル …、(リズムがあれば)dw リズム
+  曲: db メロディのチャンネル数、db フラグ(bit0 リズム、bit1 オリジナル音色)、(bit1 なら)db 音色 × 8、
+      dw チャンネル …、(リズムがあれば)dw リズム
   チャンネル(メロディ):
     0x00〜0x7F n, len        音(MIDI の音番号)を len ティック
     0x80 len                 休み
@@ -41,6 +47,7 @@ songs.h は曲の番号(SONG_名前。1 から。0 = 無し)。鳴らすのは s
     0x82 g                   音の終わりの g ティック前に音を切る(0 = 切らない)
     0x83                     ループで戻る所
     0x85 len                 今の音をそのまま len ティック伸ばす(長い音・タイ)
+    0x86 x × 8               オリジナル音色(レジスタ 0x00〜0x07)を書き換える
     0xFE                     終わり(止まる)
     0xFF                     ループで戻る所(無ければ頭)へ
   チャンネル(リズム): 0x00〜0x1F の音 n, len(bit4 BD 3 SD 2 TOM 1 CYM 0 HH)、0x80 len 休み、
@@ -101,7 +108,7 @@ def parse_len(s, i, deflen, clock):
     return d, i + len(m.group(0))
 
 
-def compile_melody(text, tempo, name):
+def compile_melody(text, tempo, name, voices):
     s = expand_repeats(text)
     clock = Clock(tempo)
     octave, vol, inst, q = 4, 12, 3, 7
@@ -142,13 +149,21 @@ def compile_melody(text, tempo, name):
             if tie and ev and ev[-1][0] in ('note', 'ext') and ev[-1][1] == midi:
                 ev.append(('ext', midi, ticks))
             else:
-                ev.append(('note', midi, ticks))
+                ev.append(('note', midi, ticks, q))
             tie = next_tie
             continue
         if ch == 'r':
             exact, i = parse_len(s, i + 1, deflen, clock)
             ev.append(('rest', clock.advance(exact)))
             tie = False
+            continue
+        m = re.match(r'@v(\d+)', s[i:])
+        if m:
+            k = int(m.group(1))
+            if k >= len(voices):
+                raise SystemExit('gen_music: %s: オリジナル音色 %d 番が無い(@voice は %d 個)' % (name, k, len(voices)))
+            ev.append(('voice', voices[k]))
+            i += len(m.group(0))
             continue
         m = re.match(r'([olvqt@])(\d+)(\.*)', s[i:])
         if m:
@@ -185,15 +200,13 @@ def compile_melody(text, tempo, name):
             i += 1
             continue
         raise SystemExit('gen_music: %s: 読めない文字 %r: %s' % (name, ch, s[max(0, i - 20):i + 20]))
-    return ev, q
+    return ev
 
 
-def melody_bytes(ev, qdef):
-    """イベントをバイト列に。q(音を伸ばす長さ)は音ごとに切る位置を計算して 0x82 で渡す"""
+def melody_bytes(ev):
+    """イベントをバイト列に。q(音を伸ばす長さ)は音ごとに、その音の長さから切る位置を計算して 0x82 で渡す"""
     out = []
     gate = None
-    # q はチャンネル全体で 1 つ(途中の q は compile で最後の値になる)。音ごとの長さから切る位置を出す
-    q = qdef
     k = 0
     while k < len(ev):
         e = ev[k]
@@ -201,6 +214,8 @@ def melody_bytes(ev, qdef):
             out += [0x81, e[1]]
         elif e[0] == 'loop':
             out += [0x83]
+        elif e[0] == 'voice':
+            out += [0x86] + list(e[1])
         elif e[0] == 'rest':
             t = e[1]
             while t > 0:
@@ -213,6 +228,7 @@ def melody_bytes(ev, qdef):
             while k2 < len(ev) and ev[k2][0] == 'ext':
                 total += ev[k2][2]
                 k2 += 1
+            q = e[3]
             g = 0 if q >= 8 else max(1, total - round(total * q / 8))
             if total <= 1:
                 g = 0
@@ -308,6 +324,8 @@ def stream_ticks(b, rhythm):
             i += 2
         elif x == 0x84:
             i += 4
+        elif x == 0x86:
+            i += 9
         else:
             i += 1
     return t
@@ -324,6 +342,10 @@ def main(src, out_bin, out_h):
         if m:
             cur = {'name': m.group(1), 'loop': m.group(2) == 'loop', 'tempo': 120, 'ch': {}, 'order': []}
             songs.append(cur)
+            continue
+        m = re.match(r'@voice((?:\s+[0-9A-Fa-f]{2}){8})\s*$', line)
+        if m:
+            cur.setdefault('voices', []).append([int(x, 16) for x in m.group(1).split()])
             continue
         m = re.match(r'@tempo\s+(\d+)', line)
         if m:
@@ -346,15 +368,17 @@ def main(src, out_bin, out_h):
             raise SystemExit('gen_music: %s: メロディは 6 チャンネルまで' % sg['name'])
         chans = []
         for c in mel:
-            ev, q = compile_melody(sg['ch'][c], sg['tempo'], sg['name'] + ':' + c)
-            chans.append(melody_bytes(ev, q) + [0xFF if sg['loop'] else 0xFE])
+            ev = compile_melody(sg['ch'][c], sg['tempo'], sg['name'] + ':' + c, sg.get('voices', []))
+            chans.append(melody_bytes(ev) + [0xFF if sg['loop'] else 0xFE])
+        if 'voices' not in sg or not any(re.search(r'@0(?!\d)', sg['ch'][c]) for c in mel):
+            raise SystemExit('gen_music: %s: オリジナル音色(@voice と @0)を使っていない(どの曲も使う)' % sg['name'])
         rhy = None
         if 'R' in sg['ch']:
             rhy = compile_rhythm(sg['ch']['R'], sg['tempo'], sg['name'] + ':R') + [0xFF if sg['loop'] else 0xFE]
-        blobs.append((sg['name'], chans, rhy))
+        blobs.append((sg['name'], chans, rhy, sg['voices'][0]))
 
     # くり返す曲は、どのチャンネルも同じ長さ(か、短い方が何回かまわってそろう長さ)でないと、回るたびにずれる
-    for name, chans, rhy in blobs:
+    for name, chans, rhy, _ in blobs:
         lens = [stream_ticks(c, False) for c in chans] + ([stream_ticks(rhy, True)] if rhy else [])
         sg = next(x for x in songs if x['name'] == name)
         if sg['loop'] and any(max(lens) % n for n in lens):
@@ -366,11 +390,12 @@ def main(src, out_bin, out_h):
     head = 1 + 2 * len(blobs)
     data = bytearray(head)
     data[0] = len(blobs)
-    for k, (name, chans, rhy) in enumerate(blobs):
+    for k, (name, chans, rhy, voice) in enumerate(blobs):
         hdr_at = len(data)
         data[1 + 2 * k:3 + 2 * k] = (BASE + hdr_at).to_bytes(2, 'little')
-        hdr = bytearray([len(chans), 1 if rhy else 0]) + bytes(2 * (len(chans) + (1 if rhy else 0)))
+        hdr = bytearray([len(chans), (1 if rhy else 0) | 2]) + bytes(voice) + bytes(2 * (len(chans) + (1 if rhy else 0)))
         data += hdr
+        hdr_at += 8                     # チャンネルの番地はオリジナル音色の後
         ptrs = []
         for c in chans + ([rhy] if rhy else []):
             ptrs.append(BASE + len(data))
@@ -383,7 +408,7 @@ def main(src, out_bin, out_h):
     with open(out_h, 'w') as f:
         f.write('/* songs.h — tools/gen_music.py が src/sound/songs.mml から作る。手で直さない */\n')
         f.write('#ifndef SONGS_H\n#define SONGS_H\n')
-        for k, (name, _, _) in enumerate(blobs):
+        for k, (name, _, _, _) in enumerate(blobs):
             f.write('#define SONG_%s %d\n' % (name, k + 1))   # 0 = 無し
         f.write('#define SONG_COUNT %d\n#endif\n' % len(blobs))
     print('gen_music: %d 曲、%d バイト' % (len(blobs), len(data)))

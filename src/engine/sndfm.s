@@ -1,13 +1,15 @@
 ; sndfm.s — BGM: FM 音源(MSX-MUSIC = YM2413)のドライバ
 ;
 ; 曲のデータは音のモジュール(セグメント SEG_SND の 0x8000-、形式は tools/gen_music.py の冒頭)。
+; 曲ごとにオリジナル音色(音色 0)を 1 つ持てる(内蔵の音色だけだと YM2413 らしい音になりがちなので、どの曲も使う)。
+; リズムのスネアには PSG のノイズ(ch B)を重ねる(sound.c)。
 ; 割り込み(sys.s)はページ2を SEG_SND にしてから sound_tick(sound.c)を呼び、そこから fm_bgm_tick を呼ぶ。
 ; メロディは FM の ch0〜5、リズムは ch6〜8(リズムモード)。レジスタへの書き込みは fm_write(sys.s。書くたびに待つ)。
 ; 割り込みは Z80 転送の間(CPU が Z80)にも入るので、R800 専用の命令は使わない。
 ; C で書くと常駐部に入りきらなかった(約 1KB)のでアセンブラにした
 
 	.module	sndfm
-	.globl	_fm_write, _g_seg2, _sys_seg2
+	.globl	_fm_write, _g_seg2, _sys_seg2, _g_snr
 
 SEG_SND	= 8			; game.h と同じ
 FMC_P	= 0			; チャンネル: 今読んでいる所(0 = 止まっている)
@@ -85,7 +87,14 @@ _bgm_play::
 	ld	b, a
 	ld	a, (hl)
 	inc	hl
-	ld	(fm_rhy), a
+	ld	c, a
+	and	a, #1
+	ld	(fm_rhy), a		; bit0 = リズム
+	bit	1, c
+	jr	z, 6$
+	; bit1 = オリジナル音色(音色 0。YM2413 のレジスタ 0x00〜0x07)
+	call	fm_voice
+6$:
 	ld	ix, #fm_ch
 	ld	a, b
 	or	a, a
@@ -295,13 +304,18 @@ mel_tick:
 	jp	11$
 24$:
 	cp	a, #0x85
-	jr	nz, 25$
+	jr	nz, 27$
 	ld	a, (hl)			; 今の音を伸ばす
 	inc	hl
 	ld	FMC_WAIT (ix), a
 	ld	FMC_P (ix), l
 	ld	FMC_P + 1 (ix), h
 	ret
+27$:
+	cp	a, #0x86
+	jr	nz, 25$
+	call	fm_voice		; オリジナル音色を書き換える(曲の途中で替える)
+	jp	11$
 25$:
 	cp	a, #0xFF
 	jr	nz, 26$
@@ -346,6 +360,13 @@ rhy_tick:
 	call	_fm_write
 	pop	hl
 	pop	af
+	bit	3, a
+	jr	z, 32$
+	push	af
+	ld	a, #1
+	ld	(_g_snr), a		; スネア: PSG のノイズも重ねる(sound.c)
+	pop	af
+32$:
 	or	a, #0x20
 	push	hl
 	ld	l, a
@@ -405,6 +426,24 @@ rhy_tick:
 39$:
 	ld	FMC_P (ix), l
 	ld	FMC_P + 1 (ix), h
+	ret
+
+; fm_voice: HL = オリジナル音色の 8 バイト → レジスタ 0x00〜0x07 に書き、HL を次へ。BC は保つ
+fm_voice:
+	push	bc
+	ld	c, #0
+1$:
+	ld	a, c
+	push	hl
+	ld	l, (hl)
+	call	_fm_write
+	pop	hl
+	inc	hl
+	inc	c
+	ld	a, c
+	cp	a, #8
+	jr	c, 1$
+	pop	bc
 	ret
 
 ; rv: A = レジスタ、HL = 値の番地 → 書いて HL を次へ
