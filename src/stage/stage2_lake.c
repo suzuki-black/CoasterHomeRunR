@@ -9,6 +9,7 @@
 #include "game.h"
 #include "env.h"
 #include "sound.h"
+#include "pcm.h"
 
 #define S(sec) ((u16)((sec) * 60))
 
@@ -92,6 +93,7 @@ static const Event lake_events[] = {
     /* ---- 湖の主: 後ろから追ってくる(撃破までスクリプトは止まる) ---- */
     { AT(146, EV_DIR),      DIR_BACK, 0, 0 },     /* 湖の主は後ろから */
     { AT(146, EV_TEXT),     T_WARNING, 0, 0 },
+    { AT(146, EV_VOICE),    VOICE_WARNING, 0, 0 },
     { AT(146, EV_SPEED),    12, 0, 0 },
     { AT(150, EV_BOSS),     ET_BOSS2, -18, 0 },
     { AT(150, EV_SPEED),    0, 0, 0 },

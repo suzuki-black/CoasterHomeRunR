@@ -9,7 +9,8 @@
 - bank4-5   : 地形モジュール(0x8000 にリンク。起動時にマッパーのセグメント 5 へ読み込む)
 - bank6-15  : ステージ 1〜5 のゲームモジュール(0x8000 にリンク。ステージの始めにページ2 = セグメント 1 へ読み込む)
 - bank16-17 : 音のモジュール(FM の曲。tools/gen_music.py が作る 0x8000- の中身。起動時にセグメント 8 へ読み込む)
-- bank18-31 : 空き
+- bank18-19 : 声のモジュール(内蔵 PCM の英語の声。tools/gen_voice.sh が作る src/sound/voicemod.bin。起動時にセグメント 9 へ)
+- bank20-31 : 空き
 
 モジュール(オーバーレイ、仕様書 7.3)はどれも 0x8000-0xBBFF にコードと定数、0xBC00-0xBFFF に変数(読み込み後に 0 で埋める。
 初期値つきの変数は置けない)。常駐部の変数(DATA/BSS)が 0xCC00-0xDDFF に収まっているかも検査する。
@@ -20,6 +21,7 @@ import sys
 BANK = 0x2000
 ROM_BANKS = 32
 SND_BANK = 16
+VOICE_BANK = 18
 DATA_BASE, DATA_LIMIT = 0xCC00, 0xDE00   # 0xDE00-0xDFFF は行の左右端(raster.s span_a/span_b)
 CODE_LIMIT = 0x8000   # 常駐部はページ1だけ(ページ2はモジュール)
 MOD_BASE, MOD_BSS, MOD_END = 0x8000, 0xBC00, 0xC000
@@ -117,8 +119,8 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path, env_ihx, env_noi, *game_args):
         sys.exit(f'mkrom: 地形モジュールのコードが 0x{ENV_CODE_LIMIT:04X}(地形の表)に食い込んだ: 0x{env_hi:04X}')
     rom[ENV_BANK * BANK:(ENV_BANK + 2) * BANK] = envimg
     mods.append(info)
-    snd_bin = game_args[-1]
-    game_args = game_args[:-1]
+    snd_bin, voice_bin = game_args[-2], game_args[-1]
+    game_args = game_args[:-2]
     if len(game_args) % 2:
         sys.exit('mkrom: ゲームモジュールは (ihx, noi) の組で渡す')
     for k in range(len(game_args) // 2):
@@ -134,6 +136,11 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path, env_ihx, env_noi, *game_args):
         sys.exit(f'mkrom: 音のモジュールが {len(snd)} B で、{MOD_BSS - MOD_BASE} B を超えた')
     rom[SND_BANK * BANK:SND_BANK * BANK + len(snd)] = snd
     mods.append(f'snd={len(snd)}B')
+    voice = open(voice_bin, 'rb').read()
+    if len(voice) > MOD_BSS - MOD_BASE:
+        sys.exit(f'mkrom: 声のモジュールが {len(voice)} B で、{MOD_BSS - MOD_BASE} B を超えた')
+    rom[VOICE_BANK * BANK:VOICE_BANK * BANK + len(voice)] = voice
+    mods.append(f'voice={len(voice)}B')
     with open(out_path, 'wb') as f:
         f.write(rom)
     print(f'mkrom: {out_path} {len(rom)} B (ASCII8) '

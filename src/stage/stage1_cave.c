@@ -10,6 +10,7 @@
 #include "game.h"
 #include "env.h"
 #include "sound.h"
+#include "pcm.h"
 
 #define S(sec) ((u16)((sec) * 60))
 
@@ -143,6 +144,7 @@ static const Event cave_events[] = {
     { AT(236, EV_SPAWN),                ET_MISBOX, 18, 10 },   /* 誘導弾の箱(中ボスの前) */
     /* ---- 中ボス: 大猿人の親方(撃破までスクリプトは止まる) ---- */
     { AT(242, EV_TEXT),                 T_WARNING, 0, 0 },
+    { AT(242, EV_VOICE),                VOICE_WARNING, 0, 0 },
     { AT(242, EV_SPEED),                6, 0, 0 },
     { AT(246, EV_BOSS),                 ET_B01, 16, 0 },
     { AT(246, EV_SPEED),                0, 0, 0 },
@@ -265,6 +267,7 @@ static const Event cave_events[] = {
     { AT(604, EV_SPAWN),                ET_MISBOX, 18, -10 },  /* 誘導弾の箱(大ボスの前) */
     /* ---- 大ボス: 遊園地の用心棒(岩を投げ、ときどき突進)。撃破後はクリアして坑道の入口へ ---- */
     { AT(610, EV_TEXT),                 T_WARNING, 0, 0 },
+    { AT(610, EV_VOICE),                VOICE_WARNING, 0, 0 },
     { AT(610, EV_SPEED),                6, 0, 0 },
     { AT(614, EV_BOSS),                 ET_BOSS1, 20, 0 },
     { AT(614, EV_DIR),                  DIR_NONE, 0, 0 },

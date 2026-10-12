@@ -15,7 +15,7 @@
 ;   ・鳴らしている間は、転送で CPU を Z80 に切り替えない(vdp.s の vdp_xfer)。切り替え(BIOS の CHGCPU)の間は走査線割込みを
 ;     止めるしかなく、張った行が過ぎると割込みが来ないまま消えて声が止まった。ステージの読み込みなどページ0を BIOS に戻す前には
 ;     pcm_stop で止める(BIOS が走査線割込みを受けると、次の行が張られず止まる)
-;   ・声のデータは地形モジュールにある(voice_fire.s。ステージごとのゲームモジュールに空きが無い)。割込みの中ではページ2を地形のセグメントにして読む
+;   ・声のデータは声のモジュール(セグメント 9。tools/gen_voice.sh)にある。割込みの中ではページ2を声のセグメントにして読む
 ;   ・割込みの処理(サンプルごとに走る所)はページ0の RAM(エリア _PAGE0)に置く。切り替え(pcm_begin / pcm_leave)は常駐部。Z80 で転送している間も動くので、R800 専用の命令は使わない
 ;
 ; ■ 割込みの中で触る VDP: S#1 の読み 1 回と R#19 の書き込み(2 バイト)。本体は 99h への 2 バイトの書き込みを DI で囲んでいる
@@ -23,8 +23,7 @@
 	.module	pcm
 	.globl	htimi, _g_seg2, _g_vdp_r1
 
-SEG_VOICE = 5			; 声のデータを置いた地形モジュールのセグメント(sys.s の SEG_ENV と同じ)
-VOICE_HDR = 0x8006		; 地形モジュールの頭: 声の長さの番地(modhead_env.s)
+SEG_VOICE = 9			; 声のモジュール(game.h の SEG_VOICE。形は tools/gen_voice.sh の冒頭)
 R0_BASE	= 0x00			; R#0(main.c の vdp_init が書く値。BIOS の控え RG0SAV は使わない: 本体が直接書くので合わない)
 STEP	= 504			; 1 サンプルの行数(9.7)= 3.9375 行
 PERIOD	= 64			; 1 サンプルのカウント(システムタイマ 3.911µs × 64 = 250µs)
@@ -76,18 +75,30 @@ _pcm_fire::
 	ret
 
 ; ---------------------------------------------------------------------------
-; void pcm_fire_voice(void) — 誘導弾の声「FIRE」を鳴らす。声は地形モジュールにあるので、ページ2を一時的に地形のセグメントにして
-;   番地と長さを読む(ゲームモジュールから呼ぶので、読んだら元に戻してから pcm_fire へ)
+; void pcm_say(u8 voice)   A = 声の番号(pcm.h の VOICE_。1 から)— 声を鳴らす(鳴っていれば頭から差し替える)。
+;   声は声のモジュールにあるので、ページ2を一時的に声のセグメントにして番地と長さを読む
+;   (ゲームモジュールから呼ぶので、読んだら元に戻してから pcm_fire へ)
 ; ---------------------------------------------------------------------------
-_pcm_fire_voice::
+_pcm_say::
 	di
+	dec	a
+	add	a, a
+	add	a, a
+	ld	e, a
+	ld	d, #0
 	ld	a, #SEG_VOICE
 	out	(0xFE), a
-	ld	hl, (VOICE_HDR)
+	ld	hl, #0x8001		; (dw 番地, dw サンプル数)の並び
+	add	hl, de
 	ld	e, (hl)
 	inc	hl
 	ld	d, (hl)
-	inc	hl			; DE = 長さ、HL = 先頭
+	inc	hl
+	push	de
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)			; DE = 長さ
+	pop	hl			; HL = 先頭
 	ld	a, (_g_seg2)
 	out	(0xFE), a
 	jp	_pcm_fire
@@ -327,7 +338,7 @@ _pcm_isr::
 	ld	a, (pcm_end)
 	or	a, a
 	jr	nz, 3$
-	ld	a, #SEG_VOICE		; 声は地形モジュールにある
+	ld	a, #SEG_VOICE		; 声は声のモジュールにある
 	out	(0xFE), a
 	ld	hl, (pcm_ptr)
 	ld	a, (hl)

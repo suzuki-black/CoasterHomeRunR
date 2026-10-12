@@ -42,6 +42,7 @@ enum {
     EV_BGM,     /* a = 曲の番号(songs.h の SONG_)を鳴らす、0 で止める */
     EV_FX,      /* a = 効果音、b = 揺れのフレーム数(着地など) */
     EV_PAL,     /* a = 0 でステージの palette、1 で palette2 に切り替える(外から坑道へ入ったときなど) */
+    EV_VOICE,   /* a = 声(pcm.h の VOICE_)を鳴らす(ボスの前の Warning! など) */
 };
 /* cmd にこの印を付けると、tick は時刻ではなくレール上の位置[m](カメラがそこを過ぎたら実行) */
 #define EV_AT 0x80
@@ -98,6 +99,8 @@ typedef struct {
 #define SEG_ENV      5
 #define SEG_SND      8   /* 音のモジュール(FM の曲。起動時に 1 回読み込む) */
 #define SND_BANK     16  /* 音のモジュールの ROM のバンク(16-17) */
+#define SEG_VOICE    9   /* 声のモジュール(内蔵 PCM の声。起動時に 1 回読み込む) */
+#define VOICE_BANK   18  /* 声のモジュールの ROM のバンク(18-19) */
 #define MOD_STAGE    (*(const Stage * const *)0x8003)
 typedef u8 (*GameRunFn)(const Stage *st, u8 first);
 #define MOD_GAME_RUN ((GameRunFn)0x8000)

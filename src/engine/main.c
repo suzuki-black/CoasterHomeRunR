@@ -230,6 +230,8 @@ void main(void)
     mod_load(ENV_BANK);
     sys_seg2(SEG_SND);               /* 音のモジュール(FM の曲)をセグメント 8 へ */
     mod_load(SND_BANK);
+    sys_seg2(SEG_VOICE);             /* 声のモジュール(内蔵 PCM の英語の声)をセグメント 9 へ */
+    mod_load(VOICE_BANK);
     sys_seg2(SEG_GAME);
 #ifdef BENCH
     bench_run();

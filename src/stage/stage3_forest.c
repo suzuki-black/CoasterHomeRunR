@@ -7,6 +7,7 @@
 #include "game.h"
 #include "env.h"
 #include "sound.h"
+#include "pcm.h"
 
 #define S(sec) ((u16)((sec) * 60))
 
@@ -87,6 +88,7 @@ static const Event forest_events[] = {
     { S(36),   EV_SPAWN, ET_MISBOX,   18,  10 },   /* 誘導弾の箱(森の番人の前) */
     { S(36.5),  EV_SPAWN, ET_E05,      20,   8 },
     { S(38),   EV_TEXT,  T_WARNING,   0,   0 },
+    { S(38),   EV_VOICE, VOICE_WARNING, 0, 0 },
     { S(38),   EV_SPEED, 6,           0,   0 },
     { S(39),   EV_BOSS,  ET_B02,      20,  0 },
     /* ---- クリア ---- */

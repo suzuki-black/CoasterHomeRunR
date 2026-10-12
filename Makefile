@@ -122,8 +122,8 @@ $(BUILD)/ressyms.rel: $(BUILD)/ressyms.s
 	$(AS) -l -o $@ $<
 
 # 地形モジュール(マッパーのセグメント 5 に置く)
-$(BUILD)/envmod.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env.rel $(BUILD)/voice_fire.rel $(BUILD)/ressyms.rel
-	$(CC) $(MODFLAGS) --code-loc 0x8008 -o $@ $^
+$(BUILD)/envmod.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env.rel $(BUILD)/ressyms.rel
+	$(CC) $(MODFLAGS) --code-loc 0x8006 -o $@ $^
 
 # ステージごとのゲームモジュール(ページ2 = セグメント 1 に、ステージの始めに読み込む)
 STG     = src/stage
@@ -153,10 +153,10 @@ $(BUILD)/boot.ihx: $(BUILD)/boot.rel
 
 GAMES = $(foreach n,1 2 3 4 5,$(BUILD)/game$(n).ihx)
 
-$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/envmod.ihx $(GAMES) $(BUILD)/sndmod.bin $(TOOLS)/mkrom.py
+$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/envmod.ihx $(GAMES) $(BUILD)/sndmod.bin src/sound/voicemod.bin $(TOOLS)/mkrom.py
 	$(PYTHON) $(TOOLS)/mkrom.py $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/engine.noi $@ \
 	  $(BUILD)/envmod.ihx $(BUILD)/envmod.noi \
-	  $(foreach n,1 2 3 4 5,$(BUILD)/game$(n).ihx $(BUILD)/game$(n).noi) $(BUILD)/sndmod.bin
+	  $(foreach n,1 2 3 4 5,$(BUILD)/game$(n).ihx $(BUILD)/game$(n).noi) $(BUILD)/sndmod.bin src/sound/voicemod.bin
 	cp $@ "$(BUILD)/$(ROMNAME) [ASCII8].rom"
 
 # 計測用 ROM(fps 表示、タイトルに CPU の状態)。オブジェクトが混ざらないよう build/fps に分けてビルドする

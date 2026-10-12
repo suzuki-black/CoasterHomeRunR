@@ -6,6 +6,7 @@
  */
 #include "game.h"
 #include "sound.h"
+#include "pcm.h"
 #include "env.h"
 
 #define S(sec) ((u16)((sec) * 60))
@@ -76,6 +77,7 @@ static const Event town_events[] = {
     { S(23.5),  EV_SPAWN, ET_E01,     -10,  -8 },
     { S(25),   EV_DIR,   DIR_BACK,    0,   0 },
     { S(25),   EV_TEXT,  T_FLOAT,     0,   0 },
+    { S(25),   EV_VOICE, VOICE_WARNING, 0, 0 },
     { S(25),   EV_SPEED, 14,          0,   0 },
     { S(26),   EV_BOSS,  ET_B03,     -20,  0 },
     { S(26.1), EV_SPEED, 0,           0,   0 },

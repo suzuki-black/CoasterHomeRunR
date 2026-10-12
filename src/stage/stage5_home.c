@@ -9,6 +9,7 @@
  */
 #include "game.h"
 #include "sound.h"
+#include "pcm.h"
 #include "env.h"
 
 #define S(sec) ((u16)((sec) * 60))
@@ -71,6 +72,7 @@ static const Event home_events[] = {
     { S(7),    EV_SPAWN, ET_MEDKIT,   16,   0 },
     /* ---- 亜人の王 ---- */
     { S(9),    EV_TEXT,  T_WARNING,   0,   0 },
+    { S(9),    EV_VOICE, VOICE_WARNING, 0, 0 },
     { S(9),    EV_SPEED, 4,           0,   0 },
     { S(10),   EV_BOSS,  ET_B04,      16,  0 },
     /* ---- 村の門の前まで走ってゆっくり止まる ---- */

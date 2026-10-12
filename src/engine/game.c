@@ -95,7 +95,8 @@ static u8  aim_hold;
 static u8  in_prev;
 static u8  fire_cd;
 static u8  hitmark;
-static u8  shotfx;               /* 1 = このフレームに撃った(照準の真ん中に閃光を重ねる) */
+static u8  shotfx;
+static u16 voice_t;               /* ボスの Warning! の声を鳴らした時刻(g_tick)。直後の Enemy ahead/behind! で上書きしない */               /* 1 = このフレームに撃った(照準の真ん中に閃光を重ねる) */
 static u8  blink;
 static u8  shake;                /* 被弾でトロッコを揺らす残りフレーム */
 static const Event *sc_ev;
@@ -524,7 +525,7 @@ static void mis_fire(void)
     for (i = 1; i < lock_n; i++) lock_id[i - 1] = lock_id[i];
     lock_n--;
     mis_left--;
-    pcm_fire_voice();
+    pcm_say(VOICE_FIRE);
 }
 
 /* 長方形を画面(64 × GAME_ROWS)に切り詰めて塗る */
@@ -684,6 +685,7 @@ static void script_update(void)
             if (ev->a) se_play(ev->a);
             shake = (u8)ev->b;
             break;
+        case EV_VOICE: pcm_say(ev->a); voice_t = g_tick; break;
         case EV_PAL:
             set_stage_palette(ev->a ? stage->palette2 : stage->palette);
             break;
@@ -953,6 +955,8 @@ static void draw_hud(void)
     if (attack_dir == DIR_FRONT && facing) warn = 2;
     /* 警告音: 出始めに鳴らし、続いている間は約 2 秒ごとに鳴らす */
     if (warn && (warn != warn_prev || !warn_time)) { se_play(SE_ALARM); warn_time = 40; }
+    /* 警告が出始めたら英語の声も(2 秒ごとのくり返しの警告音では鳴らさない) */
+    if (warn && warn != warn_prev && (u16)(g_tick - voice_t) > 45) pcm_say(warn == 1 ? VOICE_BEHIND : VOICE_AHEAD);
     if (warn_time) warn_time--;
     warn_prev = warn;
     /* 振り向きの警告は文字で(矢印はルート選択の表示に使うので使わない) */
@@ -1168,7 +1172,7 @@ u8 game_run(const Stage *st, u8 first)
     ctrl = 1; spd_over = 0; cap_id = 0; cap_time = 0; warn_prev = 0; warn_time = 0; pitch_cur = 0;
     aim_x = 128; aim_y = 92; aim_hold = 0;
     in_prev = 0xFF;                      /* タイトルで押したボタンを射撃と見なさない */
-    fire_cd = 0; hitmark = 0; shotfx = 0;
+    fire_cd = 0; hitmark = 0; shotfx = 0; voice_t = g_tick - 100;
     lock_n = 0; fly_n = 0; box_n = 0;
     for (i = 0; i < MAX_EN; i++) box_x0[i] = 0xFF;
     if (first) { life = g_cfg.life; g_score = 0; mis_left = MIS_START; }   /* 誘導弾もライフと同じく持ち越す */
@@ -1193,7 +1197,7 @@ u8 game_run(const Stage *st, u8 first)
             if (en[i].type != ET_NONE) update_enemy(&en[i]);
             }
         g_perf_logic[3] = timer_read() - tl;
-        if (g_dbg_fire) { g_dbg_fire = 0; pcm_fire_voice(); }   /* (調べ用)「FIRE」を鳴らす */
+        if (g_dbg_fire) { g_dbg_fire = 0; pcm_say(VOICE_FIRE); }   /* (調べ用)「FIRE」を鳴らす */
         render();
         present();
         if (!life) { over = 1; break; }
