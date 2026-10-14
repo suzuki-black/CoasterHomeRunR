@@ -1,5 +1,6 @@
-# test_flow.tcl — タイトル → オープニング → ステージ 1(中ボス・大ボス)→ ステージ 2(崖・川・川の主)
-#                  → ステージ 3(森・森の番人)→ ステージ 4(町・暴走汽車)→ ステージ 5(自宅前・亜人の王)
+# test_flow.tcl — タイトル → オープニング → ステージ 1(中ボス・大ボス)→ ステージ 2(地底湖・湖の主)
+#                  → ステージ 3(森・森の番人)→ ステージ 4(海の鉄橋・大ダコ人)→ ステージ 5(町・祭りの山車)
+#                  → ステージ 6(村の入り口・亜人の王)
 #                  → エンディング(SCREEN 1)→ タイトル を自動で遊んで確かめる
 #
 #   TH_NOI=build/engine.noi TH_OUT=<出力ディレクトリ> [TH_GOD=1] \
@@ -94,7 +95,7 @@ proc finish {} {
     fps_log
     log "scenes: $::seen  bosses=$::bosses"
     set ok [expr {[lsearch $::seen 1] >= 0 && ([lsearch $::seen 3] >= 0 || [lsearch $::seen 2] >= 0)}]
-    if {$::god && ([lsearch $::seen 3] < 0 || $::bosses < 6)} { set ok 0 }
+    if {$::god && ([lsearch $::seen 3] < 0 || $::bosses < 7)} { set ok 0 }
     log [expr {$ok ? "PASS" : "FAIL"}]
     close $::f
     exit

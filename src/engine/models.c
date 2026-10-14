@@ -77,9 +77,15 @@ static const MRect m_e05[] = {          /* 魔法使い(コウモリ人系)・�
 static const MRect m_arrow[] = {        /* 矢(正面から見た鏃と矢羽) */
     { -2, 0, 2, 3, C_ORANGE, 0 }, { -1, 1, 1, 2, C_WHITE, 0 },
 };
+#ifdef GAME_SEA
+static const MRect m_magic[] = {        /* 海の面では大ダコ人の墨(黒い玉) */
+    { -4, 0, 4, 7, C_BLACK, 0 }, { -2, 2, 2, 5, C_PURPLE, 0 },
+};
+#else
 static const MRect m_magic[] = {        /* 魔法弾・水の玉 */
     { -4, 0, 4, 7, C_RED, 0 }, { -2, 2, 2, 5, C_YELLOW, 0 },
 };
+#endif
 static const MRect m_crate[] = {        /* 湖に浮いた木箱と、その上の救急箱 */
     { -7, 0, 7, 8, C_BROWN, 0 }, { -7, 3, 7, 4, C_BLACK, 0 },
     { -4, 8, 4, 14, C_WHITE, 0 }, { -1, 9, 1, 13, C_RED, 0 }, { -3, 10, 3, 12, C_RED, 0 },
@@ -125,12 +131,48 @@ static const MRect m_sign[] = {         /* 分岐の合図の獣人(茶の猿人
     { -4, 26,  4, 33, C_BROWN, 1 },   { -2, 29,  2, 30, C_BLACK, 1 },
     { -12, 20, -8, 30, C_BROWN, 0 },  {  8, 20, 12, 30, C_BROWN, 0 },   /* 両手を上げている */
 };
+#ifdef GAME_SEA
+/* ここから海の面(ステージ 4 の鉄橋)だけの敵。ほかの面のモジュールには入れない(Makefile の game4.ihx) */
+static const MRect m_e06[] = {          /* 半魚人(三つ又の銛)・水色、白い腹、赤いひれ、黄色い目 */
+    { -4,  0, -1,  9, C_CYAN, 2 },   {  1,  0,  4,  9, C_CYAN, 2 },
+    { -5,  9,  5, 19, C_CYAN, 0 },   { -3, 10,  3, 18, C_WHITE, 0 },   { -8, 11, -5, 17, C_RED, 0 },
+    { -4, 19,  4, 26, C_CYAN, 1 },   { -4, 22, -2, 24, C_YELLOW, 1 },  {  2, 22,  4, 24, C_YELLOW, 1 },
+    { -3, 19,  3, 20, C_BLACK, 1 },  { -1, 26,  1, 29, C_RED, 1 },
+    {  6,  2,  7, 29, C_BLACK, 0 },  {  4, 29,  9, 30, C_BLACK, 0 },
+    {  4, 30,  5, 33, C_BLACK, 0 },  {  8, 30,  9, 33, C_BLACK, 0 },
+};
+static const MRect m_b05[] = {          /* 大ダコ人・赤。大きな頭、白い目に黒い瞳、下に広がる足と振り上げた足(白い吸盤) */
+    { -24,  0, -15,  8, C_RED, 2 },  { -11,  0,  -5, 10, C_RED, 2 },  {  5,  0, 11, 10, C_RED, 2 },  { 15,  0, 24,  8, C_RED, 2 },
+    { -17,  8,  17, 22, C_RED, 0 },  { -11, 14,  -4, 21, C_WHITE, 0 }, {  4, 14, 11, 21, C_WHITE, 0 },
+    {  -8, 15,  -5, 19, C_BLACK, 0 }, {  5, 15,  8, 19, C_BLACK, 0 },
+    { -13, 22,  13, 44, C_RED, 1 },  {  -9, 44,  9, 49, C_RED, 1 },
+    { -31, 12, -25, 40, C_RED, 0 },  { 25, 12, 31, 40, C_RED, 0 },
+    { -29, 22, -27, 25, C_WHITE, 0 }, { 27, 22, 29, 25, C_WHITE, 0 },
+};
+/* 大ダコ人の足(海から伸びて橋をつかむ)・赤、内側に白い吸盤、先はレールの側へ丸まっている。右の足(m_tent)と左の足(m_tentl) */
+static const MRect m_tent[] = {
+    { -4,  0,  4, 34, C_RED, 0 },    { -4, 14, -2, 16, C_WHITE, 0 },  { -4, 21, -2, 23, C_WHITE, 0 },  { -4, 28, -2, 30, C_WHITE, 0 },
+    { -3, 34,  3, 42, C_RED, 0 },    { -10, 40, -1, 45, C_RED, 0 },   { -13, 33, -8, 42, C_RED, 0 },   { -12, 36, -9, 38, C_WHITE, 0 },
+};
+static const MRect m_tentl[] = {
+    { -4,  0,  4, 34, C_RED, 0 },    {  2, 14,  4, 16, C_WHITE, 0 },  {  2, 21,  4, 23, C_WHITE, 0 },  {  2, 28,  4, 30, C_WHITE, 0 },
+    { -3, 34,  3, 42, C_RED, 0 },    {  1, 40, 10, 45, C_RED, 0 },    {  8, 33, 13, 42, C_RED, 0 },    {  9, 36, 12, 38, C_WHITE, 0 },
+};
+#endif
 #define MODEL(a) { a, sizeof(a) / sizeof(a[0]) }
 const Model models[] = {
     { 0, 0 }, MODEL(m_e01), MODEL(m_e02a), MODEL(m_e03), MODEL(m_e04), MODEL(m_e05),
     MODEL(m_b01), MODEL(m_treasure), MODEL(m_medkit), MODEL(m_boss1), MODEL(m_rock),
     MODEL(m_arrow), MODEL(m_magic), MODEL(m_crate), MODEL(m_boss2), MODEL(m_b02),
     MODEL(m_b03), MODEL(m_b04), MODEL(m_sign), MODEL(m_sign), MODEL(m_misbox),
+#ifdef GAME_SEA
+    MODEL(m_e06), MODEL(m_b05), MODEL(m_tent),
+#else
+    { 0, 0 }, { 0, 0 }, { 0, 0 },
+#endif
 };
 const Model model_e02b = MODEL(m_e02b);
+#ifdef GAME_SEA
+const Model model_tentl = MODEL(m_tentl);
+#endif
 

@@ -1,4 +1,4 @@
-/* stage5_home.c — ステージ 5: 村の入り口(仕様書 5 章 #7)とエンディング(5.2)
+/* stage6_home.c — ステージ 6: 村の入り口(仕様書 5 章 #7)とエンディング(5.2)
  *
  * 流れ: 村へ続く通り → 雑魚 → 亜人の王(窃盗団の頭)B04(撃破までスクリプトは止まる)
  *       → 村の門の前まで走ってゆっくり止まる(HOME AT LAST!)。門の前で村人が出迎える
@@ -59,7 +59,7 @@ static const u8 ending_text[] = {
 
 static const Event home_events[] = {
     { S(0),    EV_DIR,   DIR_NONE,    0,   0 },
-    { S(0),    EV_BGM,   SONG_STAGE5, 0,   0 },
+    { S(0),    EV_BGM,   SONG_STAGE6, 0,   0 },
     { S(1),    EV_TEXT,  T_SEE,       0,   0 },
     { S(2),     EV_DIR,  DIR_FRONT,   0,   0 },
     { S(2),     EV_SPAWN, ET_E01,      22, -10 },
@@ -88,8 +88,8 @@ const Stage stage_data = {
     2,
     0,
     0,
-    SONG_STAGE5,
+    SONG_STAGE6,
     home_zones, 0x4D9E,
-    "STAGE 5", "THE VILLAGE",
+    "STAGE 6", "THE VILLAGE",
     ending_text, SONG_ENDING,
 };

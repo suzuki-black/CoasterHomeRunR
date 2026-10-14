@@ -65,13 +65,27 @@ static const EDef edef[ET_COUNT] = {
     /* 分岐 L   */ EN_ITEM(1, -21),
     /* 分岐 R   */ EN_ITEM(1, -21),
     /* 弾の箱   */ EN_ITEM(1, -21),
+    /* E06 半魚 */ EN_WALK(2, 8),
+    /* 大ダコ人 */ { 60, MV_KEEP,  -21, -28,  2,  13, 64,   0,  0, AT_CYCLE, 30, 30,  90, 2, 30, ET_MAGIC, 35 },
+    /* 大ダコの足*/{  3, MV_HOVER, -40,  24,  3,   0,  0,  24,  8, AT_MELEE, 25, 45, 100, 1,  1, 0,        0 },
 };
 #define IS_SIGN(t) ((t) == ET_SIGNL || (t) == ET_SIGNR)
 
 /* ---------------------------------------------------------------------------
  * 状態
  * --------------------------------------------------------------------------- */
-enum { ST_IDLE, ST_APPROACH, ST_ATTACK, ST_PASS, ST_DEAD, ST_CHASE, ST_GRAB };
+enum { ST_IDLE, ST_APPROACH, ST_ATTACK, ST_PASS, ST_DEAD, ST_CHASE, ST_GRAB,
+       ST_LEAP };    /* 半魚人が海から跳び上がっている(海の面だけ) */
+
+#ifdef GAME_SEA
+/* 半魚人の跳び上がり: 床の 3.2m 下(橋の横の海)から、上向きの速さ LEAP_VY(1/256m/フレーム)で跳び、毎フレーム LEAP_G ずつ落ちる。
+ * 約 5.2m 上がって床の 2m 上で向きを変え、約 37 フレームで床に降りる。速さは attacks に入れておく(降りたら 0 に戻す)。
+ * 低い座席からは橋の床の縁より下は見えないので、頭が床より上に出るまでは描かない(LEAP_SHOW) */
+#define LEAP_Y0 (-21 * 16 - 816)
+#define LEAP_VY 115
+#define LEAP_G  5
+#define LEAP_SHOW F88(-2.5)
+#endif
 
 typedef struct {
     u8  type, state, hp, flash;
@@ -159,6 +173,16 @@ static Enemy *spawn(u8 type, i8 dist, i8 lat8)
         }
         break;
     }
+#ifdef GAME_SEA
+    if (type == ET_E06) {                      /* 半魚人: 橋の横の海から跳び上がり、レールの脇に降りる */
+        e->state = ST_LEAP;
+        e->up = LEAP_Y0;
+        e->attacks = LEAP_VY;
+        e->lat_t = e->side ? -F88(0.35) : F88(0.35);
+    } else if (type == ET_TENT) {              /* 大ダコ人の足: トラスの外側をつかむ */
+        e->lat_t = e->side ? -F88(2.3) : F88(2.3);
+    }
+#endif
     return e;
 }
 
@@ -241,6 +265,18 @@ static void lunge(i16 d)
     else if (ce.timer >= 100) { ce.timer = 0; ce.attacks++; ce.flash = 0; }
 }
 
+#ifdef GAME_SEA
+/* 大ダコ人(後ろ)は、前の海から足を伸ばしてくる(約 3 秒ごと、同時に 2 本まで、左右交互)。足が出ている間は警告を前に向け、
+ * 足を切ったら後ろへ戻す(前後を振り向かせる) */
+static void octo_arms(void)
+{
+    u8 i, n = 0;
+    for (i = 0; i < MAX_EN; i++) if (en[i].type == ET_TENT && en[i].state != ST_DEAD) n++;
+    attack_dir = n ? DIR_FRONT : DIR_BACK;
+    if (n < 2 && (ce.anim & 63) == 32) spawn(ET_TENT, 14, (ce.anim & 64) ? 22 : -22);
+}
+#endif
+
 static void update_ce(void)
 {
     const EDef *f = &edef[ce.type];
@@ -257,9 +293,31 @@ static void update_ce(void)
         move_enemy();
         if (++ce.timer >= 12) {
             if (IS_BOSS(ce.type)) boss_alive = 0;
+#ifdef GAME_SEA
+            if (ce.type == ET_B07) {             /* 大ダコ人が倒れたら、伸ばしていた足も海へ沈む */
+                u8 i;
+                for (i = 0; i < MAX_EN; i++)
+                    if (en[i].type == ET_TENT && en[i].state != ST_DEAD) {
+                        en[i].state = ST_DEAD; en[i].timer = 0; en[i].v = (i16)cam_v;
+                    }
+            }
+#endif
             ce.type = ET_NONE;
         }
         return;
+#ifdef GAME_SEA
+    case ST_LEAP:
+        /* 海から跳び上がる(前の半魚人はその場で、後ろの半魚人は乗り物について)。床に降りたら歩く敵(後ろなら追いかける) */
+        ce.v = (d < 0) ? (i16)cam_v : 0;
+        ce.up += (i8)ce.attacks;
+        ce.attacks -= LEAP_G;
+        if ((i8)ce.attacks < 0 && ce.up <= ((i16)f->up << 4)) {
+            ce.up = (i16)f->up << 4;
+            ce.attacks = 0;
+            ce.state = (d < 0) ? ST_CHASE : ST_IDLE;
+        }
+        break;
+#endif
     case ST_GRAB:
         /* 宝箱がカメラへ飛んできて消える(オープニング) */
         ce.v = (d < 0) ? (i16)cam_v + MPS(4) : (i16)cam_v - MPS(4);
@@ -344,13 +402,20 @@ static void update_ce(void)
             }
             /* 大猿人の親方: ときどき子分の猿人を呼ぶ */
             if (ce.type == ET_B01 && (ce.anim & 127) == 0) spawn(ET_E01, 14, (ce.anim & 128) ? 10 : -10);
+#ifdef GAME_SEA
+            if (ce.type == ET_B07) octo_arms();
+#endif
         }
         break;
     }
     move_enemy();
 
     /* カメラの後方へ抜けた敵を消す(追跡型・張り付く敵・ボス・演出中の宝箱を除く) */
+#ifdef GAME_SEA
+    if (ce.state == ST_CHASE || ce.state == ST_LEAP) {
+#else
     if (ce.state == ST_CHASE) {
+#endif
         if (d < -(i16)M(24)) ce.type = ET_NONE;
     } else if (f->mv != MV_HOVER && f->mv != MV_KEEP && ce.type != ET_TREASURE) {
         if (d < -(i16)M(3)) ce.type = ET_NONE;
@@ -868,6 +933,10 @@ static void draw_enemy(u8 id)
     const Model *md;
     if (e->c.z < NEAR_Z + 32) return;
     md = (e->type == ET_E02 && (e->anim & 4)) ? &model_e02b : &models[e->type];
+#ifdef GAME_SEA
+    if (e->type == ET_TENT && e->side) md = &model_tentl;   /* 左の足は先を右(レールの側)へ丸める */
+    if (e->state == ST_LEAP && e->up < LEAP_SHOW) return;   /* 跳び上がった半魚人は、頭が床より上に出てから */
+#endif
     g_dm_rects = md->r;
     g_dm_n = md->n;
     /* 遠くの敵は、画面で半ブロックに満たない部品(四捨五入で出たり消えたりする細い部品)を描かない(geom.s)。

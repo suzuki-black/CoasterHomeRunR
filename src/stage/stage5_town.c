@@ -1,4 +1,4 @@
-/* stage4_town.c — ステージ 4: 町(仕様書 5 章 #6)
+/* stage5_town.c — ステージ 5: 町(仕様書 5 章 #6)
  *
  * 流れ: 森を抜けると町の中(なぜか道にレールが敷いてある)→ 前から E01〜E05 の混成 → 後ろからコウモリ人・魔法使い・追ってくる猿人
  *       → 祭りの山車 B03(獣人たちが引いて後ろから追ってくる。上の猿人が花火を撃ち、ときどきぶつけてくる)→ 前から混成 → 自宅前へ
@@ -46,7 +46,7 @@ static const Caption town_captions[] = {
 
 static const Event town_events[] = {
     { S(0),    EV_DIR,   DIR_NONE,    0,   0 },
-    { S(0),    EV_BGM,   SONG_STAGE4, 0,   0 },
+    { S(0),    EV_BGM,   SONG_STAGE5, 0,   0 },
     { S(2),    EV_TEXT,  T_WHY,       0,   0 },
     /* ---- 前から混成(弓兵は屋根の上) ---- */
     { S(2.5),   EV_DIR,   DIR_FRONT,   0,   0 },
@@ -100,7 +100,7 @@ const Stage stage_data = {
     2,
     0,
     0,          /* 演出は飛ばさない(走りながら始まる) */
-    SONG_STAGE4,
+    SONG_STAGE5,
     town_zones, 0x3C71,
-    "STAGE 4", "THE TOWN",
+    "STAGE 5", "THE TOWN",
 };

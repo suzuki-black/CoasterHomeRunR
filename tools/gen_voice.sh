@@ -1,5 +1,5 @@
 #!/bin/sh
-# 声(内蔵 PCM で鳴らす英語の声)を作り、声のモジュール src/sound/voicemod.bin(ROM のバンク 18-19。起動時にセグメント 9 へ)へ書く。
+# 声(内蔵 PCM で鳴らす英語の声)を作り、声のモジュール src/sound/voicemod.bin(ROM のバンク 30-31。起動時にセグメント 9 へ)へ書く。
 #   sh tools/gen_voice.sh
 #   mac の読み上げ(say)を使うので、生成したファイルはリポジトリに入れておく(ビルドのたびには作らない)。
 #   声は Junior、速さ 300(2026-10-10 にユーザーが選んだ。「FIRE」で 0.31 秒)。検証は tools/lineirq192/ と docs/検証記録.md

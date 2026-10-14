@@ -3,7 +3,7 @@
 
   gen_music.py songs.mml out.bin songs.h
 
-out.bin は音のモジュール(ROM のバンク 16-17。起動時に RAM のセグメント 8 の 0x8000- へ読み込む)。
+out.bin は音のモジュール(ROM のバンク 28-29。起動時に RAM のセグメント 8 の 0x8000- へ読み込む)。
 songs.h は曲の番号(SONG_名前。1 から。0 = 無し)。鳴らすのは src/engine/sound.c。
 
 ■ MML(src/sound/songs.mml)

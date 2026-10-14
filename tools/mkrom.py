@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """ASCII8 メガロム(256KB = 8KB × 32 バンク)を組み立てる。配置は src/boot/boot.s の冒頭を参照。
 
-  mkrom.py boot.ihx engine.ihx engine.noi out.rom env.ihx env.noi game1.ihx game1.noi ... game5.ihx game5.noi sndmod.bin
+  mkrom.py boot.ihx engine.ihx engine.noi out.rom env.ihx env.noi game1.ihx game1.noi ... game6.ihx game6.noi sndmod.bin voicemod.bin
 
 - bank0     : ローダー(0x4000-0x5FFF)
 - bank1     : ページ0に置く表とコード(エリア _PAGE0 = RAM 0x1A00-0x3FFF。起動時に sys_page0_data が読み込む)
 - bank2-3   : エンジンの常駐部(RAM ページ1 0x4000-0x7FFF へローダーが写す)
 - bank4-5   : 地形モジュール(0x8000 にリンク。起動時にマッパーのセグメント 5 へ読み込む)
-- bank6-15  : ステージ 1〜5 のゲームモジュール(0x8000 にリンク。ステージの始めにページ2 = セグメント 1 へ読み込む)
-- bank16-17 : 音のモジュール(FM の曲。tools/gen_music.py が作る 0x8000- の中身。起動時にセグメント 8 へ読み込む)
-- bank18-19 : 声のモジュール(内蔵 PCM の英語の声。tools/gen_voice.sh が作る src/sound/voicemod.bin。起動時にセグメント 9 へ)
-- bank20-31 : 空き
+- bank6-17  : ステージ 1〜6 のゲームモジュール(0x8000 にリンク。ステージの始めにページ2 = セグメント 1 へ読み込む)
+- bank18-27 : 空き(ステージを足すときのゲームモジュール)
+- bank28-29 : 音のモジュール(FM の曲。tools/gen_music.py が作る 0x8000- の中身。起動時にセグメント 8 へ読み込む)
+- bank30-31 : 声のモジュール(内蔵 PCM の英語の声。tools/gen_voice.sh が作る src/sound/voicemod.bin。起動時にセグメント 9 へ)
 
 モジュール(オーバーレイ、仕様書 7.3)はどれも 0x8000-0xBBFF にコードと定数、0xBC00-0xBFFF に変数(読み込み後に 0 で埋める。
 初期値つきの変数は置けない)。常駐部の変数(DATA/BSS)が 0xCC00-0xDDFF に収まっているかも検査する。
@@ -20,8 +20,8 @@ import sys
 
 BANK = 0x2000
 ROM_BANKS = 32
-SND_BANK = 16
-VOICE_BANK = 18
+SND_BANK = 28
+VOICE_BANK = 30
 DATA_BASE, DATA_LIMIT = 0xCC00, 0xDE00   # 0xDE00-0xDFFF は行の左右端(raster.s span_a/span_b)
 CODE_LIMIT = 0x8000   # 常駐部はページ1だけ(ページ2はモジュール)
 MOD_BASE, MOD_BSS, MOD_END = 0x8000, 0xBC00, 0xC000
@@ -126,8 +126,8 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path, env_ihx, env_noi, *game_args):
     for k in range(len(game_args) // 2):
         n = k + 1
         bank = GAME_BANK(n)
-        if bank + 1 >= ROM_BANKS:
-            sys.exit(f'mkrom: ステージ {n} のバンク {bank} が範囲外')
+        if bank + 1 >= SND_BANK:
+            sys.exit(f'mkrom: ステージ {n} のバンク {bank} が音のモジュール(バンク {SND_BANK}〜)に重なった')
         img, info = check_module(f'stage{n}', game_args[k * 2], game_args[k * 2 + 1])
         rom[bank * BANK:(bank + 2) * BANK] = img
         mods.append(info)

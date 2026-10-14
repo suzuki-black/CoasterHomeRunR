@@ -83,7 +83,7 @@ $(BUILD):
 $(BUILD)/gen_data.c: $(TOOLS)/gen_data.py | $(BUILD)
 	$(PYTHON) $< $@
 
-# FM 音源の曲(src/sound/songs.mml)→ 音のモジュール(ROM のバンク 16-17)と曲の番号(songs.h)
+# FM 音源の曲(src/sound/songs.mml)→ 音のモジュール(ROM のバンク 28-29)と曲の番号(songs.h)
 $(BUILD)/sndmod.bin $(BUILD)/songs.h: src/sound/songs.mml $(TOOLS)/gen_music.py | $(BUILD)
 	$(PYTHON) $(TOOLS)/gen_music.py src/sound/songs.mml $(BUILD)/sndmod.bin $(BUILD)/songs.h
 
@@ -130,6 +130,14 @@ STG     = src/stage
 $(BUILD)/game%.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models.rel $(BUILD)/stage%.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
 	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
 
+# 海の面(ステージ 4 の鉄橋)だけの敵(半魚人・大ダコ人とその足)は、GAME_SEA を付けてコンパイルした game.c・models.c に入れる
+# (ゲームモジュールは game.c をステージごとにリンクするので、ほかの面のモジュールの空きを使わない。ステージ 1 は残り 120 B ほど)
+$(BUILD)/game4.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game_sea.rel $(BUILD)/models_sea.rel $(BUILD)/stage4.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
+	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
+
+$(BUILD)/%_sea.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
+	$(CC) $(CFLAGS) -DGAME_SEA -c -o $@ $<
+
 $(BUILD)/stage1.rel: $(STG)/stage1_cave.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
@@ -139,10 +147,13 @@ $(BUILD)/stage2.rel: $(STG)/stage2_lake.c $(HDRS) Makefile | $(BUILD)
 $(BUILD)/stage3.rel: $(STG)/stage3_forest.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-$(BUILD)/stage4.rel: $(STG)/stage4_town.c $(HDRS) Makefile | $(BUILD)
+$(BUILD)/stage4.rel: $(STG)/stage4_bridge.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-$(BUILD)/stage5.rel: $(STG)/stage5_home.c $(HDRS) Makefile | $(BUILD)
+$(BUILD)/stage5.rel: $(STG)/stage5_town.c $(HDRS) Makefile | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD)/stage6.rel: $(STG)/stage6_home.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BUILD)/boot.rel: $(BOOT)/boot.s Makefile | $(BUILD)
@@ -151,12 +162,12 @@ $(BUILD)/boot.rel: $(BOOT)/boot.s Makefile | $(BUILD)
 $(BUILD)/boot.ihx: $(BUILD)/boot.rel
 	$(CC) -mz80 --no-std-crt0 --code-loc 0x4000 --data-loc 0xC000 -o $@ $<
 
-GAMES = $(foreach n,1 2 3 4 5,$(BUILD)/game$(n).ihx)
+GAMES = $(foreach n,1 2 3 4 5 6,$(BUILD)/game$(n).ihx)
 
 $(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/envmod.ihx $(GAMES) $(BUILD)/sndmod.bin src/sound/voicemod.bin $(TOOLS)/mkrom.py
 	$(PYTHON) $(TOOLS)/mkrom.py $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/engine.noi $@ \
 	  $(BUILD)/envmod.ihx $(BUILD)/envmod.noi \
-	  $(foreach n,1 2 3 4 5,$(BUILD)/game$(n).ihx $(BUILD)/game$(n).noi) $(BUILD)/sndmod.bin src/sound/voicemod.bin
+	  $(foreach n,1 2 3 4 5 6,$(BUILD)/game$(n).ihx $(BUILD)/game$(n).noi) $(BUILD)/sndmod.bin src/sound/voicemod.bin
 	cp $@ "$(BUILD)/$(ROMNAME) [ASCII8].rom"
 
 # 計測用 ROM(fps 表示、タイトルに CPU の状態)。オブジェクトが混ざらないよう build/fps に分けてビルドする

@@ -8,6 +8,7 @@ typedef struct { i8 x0, y0, x1, y1; u8 color; u8 part; } MRect;   /* part: 0=胴
 typedef struct { const MRect *r; u8 n; } Model;
 extern const Model models[];     /* 敵の種類ごと(models.c、ページ0) */
 extern const Model model_e02b;   /* コウモリ人の翼を下げた絵 */
+extern const Model model_tentl;  /* 大ダコ人の左の足(海の面だけ。models.c の GAME_SEA) */
 
 enum { ET_NONE, ET_E01, ET_E02, ET_E03, ET_E04, ET_E05, ET_B01, ET_TREASURE, ET_MEDKIT,
        ET_BOSS1,     /* 洞窟の主(ステージ 1 の大ボス) */
@@ -22,9 +23,13 @@ enum { ET_NONE, ET_E01, ET_E02, ET_E03, ET_E04, ET_E05, ET_B01, ET_TREASURE, ET_
        ET_SIGNL,     /* 分岐の合図: お腹に L と書かれた獣人(攻撃しない。撃つと左へ。L・R とも消える) */
        ET_SIGNR,     /* 同じく R(右へ) */
        ET_MISBOX,    /* 誘導弾の箱(撃つと誘導弾が 1 発増える) */
+       /* ここから海の面(ステージ 4 の鉄橋)だけの敵。動きと絵は GAME_SEA を付けた game.c・models.c にだけ入る */
+       ET_E06,       /* 半魚人: 海から跳び上がって橋に乗り、歩いて寄ってくる(後ろなら追いかける) */
+       ET_B07,       /* 大ダコ人(ステージ 4 のボス。後ろから追ってきて墨を吐き、前に足を伸ばしてくる) */
+       ET_TENT,      /* 大ダコ人の足(前の海から伸びて橋をつかみ、叩いてくる) */
        ET_COUNT };
 #define IS_BOSS(t) ((t) == ET_B01 || (t) == ET_BOSS1 || (t) == ET_BOSS2 || (t) == ET_B02 || \
-                    (t) == ET_B03 || (t) == ET_B04)
+                    (t) == ET_B03 || (t) == ET_B04 || (t) == ET_B07)
 #define IS_SHOT(t) ((t) == ET_ROCK || (t) == ET_ARROW || (t) == ET_MAGIC)
 
 /* ステージスクリプト(仕様書 7.7)。時刻は 60Hz ティック */
@@ -94,13 +99,13 @@ typedef struct {
  *     0x8000 = jp game_run、0x8003 = そのステージの Stage へのポインタ */
 #define ENV_BANK     4
 #define GAME_BANK(n) (4 + 2 * (n))
-#define STAGE_COUNT  5
+#define STAGE_COUNT  6
 #define SEG_GAME     1
 #define SEG_ENV      5
 #define SEG_SND      8   /* 音のモジュール(FM の曲。起動時に 1 回読み込む) */
-#define SND_BANK     16  /* 音のモジュールの ROM のバンク(16-17) */
+#define SND_BANK     28  /* 音のモジュールの ROM のバンク(28-29。6〜27 はステージのモジュールに空けておく) */
 #define SEG_VOICE    9   /* 声のモジュール(内蔵 PCM の声。起動時に 1 回読み込む) */
-#define VOICE_BANK   18  /* 声のモジュールの ROM のバンク(18-19) */
+#define VOICE_BANK   30  /* 声のモジュールの ROM のバンク(30-31) */
 #define MOD_STAGE    (*(const Stage * const *)0x8003)
 typedef u8 (*GameRunFn)(const Stage *st, u8 first);
 #define MOD_GAME_RUN ((GameRunFn)0x8000)
