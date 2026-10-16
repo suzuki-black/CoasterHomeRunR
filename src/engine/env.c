@@ -613,10 +613,10 @@ static void deco_draw(u8 idx)
         break;
     }
     case K_BRIDGE:
-        /* 頭上の梁と床の下の横桁はリングごと(4m ごと)。左右の縦材は 12m より先だけ(手前は斜材が描かれる。縦材は手前ほど行が多く重い) */
+        /* 頭上の梁と床の下の横桁はリングごと(4m ごと)。左右の縦材は 8m より先だけ(手前は斜材が描かれる。縦材は手前ほど行が多く重い) */
         RQUAD(idx, -BR_U, BR_U, BR_CHD, BR_TOP, C_DIRT0);
         RQUAD(idx, -BR_U, BR_U, FLOOR_V - 60, FLOOR_V - 20, C_DIRT0);      /* 床の下の横桁 */
-        if ((i8)idx - NB >= 3 || (i8)idx - NB <= -3) {
+        if ((i8)idx - NB >= 2 || (i8)idx - NB <= -2) {
             RQUAD(idx, -BR_U - 30, -BR_U + 30, BR_GIR, BR_CHD, C_DIRT0);
             RQUAD(idx, BR_U - 30, BR_U + 30, BR_GIR, BR_CHD, C_DIRT0);
         }
@@ -807,8 +807,8 @@ static void band_draw(u8 a, u8 b, u8 dist)
         }
     }
     if (dist < 3) rails_draw(a, b);
-    /* トラスの斜材は 12m まで(その先は 1 ブロックの点線にしかならない。縦材・頭上の梁・上弦材は遠くまで描く) */
-    if (dist < 3 && KIND[na] == K_BRIDGE && fa == 0x3F && fb == 0x3F) truss_draw(a, b);
+    /* トラスの斜材は 8m まで(その先は細くて目立たない。縦材・頭上の梁・上弦材は遠くまで描く。12m までにすると 1 フレーム約 2ms 重い) */
+    if (dist < 2 && KIND[na] == K_BRIDGE && fa == 0x3F && fb == 0x3F) truss_draw(a, b);
 }
 
 /* 区間 r(リング r と r+1 の間) */
