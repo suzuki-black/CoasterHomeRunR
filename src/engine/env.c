@@ -8,7 +8,8 @@
  *   町: 両側の家並み(壁と屋根。家と家の間は空く)。村の入り口: 通りの突き当たりに村の門。
  *   遊園地: コースターの高架(細い軌道と支柱。遠くにテント・観覧車・灯り)。丘: 草の斜面を下る土の道。空中: 何も描かない。
  *   柵沿い: 左に赤と黄の縞の柵(上に灯り)、柵の上に見えるテント・メリーゴーラウンド・観覧車、右は下っていく草の斜面。
- *   鉄橋: 床と上弦材を面で塗り、トラスの斜材・縦材・頭上の梁は細い四角形で描く。まわりは海(地平線の下の塗り)。
+ *   鉄橋: 床の無い鉄橋(枕木の隙間から下の海が見える)。上弦材と遠くの線路を面で塗り、トラスの斜材・縦材・梁・横桁は細い四角形で描く。
+ *         まわりは海(地平線の下の塗り)。海は目の 12m 下にあるものとして白波を流す(近くの枕木より遅く流れ、下の方にあると分かる)。
  * 色 0 の面は塗らない(屋外の区間は天井の面が空)。屋外が見えるときは、先に空と地面を
  * 地平線の高さで塗り分け(仕様書 5.1 の 2 色塗り)てから区間を描く。
  * リング面の飾りとレールは、リング中心の投影と 1/z(ring_c)から 2D で求める(投影を増やさない)。
@@ -50,7 +51,7 @@ enum { D_LAMP_L = 1, D_ROCK_L = 2, D_ROCK_R = 4, D_TIMBER = 8, D_LAMP_R = 16,
  *   森: 9 = 幹・落ち葉、10 = 影・レール、11 = 土の道、12 = 下草、13 = 茂み、14 = 葉、15 = 空
  *   遊園地・丘: 9 = 木・枕木、10 = 暗い骨組み・レール、11 = 土の道、12 = 草、13 = 赤(テント・ゴンドラ)、14 = 灯り、15 = 空
  *   町: 9 = 戸、10 = 窓・レール、11 = 道、12 = 壁、13 = 屋根、14 = 別の色の壁(自宅前では自宅の壁)、15 = 空
- *   鉄橋(入口のトンネルも): 9 = 枕木、10 = レール・暗い岩、11 = 橋の床・岩、12 = 海、13 = 鉄骨、14 = (使わない)、15 = 空 */
+ *   鉄橋(入口のトンネルも): 9 = 枕木、10 = レール・暗い岩、11 = 遠くの線路・岩・向こう岸、12 = 海、13 = 鉄骨、14 = 白波・地平線のもや、15 = 空 */
 #define C_WOOD   9
 #define C_ROCK0 10
 #define C_ROCK1 11
@@ -111,10 +112,10 @@ static const i16 base_uv[K_COUNT][12] = {
     /* 丘   */  { -900, 400,  900, 400,  900, -250,  380, -345, -380, -345, -900, -250 },
     /* 空中 */  { -400, 200,  400, 200,  230, -333,  200, -333, -200, -333, -230, -333 },
     /* 柵沿い */{ -520, 560, 1000, 200, 1000, -700,  400, -345, -400, -345, -520, -345 },
-    /* 鉄橋 */  { -520, 900,  520, 900,  520, 840,  520, -345, -520, -345, -520, 840 },
+    /* 鉄橋 */  { -520, 900,  520, 900,  520, 840,  200, -345, -200, -345, -520, 840 },
 };
 /* 鉄橋: トラスの面(u = ±BR_U)、上弦材の上端と下端(断面の面 1・5 を細い帯にして上弦材にする)。
- * 横は床から上弦材まで開いている(目は床から 0.6m なので、床の縁の向こうに海が見える。海は地平線の下の塗り) */
+ * 床の無い橋(枕木とレールの隙間から、ずっと下の海が見える)。断面の床(面 3)は線路の幅 ±200 で、12m より先だけ塗る */
 #define BR_U    520
 #define BR_TOP  900
 #define BR_CHD  840
@@ -246,11 +247,11 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         }
         break;
     }
-    case K_BRIDGE:                              /* 床と、左右の上弦材(面 1・5 の細い帯)だけを塗る。上と横は開いている */
+    case K_BRIDGE:                              /* 線路(面 3。12m より先だけ)と、左右の上弦材(面 1・5 の細い帯)だけを塗る */
         t[0] = t[2] = t[4] = 0;
         t[1] = t[5] = C_DIRT0;
         t[3] = C_ROCK1;
-        d = D_OPEN;                             /* (床より下の橋脚や波は、低い目からは床に隠れて見えないので描かない) */
+        d = D_OPEN;
         break;
     default:                                    /* 森 */
         t[0] = 0;
@@ -379,6 +380,32 @@ void rquad_a(u8 idx);
 
 #define FLOOR_V (-333)
 
+static u8 br_long;                /* 1 = 鉄橋のレールを区間ごとでなく bridge_rails で 1 枚に描く(前か後ろだけを見ていて、仮リングが鉄橋) */
+
+/* 床の無い鉄橋の、区間の途中の枕木 2 本(約 1.3m ごと)。リング a・b の枕木の両端を画面で 3 等分した位置に 1 行の横線で描く
+ * (遠近で少し奥に寄るが、細いので目立たない) */
+static void ties_mid(u8 a, u8 b)
+{
+    u8 k;
+    i16 x0, x1, y;
+    RPT(0, a, -180, FLOOR_V); RPT(1, a, 180, FLOOR_V);
+    RPT(2, b, -180, FLOOR_V); RPT(3, b, 180, FLOOR_V);
+    g_color = C_WOOD;
+    for (k = 1; k < 3; k++) {
+        i16 f = k * 85;                                  /* 1/3・2/3(8.8) */
+        x0 = scr[0] + fmul(scr[4] - scr[0], f);
+        x1 = scr[2] + fmul(scr[6] - scr[2], f);
+        y = scr[1] + fmul(scr[5] - scr[1], f);
+        x0 = (x0 + 8) >> 4; x1 = (x1 + 8) >> 4; y = (y + 8) >> 4;
+        if (y < 0 || y >= GAME_ROWS) continue;
+        if (x0 < 0) x0 = 0;
+        if (x1 > 64) x1 = 64;
+        if (x1 <= x0) continue;
+        g_rx = (u8)x0; g_ry = (u8)y; g_rw = (u8)(x1 - x0); g_rh = 1;
+        rect_fill();
+    }
+}
+
 /* 区間(リング a → b)の床のレール 2 本と枕木 */
 static void rails_draw(u8 a, u8 b)
 {
@@ -387,6 +414,10 @@ static void rails_draw(u8 a, u8 b)
     if (DECO[ring_no[a < b ? a : b]] & D_NORAIL) return;
     /* 枕木(区間の手前のリングの面に、横長の板) */
     RQUAD(a, -180, 180, FLOOR_V, FLOOR_V + 14, C_WOOD);
+    if (KIND[ring_no[a < b ? a : b]] == K_BRIDGE) {
+        ties_mid(a, b);
+        if (br_long) return;                   /* レールは bridge_rails が手前から 12m 先まで 1 枚で描く */
+    }
     for (side = 0; side < 2; side++) {
         i16 u0 = side ? 102 : -128, u1 = side ? 128 : -102;
         RPT(0, a, u0, FLOOR_V);
@@ -582,8 +613,9 @@ static void deco_draw(u8 idx)
         break;
     }
     case K_BRIDGE:
-        /* 頭上の梁はリングごと(4m ごと)。左右の縦材は 12m より先だけ(手前は斜材が描かれる。縦材は手前ほど行が多く重い) */
+        /* 頭上の梁と床の下の横桁はリングごと(4m ごと)。左右の縦材は 12m より先だけ(手前は斜材が描かれる。縦材は手前ほど行が多く重い) */
         RQUAD(idx, -BR_U, BR_U, BR_CHD, BR_TOP, C_DIRT0);
+        RQUAD(idx, -BR_U, BR_U, FLOOR_V - 60, FLOOR_V - 20, C_DIRT0);      /* 床の下の横桁 */
         if ((i8)idx - NB >= 3 || (i8)idx - NB <= -3) {
             RQUAD(idx, -BR_U - 30, -BR_U + 30, BR_GIR, BR_CHD, C_DIRT0);
             RQUAD(idx, BR_U - 30, BR_U + 30, BR_GIR, BR_CHD, C_DIRT0);
@@ -613,25 +645,20 @@ static void deco_draw(u8 idx)
 /* ---------------------------------------------------------------------------
  * 鉄橋
  * --------------------------------------------------------------------------- */
-/* 区間 a〜b の左右のトラスの斜材。端の点は、投影済みの断面の頂点(右 = 1 上・2 上弦材の下・3 床、左 = 0・5・4)から 2D で求める。
+/* 区間 a〜b の左右のトラスの斜材。上の端は投影済みの断面の頂点(右 = 2 上弦材の下、左 = 5)、下の端はリング面の点から 2D で求める。
  * 太さは横に取る(そのリングの床から上弦材までの高さの 1/32 ずつ左右へ。遠くでも 1 ブロック)。上下の端の辺が水平になるので、
  * 一般の多角形の塗り(raster)でも割り算の要る辺は 2 本だけで済む(縦の太さの四角形だと 4 本で、1 本 約 0.7ms かかっていた)。
  * 斜材は区間ごとに向きを変える(ワーレン形)。仮リング(区間の途中)では、斜材の点を区間の中の位置 vr_f で上下の間に補間する。
  * 上弦材は断面の面 1・5 なので、区間の面と一緒に塗られる */
-/* 斜材の端 1 つ: 頂点 t(上弦材の下)と f(床)の間の、区間の中の位置 g の点を、左右に太さを付けた 2 点として o[0..3] に書く
- * (rev = 1 なら右の点を先に。四角形の頂点の順をそろえる) */
-static void truss_pt(const i16 *t, const i16 *f, u8 g, i16 *o, u8 rev)
-{
-    i16 x, y, w = (f[1] - t[1]) >> 5;
-    if (w < 8) w = 8;
-    if (g == 0) { x = f[0]; y = f[1]; }
-    else if (g == 255) { x = t[0]; y = t[1]; }
-    else { x = f[0] + fmul(t[0] - f[0], g); y = f[1] + fmul(t[1] - f[1], g); }
-    if (rev) w = -w;
-    o[0] = x - w; o[1] = y;
-    o[2] = x + w; o[3] = y;
-}
+/* 斜材の端 1 つ(truss.s): 頂点 tp_t(上弦材の下)と tp_f(床)の間の、区間の中の位置 tp_g の点を、左右に太さを付けた 2 点として
+ * tp_o[0..3] に書く(tp_rev = 1 なら右の点を先に。四角形の頂点の順をそろえる) */
+extern const i16 *tp_t, *tp_f;
+extern i16 *tp_o;
+extern u8 tp_g, tp_rev;
+void truss_pt(void);
+#define TRUSS_PT(t, f, g, o, rev) do { tp_t = (t); tp_f = (f); tp_g = (g); tp_o = (o); tp_rev = (rev); truss_pt(); } while (0)
 
+static i16 tb[8];                /* 斜材の下の端: リング a の右、b の右、a の左、b の左 */
 static void truss_draw(u8 a, u8 b)
 {
     u8 sec, ga, gb;
@@ -644,13 +671,68 @@ static void truss_draw(u8 a, u8 b)
     if (sec & 1) { ga = 255 - ga; gb = 255 - gb; }       /* 偶数の区間は頭の下から次のリングの上へ、奇数は逆 */
     pa = ring_s[a];
     pb = ring_s[b];
-    /* 右: 頂点 2(上弦材の下)・3(床)、左: 頂点 5・4 */
-    truss_pt(pa + 4, pa + 6, ga, &scr[0], 0);
-    truss_pt(pb + 4, pb + 6, gb, &scr[4], 1);
+    /* 上の端は頂点 2(右の上弦材の下)・5(左)、下の端はトラスの面の床の高さ(±BR_U。床は線路の幅なので頂点には無い) */
+    RPT(0, a, BR_U, FLOOR_V); RPT(1, b, BR_U, FLOOR_V); RPT(2, a, -BR_U, FLOOR_V); RPT(3, b, -BR_U, FLOOR_V);
+    {
+        u8 k;
+        for (k = 0; k < 8; k++) tb[k] = scr[k];
+    }
+    TRUSS_PT(pa + 4, &tb[0], ga, &scr[0], 0);
+    TRUSS_PT(pb + 4, &tb[2], gb, &scr[4], 1);
     raster(4, C_DIRT0);
-    truss_pt(pa + 10, pa + 8, ga, &scr[0], 0);
-    truss_pt(pb + 10, pb + 8, gb, &scr[4], 1);
+    TRUSS_PT(pa + 10, &tb[4], ga, &scr[0], 0);
+    TRUSS_PT(pb + 10, &tb[6], gb, &scr[4], 1);
     raster(4, C_DIRT0);
+}
+
+/* 鉄橋の、仮リングから奥のリングまで 1 枚で描く細い四角形(鉄橋はまっすぐなので、区間ごとに分けなくても形が合う)。
+ * 仮リングの点 (sq_ua, sq_va)・(sq_ub, sq_vb) と、リング far の同じ点を結ぶ */
+static i16 sq_ua, sq_va, sq_ub, sq_vb;
+static void strip_q(u8 far, u8 color)
+{
+    RPT(0, VR, sq_ua, sq_va);
+    RPT(1, VR, sq_ub, sq_vb);
+    RPT(2, far, sq_ub, sq_vb);
+    RPT(3, far, sq_ua, sq_va);
+    raster(4, color);
+}
+
+/* リング k0 から手前へ、見えている鉄橋のリングを探す(無ければ 0)。dir = 1 前 / -1 後ろ */
+static u8 far_ring(i8 k0, i8 dir)
+{
+    i8 k;
+    for (k = k0; k != 0; k -= dir) {
+        u8 idx = (u8)(k + NB);
+        if (ring_ok[idx] && ring_c[idx][2] && KIND[ring_no[idx]] == K_BRIDGE) return idx;
+    }
+    return 0;
+}
+
+/* 鉄橋の左右の欄干(トラスの面、床から 0.25〜0.45m の赤茶の帯。目より低いので、海の上に縁の線が通る)。見えている一番遠い
+ * 鉄橋のリングまで。縁の目立つ欄干で、その外が下の海だと分かる(Virtua Racing の Bay Bridge の欄干、Stunt Car Racer の
+ * 高架の縁にならう)。区間の面より先に描く */
+static void handrail_draw(i8 dir)
+{
+    u8 far = far_ring(dir > 0 ? NF : -(NB - 1), dir);
+    if (!far) return;
+    sq_va = FLOOR_V + 115; sq_vb = FLOOR_V + 64;
+    sq_ua = sq_ub = -BR_U;
+    strip_q(far, C_DIRT0);
+    sq_ua = sq_ub = BR_U;
+    strip_q(far, C_DIRT0);
+}
+
+/* 鉄橋のレール 2 本を、仮リングから 12m 先のリングまで 1 枚ずつで描く(区間ごとに描くと区間の数だけ一般の多角形の塗りが要る)。
+ * 区間の枕木と横桁の後、最後に描く(レールが上) */
+static void bridge_rails(i8 dir)
+{
+    u8 far = far_ring(3 * dir, dir);
+    if (!far) return;
+    sq_va = sq_vb = FLOOR_V;
+    sq_ua = -128; sq_ub = -102;
+    strip_q(far, rail_col);
+    sq_ua = 102; sq_ub = 128;
+    strip_q(far, rail_col);
 }
 
 /* ---------------------------------------------------------------------------
@@ -673,6 +755,8 @@ static void set_band_col(u8 na, u8 dist)
             if (c == C_ROCK2) c = C_ROCK1;
             else if (c == C_ROCK1 || c == C_DIRT0) c = C_ROCK0;
             else c = C_DIRT0;
+        } else if (kind == K_BRIDGE && k == 3 && dist < 3) {
+            c = 0;                              /* 鉄橋の手前 12m は床を塗らない(枕木とレールの隙間に海が見える) */
         }
         band_col[k] = c;
     }
@@ -780,6 +864,56 @@ static void hex_draw(i8 r, u8 color)
     hex_fast((u8)(r + NB));
 }
 
+static u8 sky_row;                /* 地平線の行(sky_draw) */
+
+/* 鉄橋のまわりの海の白波。海面は目の 12m 下にあるものとして、白波の点(左右 ±15.5m、奥行き 6〜70m を回る)を投影し、
+ * 1 行の短い線で描く。近くの枕木や横桁より遅く流れるので、海が橋のずっと下にあると分かる。back = 後ろを見ている */
+extern u16 wave_inv[256];        /* 8192 / (24 + i)(白波の奥行き(1/4m)の逆数。truss.s。初めて使うときに作る。割り算は 1 回 約 150µs) */
+extern u8 sw_m, sw_row;
+void sea_dots(void);
+/* 向こう岸の陸地(地平線の上の低い丘。横位置・幅・高さのブロック)。遠くの陸が見えると、海の広さと橋の高さが分かる
+ * (Virtua Racing の Bay Bridge の地平線の岬にならう) */
+static const u8 coast[][3] = { { 0, 15, 1 }, { 3, 7, 2 }, { 41, 23, 1 }, { 49, 10, 2 }, { 53, 4, 3 } };
+
+static void sea_waves(u16 s, u8 back)
+{
+    u8 i;
+    u16 m = s >> 4;                                      /* 1/4m */
+    if (!wave_inv[0]) { i = 0; do { wave_inv[i] = 8192 / (24 + i); } while (++i); }
+    if (sky_row >= 3 && sky_row + 2 < GAME_ROWS) {
+        g_rh = 2;                                        /* 地平線の近くの明るい帯(遠くの海のもや。Out Run・Virtua Racing の海にならう) */
+        buf_fill_rows(C_DIRT1, sky_row);
+        g_color = C_ROCK1;                               /* 向こう岸 */
+        for (i = 0; i < sizeof(coast) / 3; i++) {
+            g_rx = coast[i][0]; g_rw = coast[i][1]; g_rh = coast[i][2]; g_ry = sky_row - coast[i][2];
+            rect_fill();
+        }
+    }
+    /* 白波は海一面(線路の真下も)に 20 個(truss.s の sea_dots)。海は一色なので、白波が少ないと枕木の隙間の海も枕木と一緒に
+     * 流れて見え、下の方にあると分からなかった(2026-10-16 ユーザーの指摘)。同じ画面の高さでは、海は枕木の約 1/20 の速さで流れる */
+    sw_m = (u8)(back ? m : -m);
+    sw_row = sky_row;
+    sea_dots();
+    /* ずっと下の海に浮かぶ小舟 2 艘(長さ 6m の帆船。小さく見えるので、橋の高さが分かる。Night Striker の海の小舟にならう) */
+    for (i = 0; i < 2; i++) {
+        u8 zi = (u8)(i * 101 + 40 + (back ? m : -m));
+        i16 inv = (i16)wave_inv[zi];
+        i16 row = sky_row + ((48 * inv) >> 8);
+        i16 col = ((40 + i * 24) * inv) >> 8;            /* 左右 10m・16m */
+        i16 w = (24 * inv) >> 8;                         /* 6m */
+        if (w < 2) w = 2;
+        if (row >= sky_row + 8 || row < 2) continue;     /* 遠くにある間だけ(近いと白い点が散って見える) */
+        col = i ? 32 + col : 32 - col - w;
+        if (col < 0 || col + w > 64) continue;
+        g_color = C_ROCK0;                               /* 船体 */
+        g_rx = (u8)col; g_ry = (u8)row; g_rw = (u8)w; g_rh = 1;
+        rect_fill();
+        g_color = C_WHITE;                               /* 帆 */
+        g_rx = (u8)(col + (w >> 2)); g_rw = (u8)((w + 1) >> 1); g_ry = (u8)(row - 2); g_rh = 2;
+        rect_fill();
+    }
+}
+
 /* 空と地面(地平線の高さで 2 色に塗り分ける)。far = 一番遠くに見える地形 */
 static void sky_draw(u8 far)
 {
@@ -788,6 +922,7 @@ static void sky_draw(u8 far)
     if (cam_pcos > 16) yh += muldiv(PROJ_F, cam_psin, cam_pcos);
     else if (cam_psin < 0) yh = -1;
     row = (yh < 0) ? 0 : (yh >= 48 * 16) ? 48 : (u8)(yh >> 4);
+    sky_row = row;
     g_rh = row;
     buf_fill_rows(C_SKY, 0);
     g_rh = 48 - row;
@@ -801,7 +936,7 @@ void envm_draw(u16 s, u16 look16)
     u8 fwd = !(look > 80 && look < 176);
     u8 back = (look > 48 && look < 208);
     i8 r, k, rn;
-    u8 capped = 1;
+    u8 capped = 1, vok;
     /* 見える距離(区間の数)。振り向きの最中(前後の両方を描く数フレーム)は、前後とも 12m までにする
      * (画面が大きく回っている間なので、遠くが欠けても目立たない。1 フレームが一番重くなる所) */
     i8 lf = NF, lb = NB;
@@ -849,6 +984,7 @@ void envm_draw(u16 s, u16 look16)
         if (open) {
             /* 屋外が見える: 空と地面を塗ってから描く(奥の開口部は塞がない) */
             sky_draw(far);
+            if (far == K_BRIDGE && fwd != back) sea_waves(s, back);
             capped = 0;
         } else {
             /* トンネルの内側からは壁が視界を全部覆うので、奥の開口部を黒く塞げば
@@ -878,6 +1014,10 @@ void envm_draw(u16 s, u16 look16)
         /* 手前: 6 面ずつ。カメラを含む区間は「0.6m 先の仮リング → その先の最初のリング」で置き換える
          * (仮リングの頂点は全部画面外に投影されるので、ニアクリップ無しで画面の縁まで覆える) */
         rn = ((u16)(ring_m0 + RSTEP) * 64 > sv + 6) ? 1 : 2;
+        /* 仮リングを先に作る(鉄橋のレールを 1 枚で描けるかを、区間を描く前に決める) */
+        vok = vring_make(sv);
+        if (!vok) ring_late();
+        br_long = vok && KIND[ring_no[VR]] == K_BRIDGE;
         for (k = kn - 1; k >= rn; k--) {
             if (k == NF - 1 && kn == NF && k - 1 >= rn && merge_ok(NF - 2)) {
                 /* 遠い 2 区間(12〜20m)は 1 つの帯で描く(途中の 16m のリングは飾りの位置にだけ使う) */
@@ -889,13 +1029,15 @@ void envm_draw(u16 s, u16 look16)
             }
             seg_draw(k); frame_draw(k + 1);
         }
-        if (vring_make(sv)) {
+        if (vok) {
+            if (br_long) handrail_draw(1);
             band_draw(VR, (u8)(rn + NB), 0);
             frame_draw(rn);
+            if (br_long) bridge_rails(1);
         } else {
-            ring_late();
             for (k = rn - 1; k >= 0; k--) { seg_draw(k); frame_draw(k + 1); }
         }
+        br_long = 0;
         return;
     }
     if (back && !fwd && s >= VR_D + 6) {
@@ -913,6 +1055,9 @@ void envm_draw(u16 s, u16 look16)
             kn = -lb;
         }
         rn = ((u16)ring_m0 * 64 + 6 < sv) ? 0 : -1;
+        vok = vring_make(sv);
+        if (!vok) ring_late();
+        br_long = vok && KIND[ring_no[VR]] == K_BRIDGE;
         for (k = kn; k < rn; k++) {
             if (k == -lb && kn == -lb && k + 2 <= rn && merge_ok(-lb)) {
                 band_draw((u8)(NB - lb), (u8)(NB - lb + 2), 3);  /* 遠い 2 区間は 1 つの帯で(前と同じ) */
@@ -923,13 +1068,15 @@ void envm_draw(u16 s, u16 look16)
             }
             seg_draw(k); frame_draw(k);
         }
-        if (vring_make(sv)) {
+        if (vok) {
+            if (br_long) handrail_draw(-1);
             band_draw((u8)(rn + NB), VR, 0);
             frame_draw(rn);
+            if (br_long) bridge_rails(-1);
         } else {
-            ring_late();
             for (k = rn; k <= 0; k++) { seg_draw(k); frame_draw(k); }
         }
+        br_long = 0;
         return;
     }
     if (capped) {

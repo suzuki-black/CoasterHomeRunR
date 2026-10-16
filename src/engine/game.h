@@ -8,7 +8,7 @@ typedef struct { i8 x0, y0, x1, y1; u8 color; u8 part; } MRect;   /* part: 0=胴
 typedef struct { const MRect *r; u8 n; } Model;
 extern const Model models[];     /* 敵の種類ごと(models.c、ページ0) */
 extern const Model model_e02b;   /* コウモリ人の翼を下げた絵 */
-extern const Model model_tentl;  /* 大ダコ人の左の足(海の面だけ。models.c の GAME_SEA) */
+extern const Model model_tentl;  /* 画面の左に見える大ダコ人の足(先を右へ丸める。海の面だけ。models.c の GAME_SEA) */
 
 enum { ET_NONE, ET_E01, ET_E02, ET_E03, ET_E04, ET_E05, ET_B01, ET_TREASURE, ET_MEDKIT,
        ET_BOSS1,     /* 洞窟の主(ステージ 1 の大ボス) */
@@ -25,8 +25,8 @@ enum { ET_NONE, ET_E01, ET_E02, ET_E03, ET_E04, ET_E05, ET_B01, ET_TREASURE, ET_
        ET_MISBOX,    /* 誘導弾の箱(撃つと誘導弾が 1 発増える) */
        /* ここから海の面(ステージ 4 の鉄橋)だけの敵。動きと絵は GAME_SEA を付けた game.c・models.c にだけ入る */
        ET_E06,       /* 半魚人: 海から跳び上がって橋に乗り、歩いて寄ってくる(後ろなら追いかける) */
-       ET_B07,       /* 大ダコ人(ステージ 4 のボス。後ろから追ってきて墨を吐き、前に足を伸ばしてくる) */
-       ET_TENT,      /* 大ダコ人の足(前の海から伸びて橋をつかみ、叩いてくる) */
+       ET_B07,       /* 大ダコ人(ステージ 4 のボス。後ろから追ってきて墨を吐き、橋の両脇に足を伸ばしてくる) */
+       ET_TENT,      /* 大ダコ人の足(後ろの海から伸びて橋をつかみ、叩いてくる) */
        ET_COUNT };
 #define IS_BOSS(t) ((t) == ET_B01 || (t) == ET_BOSS1 || (t) == ET_BOSS2 || (t) == ET_B02 || \
                     (t) == ET_B03 || (t) == ET_B04 || (t) == ET_B07)

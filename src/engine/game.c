@@ -67,7 +67,7 @@ static const EDef edef[ET_COUNT] = {
     /* 弾の箱   */ EN_ITEM(1, -21),
     /* E06 半魚 */ EN_WALK(2, 8),
     /* 大ダコ人 */ { 60, MV_KEEP,  -21, -28,  2,  13, 64,   0,  0, AT_CYCLE, 30, 30,  90, 2, 30, ET_MAGIC, 35 },
-    /* 大ダコの足*/{  3, MV_HOVER, -40,  24,  3,   0,  0,  24,  8, AT_MELEE, 25, 45, 100, 1,  1, 0,        0 },
+    /* 大ダコの足*/{  3, MV_HOVER, -40,  36,  3,   0,  0,  24,  8, AT_MELEE, 25, 45, 100, 1,  1, 0,        0 },
 };
 #define IS_SIGN(t) ((t) == ET_SIGNL || (t) == ET_SIGNR)
 
@@ -109,8 +109,10 @@ static u8  aim_hold;
 static u8  in_prev;
 static u8  fire_cd;
 static u8  hitmark;
-static u8  shotfx;
-static u16 voice_t;               /* ボスの Warning! の声を鳴らした時刻(g_tick)。直後の Enemy ahead/behind! で上書きしない */               /* 1 = このフレームに撃った(照準の真ん中に閃光を重ねる) */
+static u8  shotfx;               /* 1 = このフレームに撃った(照準の真ん中に閃光を重ねる) */
+static u16 voice_t;              /* ボスの Warning! の声を鳴らした時刻(g_tick)。直後の Enemy ahead/behind! で上書きしない */
+static u16 fire_t;               /* 誘導弾の Fire! を鳴らした時刻(g_tick)。鳴っている間(FIRE_T)はほかの声で切らない */
+#define FIRE_T 20                /* Fire! の長さ(0.31 秒)をティックで */
 static u8  blink;
 static u8  shake;                /* 被弾でトロッコを揺らす残りフレーム */
 static const Event *sc_ev;
@@ -129,6 +131,14 @@ static u8  branch_open;          /* 1 = まだ選べる(分岐点の手前) */
 /* ---------------------------------------------------------------------------
  * 敵
  * --------------------------------------------------------------------------- */
+/* 声を鳴らす(誘導弾の Fire! がいちばん上: Fire! が鳴っている間は、ほかの声で切らない)。鳴らしたら 1 */
+static u8 say(u8 voice)
+{
+    if ((u16)(g_tick - fire_t) < FIRE_T) return 0;
+    pcm_say(voice);
+    return 1;
+}
+
 static Enemy *spawn(u8 type, i8 dist, i8 lat8)
 {
     u8 i;
@@ -266,14 +276,13 @@ static void lunge(i16 d)
 }
 
 #ifdef GAME_SEA
-/* 大ダコ人(後ろ)は、前の海から足を伸ばしてくる(約 3 秒ごと、同時に 2 本まで、左右交互)。足が出ている間は警告を前に向け、
- * 足を切ったら後ろへ戻す(前後を振り向かせる) */
+/* 大ダコ人(後ろ)は、橋の両脇の海から足を伸ばしてくる(約 3 秒ごと、同時に 2 本まで、左右交互)。
+ * 足も大ダコ人と同じ後ろから(ボス戦の間は警告の向きを変えない。2026-10-15 ユーザーの指定) */
 static void octo_arms(void)
 {
     u8 i, n = 0;
     for (i = 0; i < MAX_EN; i++) if (en[i].type == ET_TENT && en[i].state != ST_DEAD) n++;
-    attack_dir = n ? DIR_FRONT : DIR_BACK;
-    if (n < 2 && (ce.anim & 63) == 32) spawn(ET_TENT, 14, (ce.anim & 64) ? 22 : -22);
+    if (n < 2 && (ce.anim & 63) == 32) spawn(ET_TENT, -14, (ce.anim & 64) ? 22 : -22);
 }
 #endif
 
@@ -590,7 +599,8 @@ static void mis_fire(void)
     for (i = 1; i < lock_n; i++) lock_id[i - 1] = lock_id[i];
     lock_n--;
     mis_left--;
-    pcm_say(VOICE_FIRE);
+    pcm_say(VOICE_FIRE);                 /* Fire! はほかの声を止めて鳴らす */
+    fire_t = g_tick;
 }
 
 /* 長方形を画面(64 × GAME_ROWS)に切り詰めて塗る */
@@ -750,7 +760,7 @@ static void script_update(void)
             if (ev->a) se_play(ev->a);
             shake = (u8)ev->b;
             break;
-        case EV_VOICE: pcm_say(ev->a); voice_t = g_tick; break;
+        case EV_VOICE: if (say(ev->a)) voice_t = g_tick; break;
         case EV_PAL:
             set_stage_palette(ev->a ? stage->palette2 : stage->palette);
             break;
@@ -934,7 +944,7 @@ static void draw_enemy(u8 id)
     if (e->c.z < NEAR_Z + 32) return;
     md = (e->type == ET_E02 && (e->anim & 4)) ? &model_e02b : &models[e->type];
 #ifdef GAME_SEA
-    if (e->type == ET_TENT && e->side) md = &model_tentl;   /* 左の足は先を右(レールの側)へ丸める */
+    if (e->type == ET_TENT && e->c.x < 0) md = &model_tentl;   /* 画面の左の足は先を右(レールの側)へ丸める */
     if (e->state == ST_LEAP && e->up < LEAP_SHOW) return;   /* 跳び上がった半魚人は、頭が床より上に出てから */
 #endif
     g_dm_rects = md->r;
@@ -1025,7 +1035,8 @@ static void draw_hud(void)
     /* 警告音: 出始めに鳴らし、続いている間は約 2 秒ごとに鳴らす */
     if (warn && (warn != warn_prev || !warn_time)) { se_play(SE_ALARM); warn_time = 40; }
     /* 警告が出始めたら英語の声も(2 秒ごとのくり返しの警告音では鳴らさない) */
-    if (warn && warn != warn_prev && (u16)(g_tick - voice_t) > 45) pcm_say(warn == 1 ? VOICE_BEHIND : VOICE_AHEAD);
+    /* ボス戦の間は鳴らさない(向きの声はボスの前に言い切る。ボス戦では振り向くたびに鳴って、声の間は重くなる) */
+    if (warn && warn != warn_prev && !boss_alive && (u16)(g_tick - voice_t) > 45) say(warn == 1 ? VOICE_BEHIND : VOICE_AHEAD);
     if (warn_time) warn_time--;
     warn_prev = warn;
     /* 振り向きの警告は文字で(矢印はルート選択の表示に使うので使わない) */
@@ -1241,7 +1252,7 @@ u8 game_run(const Stage *st, u8 first)
     ctrl = 1; spd_over = 0; cap_id = 0; cap_time = 0; warn_prev = 0; warn_time = 0; pitch_cur = 0;
     aim_x = 128; aim_y = 92; aim_hold = 0;
     in_prev = 0xFF;                      /* タイトルで押したボタンを射撃と見なさない */
-    fire_cd = 0; hitmark = 0; shotfx = 0; voice_t = g_tick - 100;
+    fire_cd = 0; hitmark = 0; shotfx = 0; voice_t = g_tick - 100; fire_t = g_tick - 100;
     lock_n = 0; fly_n = 0; box_n = 0;
     for (i = 0; i < MAX_EN; i++) box_x0[i] = 0xFF;
     if (first) { life = g_cfg.life; g_score = 0; mis_left = MIS_START; }   /* 誘導弾もライフと同じく持ち越す */
