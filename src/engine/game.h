@@ -28,8 +28,6 @@ enum { ET_NONE, ET_E01, ET_E02, ET_E03, ET_E04, ET_E05, ET_B01, ET_TREASURE, ET_
        ET_B07,       /* 大ダコ人(ステージ 4 のボス。後ろから追ってきて墨を吐き、橋の両脇に足を伸ばしてくる) */
        ET_TENT,      /* 大ダコ人の足(後ろの海から伸びて橋をつかみ、叩いてくる) */
        ET_COUNT };
-#define IS_BOSS(t) ((t) == ET_B01 || (t) == ET_BOSS1 || (t) == ET_BOSS2 || (t) == ET_B02 || \
-                    (t) == ET_B03 || (t) == ET_B04 || (t) == ET_B07)
 #define IS_SHOT(t) ((t) == ET_ROCK || (t) == ET_ARROW || (t) == ET_MAGIC)
 
 /* ステージスクリプト(仕様書 7.7)。時刻は 60Hz ティック */

@@ -19,6 +19,7 @@ extern i16 cam_psin, cam_pcos;
 extern i16 cam_sin, cam_cos;
 
 void render_set_camera(i16 x, i16 y, i16 z, u16 yaw, i8 pitch);
+extern u8 g_cam_shake;           /* 0 以外ならカメラを揺らす(被弾・着地。game.c が残りフレームを入れる) */
 void xform(i16 wx, i16 wy, i16 wz, V3 *o);
 /* 凸多角形(n ≤ 6)をカメラ空間で描く。ニアクリップ→投影→塗り */
 void poly3(const V3 *v, u8 n, u8 color);

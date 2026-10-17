@@ -67,23 +67,35 @@ void popups_draw(void)
     }
 }
 
-/* 被弾で車両から飛び散る破片(画面座標 8.8 ブロック)。車体の赤・メッキの白・黒の 3 色 */
+/* 被弾で車両から飛び散る破片、倒した敵から飛び散る破片(画面座標 8.8 ブロック)。車体(敵)の色・白・黒の 3 色 */
 #define N_DEBRIS 6
 static i16 deb_x[N_DEBRIS], deb_y[N_DEBRIS], deb_vx[N_DEBRIS], deb_vy[N_DEBRIS];
 static u8  deb_t;
-static const u8 deb_col[3] = { C_RED, C_WHITE, C_BLACK };
+static u8 deb_col[3] = { C_RED, C_WHITE, C_BLACK };
 
-void debris_start(void)
+static void debris_go(i16 x, i16 y)
 {
     u8 i, r = (u8)g_tick;
     for (i = 0; i < N_DEBRIS; i++) {
         r = r * 5 + 7;
-        deb_x[i] = F88(32) + ((i16)(r & 31) - 16) * 64;
-        deb_y[i] = F88(TROLLEY_Y + 4);
+        deb_x[i] = x + ((i16)(r & 31) - 16) * 64;
+        deb_y[i] = y;
         deb_vx[i] = ((i16)(r & 63) - 32) * 12;
         deb_vy[i] = -F88(1.2) - (i16)(r & 7) * 24;
     }
     deb_t = 14;
+}
+
+void debris_start(void)
+{
+    deb_col[0] = C_RED;
+    debris_go(F88(32), F88(TROLLEY_Y + 4));
+}
+
+void debris_burst(u8 x, u8 y, u8 c)
+{
+    deb_col[0] = c;
+    debris_go((i16)x << 8, (i16)y << 8);
 }
 
 void debris_draw(void)

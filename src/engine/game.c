@@ -70,6 +70,8 @@ static const EDef edef[ET_COUNT] = {
     /* 大ダコの足*/{  3, MV_HOVER, -40,  36,  3,   0,  0,  24,  8, AT_MELEE, 25, 45, 100, 1,  1, 0,        0 },
 };
 #define IS_SIGN(t) ((t) == ET_SIGNL || (t) == ET_SIGNR)
+/* ボスか(ボスはどれも動き方が MV_KEEP。種類を 1 つずつ比べるより小さい) */
+#define BOSS_T(t) (edef[t].mv == MV_KEEP)
 
 /* ---------------------------------------------------------------------------
  * 状態
@@ -114,7 +116,8 @@ static u16 voice_t;              /* ボスの Warning! の声を鳴らした時�
 static u16 fire_t;               /* 誘導弾の Fire! を鳴らした時刻(g_tick)。鳴っている間(FIRE_T)はほかの声で切らない */
 #define FIRE_T 20                /* Fire! の長さ(0.31 秒)をティックで */
 static u8  blink;
-static u8  shake;                /* 被弾でトロッコを揺らす残りフレーム */
+static u8  shake;                /* 被弾・着地で画面(カメラ)と乗り物を揺らす残りフレーム */
+static u8  hitstop;              /* 敵を倒した瞬間に止める残りフレーム(ヒットストップ) */
 static const Event *sc_ev;
 static u8  sc_end;
 static u8  ctrl;                 /* 1 = 操作できる(オープニングの演出中は 0) */
@@ -298,10 +301,11 @@ static void update_ce(void)
 
     switch (ce.state) {
     case ST_DEAD:
-        ce.up -= 24;
+        if (BOSS_T(ce.type)) ce.up -= 24;            /* ボスは沈む */
+        else { ce.up += (i8)ce.attacks; ce.attacks -= 6; }   /* ふつうの敵は跳ね上がって落ちる */
         move_enemy();
         if (++ce.timer >= 12) {
-            if (IS_BOSS(ce.type)) boss_alive = 0;
+            if (BOSS_T(ce.type)) boss_alive = 0;
 #ifdef GAME_SEA
             if (ce.type == ET_B07) {             /* 大ダコ人が倒れたら、伸ばしていた足も海へ沈む */
                 u8 i;
@@ -468,7 +472,7 @@ static u8 box_n, box_id[LOCK_MAX * 2];          /* 外枠を書いた敵(mis_dra
 
 static void kill_enemy(Enemy *e)
 {
-    u8 t = e->type;
+    u8 t = e->type, boss;
     if (IS_SIGN(t)) {                        /* 先に撃った側へ */
         se_play(SE_KILL);
         branch_pick(t == ET_SIGNR);
@@ -496,8 +500,9 @@ static void kill_enemy(Enemy *e)
         se_play(SE_HIT);
         return;
     }
+    boss = BOSS_T(t);
     {
-        u16 pt = IS_BOSS(t) ? edef[t].hp * 20 : edef[t].hp * 10;
+        u16 pt = edef[t].hp * (boss ? 20 : 10);
         g_score += pt;
         popup(POP_SCORE, pt * 10);
     }
@@ -506,6 +511,17 @@ static void kill_enemy(Enemy *e)
     e->flash = 12;
     e->v = (i16)cam_v;
     se_play(SE_KILL);
+    /* 倒した手応え: 一瞬止める(ヒットストップ)、敵の色の破片を飛ばす。ふつうの敵は上へ跳ね上げて奥へ吹き飛ばす
+     * (ボスは沈める。止める時間を長くして画面を揺らす) */
+    debris_burst(g_pop_hx, g_pop_hy + 4, models[t].r[0].color);
+    hitstop = 2;
+    if (boss) {
+        hitstop = 10;
+        shake = 8;
+    } else {
+        e->attacks = 48;                     /* 上向きの速さ(1/256m/フレーム。ST_DEAD で毎フレーム 6 ずつ落ちる) */
+        e->v += ((i16)(e->s - cam_s) < 0) ? -MPS(4) : MPS(4);
+    }
 }
 
 /* ---------------------------------------------------------------------------
@@ -622,7 +638,7 @@ static void mis_hit(u8 id)
     Enemy *e = &en[id];
     g_pop_hx = (u8)((box_x0[id] + box_x1[id]) >> 1);
     g_pop_hy = (box_y0[id] > 6) ? box_y0[id] - 6 : 0;
-    if (IS_BOSS(e->type)) e->hp = (e->hp > MIS_BOSS) ? e->hp - MIS_BOSS : 0;
+    if (BOSS_T(e->type)) e->hp = (e->hp > MIS_BOSS) ? e->hp - MIS_BOSS : 0;
     else e->hp = 0;
     if (!e->hp) kill_enemy(e);
     else { e->flash = 2; se_play(SE_HIT); }
@@ -1112,6 +1128,7 @@ static void render(void)
             pitch_cur += st;
         }
     }
+    g_cam_shake = shake;                 /* 揺れ(被弾・着地・ボスを倒したとき)。カメラの向きをずらすのは render.c */
     render_set_camera(p.x, p.y - EYE_DROP, p.z, yaw + look, (i8)fmul(pitch_cur, COS((u8)(look >> 8))));
     env_draw(cam_s, look >> 8);
     g_perf_env = timer_read() - t0;
@@ -1260,11 +1277,17 @@ u8 game_run(const Stage *st, u8 first)
     boss_alive = 0;
     blink = 0;
     shake = 0;
+    hitstop = 0;
     sc_tick = 0; sc_ev = st->events; sc_end = 0;
     g_scene = 1;
 
     for (;;) {
         u16 tl;
+        if (hitstop) {                   /* ヒットストップ: 処理も描画も止めて、同じ絵のまま 1 フレーム待つ */
+            hitstop--;
+            wait_tick(); wait_tick();
+            continue;
+        }
         timer_reset();
         tl = timer_read();
         player_update();

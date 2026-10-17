@@ -138,6 +138,13 @@ $(BUILD)/game4.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game_sea.rel $(BUILD)/mod
 $(BUILD)/%_sea.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -DGAME_SEA -c -o $@ $<
 
+# ステージ 1 のモジュールは置き場が一番きついので、ステージ 1 に出ない敵の絵を外した models.c をリンクする(GAME_S1)
+$(BUILD)/game1.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models_s1.rel $(BUILD)/stage1.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
+	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
+
+$(BUILD)/%_s1.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
+	$(CC) $(CFLAGS) -DGAME_S1 -c -o $@ $<
+
 $(BUILD)/stage1.rel: $(STG)/stage1_cave.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 

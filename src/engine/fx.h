@@ -10,6 +10,8 @@ void popup(u8 kind, u16 v);
 void popups_draw(void);
 /* 被弾で車両から車体の破片が飛び散る */
 void debris_start(void);
+/* 倒した敵から破片が飛び散る(画面の位置 x, y、敵の色 c と白・黒) */
+void debris_burst(u8 x, u8 y, u8 c);
 void debris_draw(void);
 /* 分岐点から先の、選ばれていない側の線路(game.c が rail_sample で g_alt に入れる) */
 #define ALT_N 12
