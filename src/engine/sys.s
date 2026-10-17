@@ -20,7 +20,7 @@
 
 	.module	sys
 
-	.globl	_sound_tick
+	.globl	_g_snd_ok
 	.globl	_g_spr_attr
 	.globl	_g_seg2
 	.globl	_pcm_mode, _pcm_req, _pcm_r0, _pcm_isr, _pcm_begin, _pcm_stop
@@ -28,7 +28,10 @@
 ; ページ2(0x8000-0xBFFF)のマッパーのセグメント(仕様書 7.3 のオーバーレイ)
 SEG_GAME = 1			; ゲームモジュール(ステージごとに読み込む。BGM のデータもここ)
 SEG_ENV	= 5			; 地形モジュール(起動時に 1 回読み込む)
-SEG_SND	= 8			; 音のモジュール(FM の曲。起動時に 1 回読み込む)
+SEG_SND	= 8			; 音のモジュール(効果音・FM の曲のドライバと曲。起動時に 1 回読み込む)
+SND_TICK = 0x8000		; 音のモジュールの入口(modhead_snd.s)
+SND_PLAY = 0x8003
+SND_STOP = 0x8006
 MOD_ADDR = 0x8000		; モジュールの先頭(0x8000: 入口の jp、0x8003: ゲームは Stage へのポインタ / 地形は 2 つ目の jp)
 MOD_BSS	= 0xBC00		; モジュールの変数(読み込んだら 0 で埋める)。〜0xBFFF
 ENVM_BUILD = MOD_ADDR		; 地形モジュールの入口(jp envm_build / jp envm_draw)
@@ -133,13 +136,42 @@ htimi::
 	xor	a, a
 	ld	(_g_flip_req), a
 1$:
-	; サウンドは音のモジュールの曲を読むので、ページ2を音のセグメントにしてから呼び、元に戻す
+	; サウンドは音のモジュール(セグメント SEG_SND の 0x8000 = sndtick.c の sndm_tick)にある。ページ2を音のセグメントにしてから
+	; 呼び、元に戻す。音のモジュールを読み込む前(起動の途中)は呼ばない
+	ld	a, (_g_snd_ok)
+	or	a, a
+	ret	z
 	ld	a, #SEG_SND
 	out	(0xFE), a
-	call	_sound_tick
+	call	SND_TICK
 	ld	a, (_g_seg2)
 	out	(0xFE), a
 	ret
+
+; ---------------------------------------------------------------------------
+; void bgm_play(u8 song)   A = 曲の番号(songs.h の SONG_。0 = 止める)
+; void bgm_stop(void)
+;   音のモジュールの sndm_play / sndm_stop を、ページ2を音のセグメントにして呼び、元に戻す
+;   (割り込みが戻す先も音のセグメントにする: g_seg2 も切り替える)
+; ---------------------------------------------------------------------------
+_bgm_play::
+	ld	c, a
+	ld	a, (_g_seg2)
+	push	af
+	ld	a, #SEG_SND
+	call	_sys_seg2
+	ld	a, c
+	call	SND_PLAY
+	pop	af
+	jp	_sys_seg2
+_bgm_stop::
+	ld	a, (_g_seg2)
+	push	af
+	ld	a, #SEG_SND
+	call	_sys_seg2
+	call	SND_STOP
+	pop	af
+	jp	_sys_seg2
 
 ; ---------------------------------------------------------------------------
 ; void sys_seg2(u8 seg) — ページ2のセグメントを切り替える(割り込みが戻せるよう g_seg2 に先に書く)

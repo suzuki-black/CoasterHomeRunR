@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ASCII8 メガロム(256KB = 8KB × 32 バンク)を組み立てる。配置は src/boot/boot.s の冒頭を参照。
 
-  mkrom.py boot.ihx engine.ihx engine.noi out.rom env.ihx env.noi game1.ihx game1.noi ... game6.ihx game6.noi sndmod.bin voicemod.bin
+  mkrom.py boot.ihx engine.ihx engine.noi out.rom env.ihx env.noi game1.ihx game1.noi ... game6.ihx game6.noi snd.ihx snd.noi songs.bin voicemod.bin
 
 - bank0     : ローダー(0x4000-0x5FFF)
 - bank1     : ページ0に置く表とコード(エリア _PAGE0 = RAM 0x1A00-0x3FFF。起動時に sys_page0_data が読み込む)
@@ -9,7 +9,8 @@
 - bank4-5   : 地形モジュール(0x8000 にリンク。起動時にマッパーのセグメント 5 へ読み込む)
 - bank6-17  : ステージ 1〜6 のゲームモジュール(0x8000 にリンク。ステージの始めにページ2 = セグメント 1 へ読み込む)
 - bank18-27 : 空き(ステージを足すときのゲームモジュール)
-- bank28-29 : 音のモジュール(FM の曲。tools/gen_music.py が作る 0x8000- の中身。起動時にセグメント 8 へ読み込む)
+- bank28-29 : 音のモジュール(0x8000- に効果音・PSG・FM の曲のドライバ(sndtick.c・sndfm.s)、SONG_BASE- に曲(tools/gen_music.py)。
+              起動時にセグメント 8 へ読み込む)
 - bank30-31 : 声のモジュール(内蔵 PCM の英語の声。tools/gen_voice.sh が作る src/sound/voicemod.bin。起動時にセグメント 9 へ)
 
 モジュール(オーバーレイ、仕様書 7.3)はどれも 0x8000-0xBBFF にコードと定数、0xBC00-0xBFFF に変数(読み込み後に 0 で埋める。
@@ -30,6 +31,7 @@ def GAME_BANK(n): return 4 + 2 * n
 P0D_BASE, P0D_LIMIT = 0x1A00, 0x2E00   # ページ0の表とコード(0x0200-0x19FF は辺キャッシュ、0x2E00-0x3FFF は地形の断面の表)
 P0D_STAGE = 0x1800                      # 読み込みは 0xB400-0xCBFF 経由なので 6KB まで
 ENV_CODE_LIMIT = 0xB600                 # 地形モジュールのコード(0xB600-0xBBFF は地形の色・飾り・種類の表)
+SONG_BASE = 0x8C00                      # 音のモジュールの曲の表(tools/gen_music.py の BASE、sndfm.s の SONG_TAB)
 
 
 def read_ihx(path):
@@ -119,8 +121,8 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path, env_ihx, env_noi, *game_args):
         sys.exit(f'mkrom: 地形モジュールのコードが 0x{ENV_CODE_LIMIT:04X}(地形の表)に食い込んだ: 0x{env_hi:04X}')
     rom[ENV_BANK * BANK:(ENV_BANK + 2) * BANK] = envimg
     mods.append(info)
-    snd_bin, voice_bin = game_args[-2], game_args[-1]
-    game_args = game_args[:-2]
+    snd_ihx, snd_noi, songs_bin, voice_bin = game_args[-4:]
+    game_args = game_args[:-4]
     if len(game_args) % 2:
         sys.exit('mkrom: ゲームモジュールは (ihx, noi) の組で渡す')
     for k in range(len(game_args) // 2):
@@ -131,11 +133,17 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path, env_ihx, env_noi, *game_args):
         img, info = check_module(f'stage{n}', game_args[k * 2], game_args[k * 2 + 1])
         rom[bank * BANK:(bank + 2) * BANK] = img
         mods.append(info)
-    snd = open(snd_bin, 'rb').read()
-    if len(snd) > MOD_BSS - MOD_BASE:
-        sys.exit(f'mkrom: 音のモジュールが {len(snd)} B で、{MOD_BSS - MOD_BASE} B を超えた')
-    rom[SND_BANK * BANK:SND_BANK * BANK + len(snd)] = snd
-    mods.append(f'snd={len(snd)}B')
+    sndimg, info = check_module('snd', snd_ihx, snd_noi)
+    snd_hi = max(a for a in read_ihx(snd_ihx))
+    if snd_hi >= SONG_BASE:
+        sys.exit(f'mkrom: 音のモジュールのドライバが 0x{SONG_BASE:04X}(曲の表)に食い込んだ: 0x{snd_hi:04X}')
+    songs = open(songs_bin, 'rb').read()
+    if SONG_BASE + len(songs) > MOD_BSS:
+        sys.exit(f'mkrom: 曲が {len(songs)} B で、0x{SONG_BASE:04X}-0x{MOD_BSS - 1:04X} に収まらない')
+    sndimg = bytearray(sndimg)
+    sndimg[SONG_BASE - MOD_BASE:SONG_BASE - MOD_BASE + len(songs)] = songs
+    rom[SND_BANK * BANK:(SND_BANK + 2) * BANK] = bytes(sndimg)
+    mods.append(f'snd={snd_hi - MOD_BASE + 1}B+songs={len(songs)}B')
     voice = open(voice_bin, 'rb').read()
     if len(voice) > MOD_BSS - MOD_BASE:
         sys.exit(f'mkrom: 声のモジュールが {len(voice)} B で、{MOD_BSS - MOD_BASE} B を超えた')

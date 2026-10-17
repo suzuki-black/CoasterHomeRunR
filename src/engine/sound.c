@@ -1,117 +1,32 @@
-/* sound.c — PSG 効果音ドライバ(仕様書 7.8)
+/* sound.c — サウンドの常駐部(仕様書 7.8): 効果音の予約と初期化だけ
  *
- * BGM は FM 音源(下の bgm_)、PSG は効果音だけ(ch C)。効果音は 1 フレーム 4 バイト:
- *   周期(下位, 上位)、音量(0-15、0xFF で終端)、ノイズ周期(0xFF = ノイズなし)。周期 0 = トーンなし。
+ * 鳴らす処理(効果音・ドラムのノイズ・PSG のパート・FM の曲)は、音のモジュール(セグメント SEG_SND の 0x8000-)にある
+ * (sndtick.c・sndfm.s。割り込みはページ2を SEG_SND にしてから 0x8000 を呼ぶ。曲を鳴らす・止めるのは sys.s の中継)。
  * 優先度: 被弾 > 体当たり(予備) > 敵撃破 > 警告 > 射撃・命中・ロック > 救急箱。低い音は高い音を上書きしない。
  * PSG は割り込み側だけが書く。本体は se_play で予約するだけ。
- * R#7 の bit7=1(ポート B 出力)・bit6=0(ポート A 入力)はジョイスティックのために常に保つ。
  */
 #include "sound.h"
 
-static const u8 se_heal[] = {
-    0x60, 0, 12, 0xFF,  0x60, 0, 12, 0xFF,  0x48, 0, 12, 0xFF,  0x48, 0, 12, 0xFF,
-    0x36, 0, 12, 0xFF,  0x36, 0, 10, 0xFF,  0x36, 0, 6, 0xFF,  0, 0, 0xFF, 0 };
-static const u8 se_shot[] = {
-    0, 0, 15, 4,  0, 0, 13, 6,  0, 0, 10, 9,  0, 0, 6, 12,  0, 0, 0xFF, 0 };
-static const u8 se_hit[] = {
-    0x80, 0, 13, 0xFF,  0xA0, 0, 11, 0xFF,  0, 0, 0xFF, 0 };
-static const u8 se_alarm[] = {          /* 警告: 高い音 2 発 */
-    0x38, 0, 13, 0xFF,  0x38, 0, 13, 0xFF,  0x38, 0, 12, 0xFF,  0x38, 0, 11, 0xFF,  0x38, 0, 0, 0xFF,
-    0x38, 0, 0, 0xFF,   0x2C, 0, 13, 0xFF,  0x2C, 0, 13, 0xFF,  0x2C, 0, 12, 0xFF,  0x2C, 0, 10, 0xFF,
-    0x2C, 0, 6, 0xFF,   0, 0, 0xFF, 0 };
-static const u8 se_kill[] = {
-    0x00, 1, 14, 20,  0x40, 1, 13, 22,  0x80, 1, 12, 24,  0xC0, 1, 11, 26,
-    0x00, 2, 10, 28,  0x40, 2, 8, 30,  0x80, 2, 6, 31,  0xC0, 2, 3, 31,  0, 0, 0xFF, 0 };
-static const u8 se_train[] = {
-    0x00, 8, 15, 31,  0x00, 8, 15, 31,  0x00, 9, 14, 31,  0x00, 9, 13, 31,
-    0x00, 10, 12, 31,  0x00, 10, 10, 31,  0x00, 11, 8, 31,  0x00, 11, 5, 31,  0, 0, 0xFF, 0 };
-static const u8 se_damage[] = {
-    0x00, 4, 15, 31,  0x40, 4, 15, 28,  0x80, 4, 14, 31,  0xC0, 4, 13, 28,
-    0x00, 5, 12, 31,  0x40, 5, 10, 28,  0x80, 5, 8, 31,  0xC0, 5, 5, 28,  0, 0, 0xFF, 0 };
-
-static const u8 se_lock[] = {           /* 誘導弾のロック: 「ピピ」 */
-    0x30, 0, 13, 0xFF,  0x30, 0, 12, 0xFF,  0, 0, 0, 0xFF,  0x30, 0, 13, 0xFF,  0x30, 0, 11, 0xFF,  0, 0, 0xFF, 0 };
-
-static const u8 se_tally[] = {          /* ステージクリアの加算: 短い「ピッ」(連打して「とぅるるる」) */
-    0x50, 0, 11, 0xFF,  0x50, 0, 7, 0xFF,  0, 0, 0xFF, 0 };
-
-static const u8 * const se_tab[SE_COUNT] = {
-    0, se_heal, se_shot, se_hit, se_alarm, se_kill, se_train, se_damage, se_lock, se_tally };
-/* 優先度(大きいほど強い)。ロックは射撃と同じ */
-static const u8 se_pri[SE_COUNT] = { 0, 1, 2, 2, 3, 4, 5, 6, 2, 1 };
-
-/* BGM は FM 音源(sndfm.s のアセンブラ。割り込みからは下の sound_tick → fm_bgm_tick) */
-void fm_bgm_tick(void);
-
-static volatile u8 se_req;
-static const u8 *se_ptr;
-static u8 se_cur;
+/* 優先度(大きいほど強い)。ロックは射撃と同じ。音のモジュールも見る */
+const u8 g_se_pri[SE_COUNT] = { 0, 1, 2, 2, 3, 4, 5, 6, 2, 1 };
+volatile u8 g_se_req;
+u8 g_snd_ok;
 
 extern u8 g_fmw_n;                       /* sys.s の fm_write の待ちのループの回数 */
 
 void sound_init(void)
 {
-    g_fmw_n = 50;                        /* R800 で値を書いた後 約 28µs(sys.s の FMW_WAIT) */
     u8 r;
+    g_fmw_n = 50;                        /* R800 で値を書いた後 約 28µs(sys.s の FMW_WAIT) */
     for (r = 0; r < 14; r++) psg_write(r, 0);
-    psg_write(7, 0xBF);          /* トーン・ノイズとも止める(効果音が ch C を使うときだけ開ける)。bit7=1 bit6=0 */
-    se_req = 0; se_ptr = 0; se_cur = 0;
+    psg_write(7, 0xBF);          /* トーン・ノイズとも止める(鳴らすときだけ開ける)。bit7=1(ポート B 出力)bit6=0(ポート A 入力) */
+    g_se_req = 0;
     bgm_stop();
 }
 
 void se_play(u8 id)
 {
-    u8 pend = se_req;
-    if (pend && se_pri[pend] > se_pri[id]) return;
-    se_req = id;
-}
-
-/* スネアに重ねる PSG のノイズ(ch B。BGM が FM になって空いた)。FM のリズムがスネアを打つと sndfm.s が g_snr = 1 にする */
-u8 g_snr;
-static u8 snr_vol, snr_off;
-
-void sound_tick(void)
-{
-    u8 req = se_req, mix = 0xBF, se_noise = 0;
-    fm_bgm_tick();
-    if (req) {
-        se_req = 0;
-        if (!se_ptr || se_pri[req] >= se_pri[se_cur]) {
-            se_ptr = se_tab[req];
-            se_cur = req;
-        }
-    }
-    if (se_ptr) {
-        if (se_ptr[2] == 0xFF) {
-            psg_write(10, 0);
-            se_ptr = 0;
-            se_cur = 0;
-        } else {
-            if (se_ptr[0] | se_ptr[1]) {
-                psg_write(4, se_ptr[0]);
-                psg_write(5, se_ptr[1]);
-                mix &= ~0x04;
-            }
-            if (se_ptr[3] != 0xFF) {
-                psg_write(6, se_ptr[3]);
-                mix &= ~0x20;
-                se_noise = 1;
-            }
-            psg_write(10, se_ptr[2]);
-            se_ptr += 4;
-        }
-    }
-    /* スネアのノイズ: 強く鳴らして数ティックで消す。ノイズの周期は効果音と共有なので、効果音が使っていないときだけ書く */
-    if (g_snr) { g_snr = 0; snr_vol = 13; }
-    if (snr_vol) {
-        if (!se_noise) psg_write(6, 6);
-        mix &= ~0x10;
-        psg_write(9, snr_vol);
-        snr_vol = (snr_vol > 3) ? snr_vol - 3 : 0;
-        snr_off = 1;
-    } else if (snr_off) {
-        psg_write(9, 0);
-        snr_off = 0;
-    }
-    psg_write(7, mix);
+    u8 pend = g_se_req;
+    if (pend && g_se_pri[pend] > g_se_pri[id]) return;
+    g_se_req = id;
 }

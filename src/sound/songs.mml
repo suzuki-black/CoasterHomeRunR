@@ -7,29 +7,35 @@
 #   11 秒 レールを壊して飛び出す所で主題(変ニ長調)をピアノの重い和音に乗せる、15 秒 着地の和音
 #   (FS-A1ST で 0 秒 宝を取り返す、3 秒 ゲート、5.4 秒 巻き上げ、10.6 秒 JUMP、11.2 秒 飛び出す、14.9 秒 着地、16.3 秒 ステージ 1 の曲へ)
 @tempo 120
-@voice 21 21 1E 05 85 72 13 16   # オリジナル音色 0: 柔らかい金管(ホルンの呼びかけ)
-@voice 61 61 1E 06 72 61 25 16   # オリジナル音色 1: ビブラートつきの柔らかい弦(飛び出す所からの主題)
+#   YM2413 の内蔵の音色らしさを消すため(2026-10-17 ユーザーの指定)、旋律も和音もオリジナル音色にし(内蔵の音色はベースだけ)、
+#   旋律を PSG でわずかに高い音程で重ねる(デチューン)。和音は前半が金管、主題から弦(音色 1 に切り替える)
+@voice 21 21 16 0E 75 82 13 16   # オリジナル音色 0: ふくらむ金管(波形の半分を切った帰還の強い音。ホルンの呼びかけと前半の和音)
+@voice 61 62 1C 07 63 71 23 15   # オリジナル音色 1: ビブラートつきの厚い弦(キャリアを 1 オクターブ上に。主題と和音)
 A @0 @v0 v15 q7 o4 b-4. a-8 g-4 f4 | a-2. r4 | b-4. a-8 g-4 f4 | g-2 a-2 | b-2 > c2 < |
 A > e-2 < @v1 @0 v15 q8 a-4 f8 a-8 | > d-2 < b-4 a-8 g-8 | g-4 e-4 f2 | f1
+P D+7 v10 q7 o4 b-4. a-8 g-4 f4 | a-2. r4 | b-4. a-8 g-4 f4 | g-2 a-2 | b-2 > c2 < |
+P > e-2 < v11 q8 a-4 f8 a-8 | > d-2 < b-4 a-8 g-8 | g-4 e-4 f2 | f1
 B @0 v12 q7 o4 f4. f8 d-4 d-4 | f2. r4 | f4. f8 d-4 d-4 | d-2 e-2 | g-2 a2 |
 B > c2 < @0 v12 q8 f4 d-8 f8 | a-2 g-4 f8 e-8 | e-4 c4 d-2 | d-1
-C @3 v13 q8 o4 f2 r2 | a-2 r2 | f2 r2 | l8 b- b- b- b- > c c c c < | v14 b- b- b- b- > c c c c < |
-C v15 l4 > e-2 < a-4 a-4 | a-4 a-4 b-4 b-4 | > c4 c4 < a-4 a-4 | a-1
-D @3 v12 q8 o4 d-2 r2 | f2 r2 | d-2 r2 | l8 g- g- g- g- a- a- a- a- | v13 g- g- g- g- a a a a |
-D v14 l4 c2 f4 f4 | f4 f4 g-4 g-4 | g-4 g-4 f4 f4 | f1
-E @3 v12 q8 o3 b-2 r2 | > d-2 < r2 | b-2 r2 | l8 > d- d- d- d- e- e- e- e- < | v13 > e- e- e- e- f f f f < |
-E v14 l4 a-2 > d-4 d-4 < | > d-4 d-4 d-4 d-4 < | > e-4 e-4 d-4 d-4 < | > d-1 <
+C @0 v11 q8 o4 f2 r2 | a-2 r2 | f2 r2 | l8 b- b- b- b- > c c c c < | v12 b- b- b- b- > c c c c < |
+C v13 l4 > e-2 < a-4 a-4 | a-4 a-4 b-4 b-4 | > c4 c4 < a-4 a-4 | a-1
+D @0 v10 q8 o4 d-2 r2 | f2 r2 | d-2 r2 | l8 g- g- g- g- a- a- a- a- | v11 g- g- g- g- a a a a |
+D v12 l4 c2 f4 f4 | f4 f4 g-4 g-4 | g-4 g-4 f4 f4 | f1
+E @0 v10 q8 o3 b-2 r2 | > d-2 < r2 | b-2 r2 | l8 > d- d- d- d- e- e- e- e- < | v11 > e- e- e- e- f f f f < |
+E v12 l4 a-2 > d-4 d-4 < | > d-4 d-4 d-4 d-4 < | > e-4 e-4 d-4 d-4 < | > d-1 <
 F @14 v14 q7 o2 b-2 r2 | > d-2 < r2 | b-2 r2 | > g-2 a-2 < | > e-2 f2 < |
 F > a-2 d-2 < | > d-2 g-2 < | > a-2 d-2 < | > d-1 <
-R V15,12,14,13,9 bt4 r4 r2 | bt4 r4 r2 | bt4 r4 r2 | l8 t r t r t r t r | l16 [s]16 |
+R V15,12,14,9,5 bt4 r4 r2 | bt4 r4 r2 | bt4 r4 r2 | l8 t r t r t r t r | l16 [s]16 |
 R btc4 r4 bc4 r4 | bt4 h4 b4 h4 | bt4 h4 bc4 h4 | btc1
 
 @song STAGE1 loop
 # ステージ 1「逃走」(リムスキー=コルサコフの『熊蜂の飛行』をイメージ)。イ短調、t150 で 16 分音符 = 6 ティック。
 #   半音で上下する 16 分音符の「羽音」をバイオリンに、クラリネットが長い音で追い、ハープシコードの裏打ちとベースで急き立てる
 @tempo 150
-@voice 61 21 14 07 F3 E2 13 14   # オリジナル音色 0: ビブラートつきの明るいのこぎり波のリード(羽音)
-@voice 32 21 1C 06 D4 E2 24 15   # オリジナル音色 1: 鼻にかかったオーボエ風(9〜16 小節)
+#   YM2413 の内蔵の音色らしさを消すため(2026-10-17 ユーザーの指定)、伴奏(長い音・裏打ち)もオリジナル音色にし(内蔵はベースだけ)、
+#   羽音を PSG でわずかに高い音程で重ねる(デチューン)
+@voice 61 21 14 0F F3 E2 13 14   # オリジナル音色 0: 波形の半分を切って帰還を強めた、ブーンと鳴るのこぎり波(羽音)
+@voice 32 21 1C 0E D4 E2 24 15   # オリジナル音色 1: 波形の半分を切った鼻にかかる音(9〜16 小節)
 A @0 @v0 v14 q7 o5 l16
 A e d+ d c+ c d d+ e e d+ d c+ c < b > c c+ | d d+ e f e d+ d c+ c < b a+ a g+ a b > c |
 A < g+ a a+ b > c c+ d d+ e d+ d c+ c < b a+ a | g+ a b > c d e f e d c < b a g+ f+ g+ a+ > |
@@ -39,15 +45,29 @@ A @v1 f e d+ e f f+ g g+ a g+ g f+ f e d+ e | g f+ f e d e f f+ g f+ f e d c+ d 
 A e d+ d c+ c d d+ e e d+ d c+ c < b > c c+ | c < b a+ a g+ a a+ b > c c+ d d+ e d c < b > |
 A f e d+ d c+ d d+ e f e f f+ g f+ f e | g+ a g+ g f+ g g+ a a+ b > c c+ d c+ c < b > |
 A e d+ d c+ c d d+ e e d+ d c+ c < b > c c+ | < b a+ a g+ a a+ b > c c+ d d+ e f e d c |
-B @5 v11 q7 o4 a2 > c2 | e1 | < b2 g+2 | e1 | a2 f2 | e2 a2 | g+2 b2 | a1 |
+P D+8 v9 q7 o5 l16
+P e d+ d c+ c d d+ e e d+ d c+ c < b > c c+ | d d+ e f e d+ d c+ c < b a+ a g+ a b > c |
+P < g+ a a+ b > c c+ d d+ e d+ d c+ c < b a+ a | g+ a b > c d e f e d c < b a g+ f+ g+ a+ > |
+P f e d+ d c+ d d+ e f e f f+ g f+ f e | e d+ d c+ c d d+ e e d+ d c+ c < b > c c+ |
+P < b a+ a g+ a a+ b > c d c < b a g+ a b > c | < a1 > |
+P f e d+ e f f+ g g+ a g+ g f+ f e d+ e | g f+ f e d e f f+ g f+ f e d c+ d e |
+P e d+ d c+ c d d+ e e d+ d c+ c < b > c c+ | c < b a+ a g+ a a+ b > c c+ d d+ e d c < b > |
+P f e d+ d c+ d d+ e f e f f+ g f+ f e | g+ a g+ g f+ g g+ a a+ b > c c+ d c+ c < b > |
+P e d+ d c+ c d d+ e e d+ d c+ c < b > c c+ | < b a+ a g+ a a+ b > c c+ d d+ e f e d c |
+B @0 v10 q7 o4 a2 > c2 | e1 | < b2 g+2 | e1 | a2 f2 | e2 a2 | g+2 b2 | a1 |
 B > c2 < a2 | b2 > d2 | e1 | c2 < a2 | > d2 f2 | e2 d2 | c2 < b2 | g+1 |
-C @11 v10 q4 o4 l8 [r e r e]2 | [r e r e]2 | [r d r d]2 | [r d r d]2 | [r f r f]2 | [r e r e]2 | [r d r d]2 | [r e r e]2 |
+C @0 v9 q3 o4 l8 [r e r e]2 | [r e r e]2 | [r d r d]2 | [r d r d]2 | [r f r f]2 | [r e r e]2 | [r d r d]2 | [r e r e]2 |
 C [r f r f]2 | [r g r g]2 | [r g r g]2 | [r e r e]2 | [r f r f]2 | [r g+ r g+]2 | [r e r e]2 | [r d r d]2 |
-D @11 v9 q4 o4 l8 [r c r c]2 | [r c r c]2 | [r < b > r < b >]2 | [r < b > r < b >]2 | [r d r d]2 | [r c r c]2 | [r < b > r < b >]2 | [r c r c]2 |
+D @0 v8 q3 o4 l8 [r c r c]2 | [r c r c]2 | [r < b > r < b >]2 | [r < b > r < b >]2 | [r d r d]2 | [r c r c]2 | [r < b > r < b >]2 | [r c r c]2 |
 D [r c r c]2 | [r d r d]2 | [r < b > r < b >]2 | [r c r c]2 | [r d r d]2 | [r d r d]2 | [r c r c]2 | [r < b > r < b >]2 |
-E @14 v14 q6 o2 l8 [a a > a < a]2 | [a a > a < a]2 | [e e > e < e]2 | [e e > e < e]2 | [d d > d < d]2 | [a a > a < a]2 | [e e > e < e]2 | [a a > a < a]2 |
+E @14 v15 q5 o2 l8 [a a > a < a]2 | [a a > a < a]2 | [e e > e < e]2 | [e e > e < e]2 | [d d > d < d]2 | [a a > a < a]2 | [e e > e < e]2 | [a a > a < a]2 |
 E [f f > f < f]2 | [g g > g < g]2 | [e e > e < e]2 | [a a > a < a]2 | [d d > d < d]2 | [e e > e < e]2 | [a a > a < a]2 | [e e > e < e]2 |
-R V14,13,12,12,9 l8 [bh h sh h bh bh sh h]15 bh h sh h sh s16 s16 s s
+#   リズム: 16 分のハイハットで走らせ、スネアの後ろの小さな音とシンコペーションのバスドラム。4 小節ごとにタムとスネアの連打、頭にシンバル
+#   (2026-10-17 ユーザー: 「リズムが弱い」)。バスドラムには PSG の「ドン」、スネア・ハイハット・シンバルには PSG のノイズが重なる
+R V15,15,12,11,7
+R [ bc16 h16 h16 h16 sh16 h16 h16 b16 h16 b16 h16 h16 sh16 h16 bh16 s16
+R  [ b16 h16 h16 h16 sh16 h16 h16 b16 h16 b16 h16 h16 sh16 h16 bh16 s16 ]2
+R    b16 h16 h16 h16 sh16 h16 h16 b16 t16 t16 s16 s16 t16 s16 bs16 s16 ]4
 
 @song STAGE2 loop
 # ステージ 2「地底湖」(ロッシーニ『ウィリアム・テル』序曲の終結部「スイス軍の行進」をイメージ)。ホ短調、t150。

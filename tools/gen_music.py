@@ -3,7 +3,8 @@
 
   gen_music.py songs.mml out.bin songs.h
 
-out.bin は音のモジュール(ROM のバンク 28-29。起動時に RAM のセグメント 8 の 0x8000- へ読み込む)。
+out.bin は音のモジュールの曲の部分(ROM のバンク 28-29。起動時に RAM のセグメント 8 へ読み込む。0x8000- はドライバのコード
+(sndfm.s・sndtick.c)で、曲の表はその後ろの BASE から。tools/mkrom.py が両方を合わせる)。
 songs.h は曲の番号(SONG_名前。1 から。0 = 無し)。鳴らすのは src/engine/sound.c。
 
 ■ MML(src/sound/songs.mml)
@@ -16,6 +17,9 @@ songs.h は曲の番号(SONG_名前。1 から。0 = 無し)。鳴らすのは s
     @v1                      (本文)ここからオリジナル音色を 1 番に替える。同時に持てるのは 1 つなので、@0 を使っている
                              全チャンネルの音色が替わる。場面の切れ目で替え、曲の頭に戻ったときのために旋律の頭に @v0 を置く
   A 〜 F で始まる行          メロディのチャンネル(出てきた順に FM の ch0〜5。同じ名前の行は続けて書ける)
+  P で始まる行               PSG のパート(PSG の ch A。FM のパートにわずかにずらした音程で重ねて、YM2413 らしさを薄める)。
+                             書き方はメロディと同じ(音色 @ は無し)。加えて D+8 / D-6 でデチューン(セント)、
+                             E3 で 3 ティックごとに音量を 1 下げる(E0 = 下げない)
   R で始まる行               リズム(FM の ch6〜8 をリズムモードで使う)
   本文(メロディ):
     c d e f g a b            音符。+ か # で半音上げ、- で半音下げ。続けて長さ(4 = 4 分音符、付点 .)
@@ -36,10 +40,10 @@ songs.h は曲の番号(SONG_名前。1 から。0 = 無し)。鳴らすのは s
   本文(リズム): b s t c h(バスドラム・スネア・タム・シンバル・ハイハット)を並べた塊 + 長さ。例 bh8 h8 sh8 h8
     r 休み、l 長さ、[ ]、L、t は同じ。V15,15,12,12,10 で音量(バスドラム・スネア・タム・シンバル・ハイハット)
 
-■ データ(音のモジュール。番地は 0x8000 から)
-  0x8000: db 曲の数、dw 曲 …
-  曲: db メロディのチャンネル数、db フラグ(bit0 リズム、bit1 オリジナル音色)、(bit1 なら)db 音色 × 8、
-      dw チャンネル …、(リズムがあれば)dw リズム
+■ データ(音のモジュールの曲の部分。番地は BASE = 0x8C00 から)
+  BASE: db 曲の数、dw 曲 …
+  曲: db メロディのチャンネル数、db フラグ(bit0 リズム、bit1 オリジナル音色、bit2 PSG のパート)、(bit1 なら)db 音色 × 8、
+      dw チャンネル …、(リズムがあれば)dw リズム、(PSG のパートがあれば)dw PSG のパート
   チャンネル(メロディ):
     0x00〜0x7F n, len        音(MIDI の音番号)を len ティック
     0x80 len                 休み
@@ -50,14 +54,17 @@ songs.h は曲の番号(SONG_名前。1 から。0 = 無し)。鳴らすのは s
     0x86 x × 8               オリジナル音色(レジスタ 0x00〜0x07)を書き換える
     0xFE                     終わり(止まる)
     0xFF                     ループで戻る所(無ければ頭)へ
+  チャンネル(PSG のパート): 0x90|周期の上位 4 ビット, 周期の下位, len = 音(デチューン込みの周期)、0x81 v = 音量(0〜15)、
+    0x88 d = d ティックごとに音量を 1 下げる、0x80・0x82・0x83・0x85・0xFE・0xFF はメロディと同じ
   チャンネル(リズム): 0x00〜0x1F の音 n, len(bit4 BD 3 SD 2 TOM 1 CYM 0 HH)、0x80 len 休み、
     0x84 a b c(音量レジスタ 0x36・0x37・0x38 の値)、0x83・0xFE・0xFF は同じ
 """
 import re
 import sys
 
-BASE = 0x8000
-LIMIT = 0x3C00          # 15KB(モジュールの 0xBC00- は読み込み後に 0 で埋められる)
+BASE = 0x8C00           # 曲の表(sndfm.s の SONG_TAB。0x8000- はドライバのコード)
+LIMIT = 0xBC00 - BASE   # モジュールの 0xBC00- は変数(読み込み後に 0 で埋められる)
+PSG_CLOCK = 3579545 / 2
 TICKS = 60.0            # 1 秒のティック数
 DRUM_BITS = {'b': 0x10, 's': 0x08, 't': 0x04, 'c': 0x02, 'h': 0x01}
 NOTE = {'c': 0, 'd': 2, 'e': 4, 'f': 5, 'g': 7, 'a': 9, 'b': 11}
@@ -165,6 +172,16 @@ def compile_melody(text, tempo, name, voices):
             ev.append(('voice', voices[k]))
             i += len(m.group(0))
             continue
+        m = re.match(r'D([+-]?\d+)', s[i:])
+        if m:
+            ev.append(('det', int(m.group(1))))
+            i += len(m.group(0))
+            continue
+        m = re.match(r'E(\d+)', s[i:])
+        if m:
+            ev.append(('dec', int(m.group(1))))
+            i += len(m.group(0))
+            continue
         m = re.match(r'([olvqt@])(\d+)(\.*)', s[i:])
         if m:
             c, n = m.group(1), int(m.group(2))
@@ -248,6 +265,82 @@ def melody_bytes(ev):
             continue
         k += 1
     return out
+
+
+def psg_period(midi, cents):
+    f = 440.0 * 2 ** ((midi - 69) / 12.0) * 2 ** (cents / 1200.0)
+    return max(1, min(4095, round(PSG_CLOCK / 16 / f)))
+
+
+def psg_bytes(ev):
+    """PSG のパートのイベントをバイト列に(sndtick.c の psg_part)。音は周期(デチューン込み)を直接書く"""
+    out = []
+    gate = None
+    det = 0
+    k = 0
+    while k < len(ev):
+        e = ev[k]
+        if e[0] == 'iv':
+            out += [0x81, 15 - (e[1] & 15)]
+        elif e[0] == 'det':
+            det = e[1]
+        elif e[0] == 'dec':
+            out += [0x88, e[1]]
+        elif e[0] == 'loop':
+            out += [0x83]
+        elif e[0] == 'rest':
+            t = e[1]
+            while t > 0:
+                n = min(t, 255)
+                out += [0x80, n]
+                t -= n
+        elif e[0] == 'note':
+            total = e[2]
+            k2 = k + 1
+            while k2 < len(ev) and ev[k2][0] == 'ext':
+                total += ev[k2][2]
+                k2 += 1
+            q = e[3]
+            g = 0 if q >= 8 else max(1, total - round(total * q / 8))
+            if total <= 1:
+                g = 0
+            g = min(g, 255)
+            if g != gate:
+                out += [0x82, g]
+                gate = g
+            per = psg_period(e[1], det)
+            t = total
+            n = min(t, 255)
+            out += [0x90 | (per >> 8), per & 0xFF, n]
+            t -= n
+            while t > 0:
+                n = min(t, 255)
+                out += [0x85, n]
+                t -= n
+            k = k2
+            continue
+        elif e[0] == 'voice':
+            raise SystemExit('gen_music: PSG のパートに @v は使えない')
+        k += 1
+    return out
+
+
+def psg_ticks(b):
+    t = 0
+    i = 0
+    while i < len(b):
+        x = b[i]
+        if (x & 0xF0) == 0x90:
+            t += b[i + 2]
+            i += 3
+        elif x in (0x80, 0x85):
+            t += b[i + 1]
+            i += 2
+        elif x in (0x81, 0x82, 0x88):
+            i += 2
+        else:
+            i += 1
+    return t
 
 
 def compile_rhythm(text, tempo, name):
@@ -351,7 +444,7 @@ def main(src, out_bin, out_h):
         if m:
             cur['tempo'] = int(m.group(1))
             continue
-        m = re.match(r'([A-FR])\s+(.*)', line)
+        m = re.match(r'([A-FRP])\s+(.*)', line)
         if m and cur is not None:
             c = m.group(1)
             if c not in cur['ch']:
@@ -363,7 +456,7 @@ def main(src, out_bin, out_h):
 
     blobs = []
     for sg in songs:
-        mel = [c for c in sg['order'] if c != 'R']
+        mel = [c for c in sg['order'] if c not in 'RP']
         if len(mel) > 6:
             raise SystemExit('gen_music: %s: メロディは 6 チャンネルまで' % sg['name'])
         chans = []
@@ -375,11 +468,14 @@ def main(src, out_bin, out_h):
         rhy = None
         if 'R' in sg['ch']:
             rhy = compile_rhythm(sg['ch']['R'], sg['tempo'], sg['name'] + ':R') + [0xFF if sg['loop'] else 0xFE]
-        blobs.append((sg['name'], chans, rhy, sg['voices'][0]))
+        psg = None
+        if 'P' in sg['ch']:
+            psg = psg_bytes(compile_melody(sg['ch']['P'], sg['tempo'], sg['name'] + ':P', [])) + [0xFF if sg['loop'] else 0xFE]
+        blobs.append((sg['name'], chans, rhy, sg['voices'][0], psg))
 
     # くり返す曲は、どのチャンネルも同じ長さ(か、短い方が何回かまわってそろう長さ)でないと、回るたびにずれる
-    for name, chans, rhy, _ in blobs:
-        lens = [stream_ticks(c, False) for c in chans] + ([stream_ticks(rhy, True)] if rhy else [])
+    for name, chans, rhy, _, psg in blobs:
+        lens = [stream_ticks(c, False) for c in chans] + ([stream_ticks(rhy, True)] if rhy else []) + ([psg_ticks(psg)] if psg else [])
         sg = next(x for x in songs if x['name'] == name)
         if sg['loop'] and any(max(lens) % n for n in lens):
             raise SystemExit('gen_music: %s: チャンネルの長さ(ティック)がそろっていない(短い方が何回かで割り切れること): %s'
@@ -390,14 +486,15 @@ def main(src, out_bin, out_h):
     head = 1 + 2 * len(blobs)
     data = bytearray(head)
     data[0] = len(blobs)
-    for k, (name, chans, rhy, voice) in enumerate(blobs):
+    for k, (name, chans, rhy, voice, psg) in enumerate(blobs):
         hdr_at = len(data)
         data[1 + 2 * k:3 + 2 * k] = (BASE + hdr_at).to_bytes(2, 'little')
-        hdr = bytearray([len(chans), (1 if rhy else 0) | 2]) + bytes(voice) + bytes(2 * (len(chans) + (1 if rhy else 0)))
+        streams = chans + ([rhy] if rhy else []) + ([psg] if psg else [])
+        hdr = bytearray([len(chans), (1 if rhy else 0) | 2 | (4 if psg else 0)]) + bytes(voice) + bytes(2 * len(streams))
         data += hdr
-        hdr_at += 8                     # チャンネルの番地はオリジナル音色の後
+        hdr_at += 8                     # チャンネルの番地はオリジナル音色の後(メロディ、リズム、PSG のパートの順)
         ptrs = []
-        for c in chans + ([rhy] if rhy else []):
+        for c in streams:
             ptrs.append(BASE + len(data))
             data += bytes(c)
         for j, p in enumerate(ptrs):
@@ -408,7 +505,7 @@ def main(src, out_bin, out_h):
     with open(out_h, 'w') as f:
         f.write('/* songs.h — tools/gen_music.py が src/sound/songs.mml から作る。手で直さない */\n')
         f.write('#ifndef SONGS_H\n#define SONGS_H\n')
-        for k, (name, _, _, _) in enumerate(blobs):
+        for k, (name, _, _, _, _) in enumerate(blobs):
             f.write('#define SONG_%s %d\n' % (name, k + 1))   # 0 = 無し
         f.write('#define SONG_COUNT %d\n#endif\n' % len(blobs))
     print('gen_music: %d 曲、%d バイト' % (len(blobs), len(data)))

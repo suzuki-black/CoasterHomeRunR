@@ -50,7 +50,7 @@ ROMNAME ?= TrolleyHomeRun
 LDFLAGS = -mr800 --no-std-crt0 --code-loc 0x4008 --data-loc 0xCC00 -Wl-b_PAGE0=0x1A00 -Wl-j -Wl-m -Wl-u
 P0FLAGS = --constseg PAGE0
 
-ASM_SRCS = $(ENG)/crt0.s $(ENG)/sys.s $(ENG)/vdp.s $(ENG)/gfx.s $(ENG)/math.s $(ENG)/raster.s $(ENG)/geom.s $(ENG)/pcm.s $(ENG)/sndfm.s
+ASM_SRCS = $(ENG)/crt0.s $(ENG)/sys.s $(ENG)/vdp.s $(ENG)/gfx.s $(ENG)/math.s $(ENG)/raster.s $(ENG)/geom.s $(ENG)/pcm.s
 C_SRCS   = $(ENG)/main.c $(ENG)/render.c $(ENG)/rail.c $(ENG)/shared.c \
            $(ENG)/hud.c $(ENG)/sound.c $(ENG)/trolley.c $(ENG)/menu.c $(ENG)/fx.c $(ENG)/vdpbench.c
 # モジュールのリンク: 0x8000 に先頭(modhead)、変数は 0xBC00-0xBFFF。常駐部のシンボルは ressyms(engine.noi から生成)で渡す
@@ -83,9 +83,9 @@ $(BUILD):
 $(BUILD)/gen_data.c: $(TOOLS)/gen_data.py | $(BUILD)
 	$(PYTHON) $< $@
 
-# FM 音源の曲(src/sound/songs.mml)→ 音のモジュール(ROM のバンク 28-29)と曲の番号(songs.h)
-$(BUILD)/sndmod.bin $(BUILD)/songs.h: src/sound/songs.mml $(TOOLS)/gen_music.py | $(BUILD)
-	$(PYTHON) $(TOOLS)/gen_music.py src/sound/songs.mml $(BUILD)/sndmod.bin $(BUILD)/songs.h
+# FM 音源の曲(src/sound/songs.mml)→ 音のモジュールの曲の部分(0x8C00-)と曲の番号(songs.h)
+$(BUILD)/songs.bin $(BUILD)/songs.h: src/sound/songs.mml $(TOOLS)/gen_music.py | $(BUILD)
+	$(PYTHON) $(TOOLS)/gen_music.py src/sound/songs.mml $(BUILD)/songs.bin $(BUILD)/songs.h
 
 $(BUILD)/gen_data.rel: $(BUILD)/gen_data.c $(HDRS) Makefile
 	$(CC) $(CFLAGS) $(P0FLAGS) -c -o $@ $<
@@ -98,7 +98,7 @@ $(BUILD)/%.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 # Z80 でも動く C: R800 専用の命令(multu / multuw)と、Z80 では非公式の命令(IX・IY の半分のレジスタ)が無いことを確かめる
-Z80_SAFE_C = sound
+Z80_SAFE_C = sound sndtick
 $(patsubst %,$(BUILD)/%.rel,$(Z80_SAFE_C)): $(BUILD)/%.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 	@if grep -qiE '\b(multu|multuw|ixh|ixl|iyh|iyl)\b' $(BUILD)/$*.asm; then \
@@ -124,6 +124,11 @@ $(BUILD)/ressyms.rel: $(BUILD)/ressyms.s
 # 地形モジュール(マッパーのセグメント 5 に置く)
 $(BUILD)/envmod.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env.rel $(BUILD)/truss.rel $(BUILD)/ressyms.rel
 	$(CC) $(MODFLAGS) --code-loc 0x8006 -o $@ $^
+
+# 音のモジュール(マッパーのセグメント 8 に置く。効果音・ドラムのノイズ・PSG のパート・FM の曲のドライバ。曲のデータは 0x8C00- に
+# tools/mkrom.py が合わせる)。割り込み(Z80 転送の間も)から動くので、C は Z80_SAFE_C で確かめる
+$(BUILD)/sndmod.ihx: $(BUILD)/modhead_snd.rel $(BUILD)/sndtick.rel $(BUILD)/sndfm.rel $(BUILD)/ressyms.rel
+	$(CC) $(MODFLAGS) --code-loc 0x8009 -o $@ $^
 
 # ステージごとのゲームモジュール(ページ2 = セグメント 1 に、ステージの始めに読み込む)
 STG     = src/stage
@@ -171,10 +176,10 @@ $(BUILD)/boot.ihx: $(BUILD)/boot.rel
 
 GAMES = $(foreach n,1 2 3 4 5 6,$(BUILD)/game$(n).ihx)
 
-$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/envmod.ihx $(GAMES) $(BUILD)/sndmod.bin src/sound/voicemod.bin $(TOOLS)/mkrom.py
+$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/envmod.ihx $(GAMES) $(BUILD)/sndmod.ihx $(BUILD)/songs.bin src/sound/voicemod.bin $(TOOLS)/mkrom.py
 	$(PYTHON) $(TOOLS)/mkrom.py $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/engine.noi $@ \
 	  $(BUILD)/envmod.ihx $(BUILD)/envmod.noi \
-	  $(foreach n,1 2 3 4 5 6,$(BUILD)/game$(n).ihx $(BUILD)/game$(n).noi) $(BUILD)/sndmod.bin src/sound/voicemod.bin
+	  $(foreach n,1 2 3 4 5 6,$(BUILD)/game$(n).ihx $(BUILD)/game$(n).noi) $(BUILD)/sndmod.ihx $(BUILD)/sndmod.noi $(BUILD)/songs.bin src/sound/voicemod.bin
 	cp $@ "$(BUILD)/$(ROMNAME) [ASCII8].rom"
 
 # 計測用 ROM(fps 表示、タイトルに CPU の状態)。オブジェクトが混ざらないよう build/fps に分けてビルドする

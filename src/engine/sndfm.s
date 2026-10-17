@@ -1,17 +1,17 @@
-; sndfm.s — BGM: FM 音源(MSX-MUSIC = YM2413)のドライバ
+; sndfm.s — BGM: FM 音源(MSX-MUSIC = YM2413)のドライバ(音のモジュールの中。セグメント SEG_SND の 0x8000-)
 ;
-; 曲のデータは音のモジュール(セグメント SEG_SND の 0x8000-、形式は tools/gen_music.py の冒頭)。
-; 曲ごとにオリジナル音色(音色 0)を 1 つ持てる(内蔵の音色だけだと YM2413 らしい音になりがちなので、どの曲も使う)。
-; リズムのスネアには PSG のノイズ(ch B)を重ねる(sound.c)。
-; 割り込み(sys.s)はページ2を SEG_SND にしてから sound_tick(sound.c)を呼び、そこから fm_bgm_tick を呼ぶ。
+; 曲のデータは同じモジュールの SONG_TAB から(形式は tools/gen_music.py の冒頭)。
+; 曲ごとにオリジナル音色(音色 0)を持てる(内蔵の音色だけだと YM2413 らしい音になりがちなので、どの曲も使う)。
+; リズムが打った音は g_drm に入れ、PSG のノイズ(ch B)を重ねる(sndtick.c)。曲の PSG のパート(ch A)の番地は g_psg_top へ。
+; 割り込み(sys.s)はページ2を SEG_SND にしてから 0x8000(sndtick.c の sndm_tick)を呼び、そこから fm_bgm_tick を呼ぶ。
+; 曲を鳴らす・止める(fm_play・fm_stop)も、常駐部の中継がページ2を SEG_SND にしてから sndtick.c 経由で呼ぶ。
 ; メロディは FM の ch0〜5、リズムは ch6〜8(リズムモード)。レジスタへの書き込みは fm_write(sys.s。書くたびに待つ)。
 ; 割り込みは Z80 転送の間(CPU が Z80)にも入るので、R800 専用の命令は使わない。
-; C で書くと常駐部に入りきらなかった(約 1KB)のでアセンブラにした
 
 	.module	sndfm
-	.globl	_fm_write, _g_seg2, _sys_seg2, _g_snr
+	.globl	_fm_write, _g_drm
 
-SEG_SND	= 8			; game.h と同じ
+SONG_TAB = 0x8C00		; 曲の表(tools/gen_music.py の BASE。ドライバのコードはその手前まで。tools/mkrom.py が確かめる)
 FMC_P	= 0			; チャンネル: 今読んでいる所(0 = 止まっている)
 FMC_TOP	= 2			; 頭
 FMC_LOOP = 4			; ループで戻る所(0 = 頭)
@@ -26,8 +26,10 @@ FM_MEL	= 6
 fm_ch:		.ds	FMC_SIZE * (FM_MEL + 1)	; メロディ 6 + リズム
 fm_nmel:	.ds	1
 fm_rhy:		.ds	1
-bp_seg:		.ds	1
+fm_flags:	.ds	1
+fm_hdr:		.ds	2	; 見出しを読んでいる所(リズムの初期化の間とっておく)
 _g_bgm_on::	.ds	1	; 1 = 鳴らしている
+_g_psg_top::	.ds	2	; 曲の PSG のパート(無ければ 0)
 
 	.area	_CODE
 
@@ -52,30 +54,25 @@ rhy_init:
 	.db	0x36,0x04, 0x37,0x44, 0x38,0x44, 0x0E,0x20
 
 ; ---------------------------------------------------------------------------
-; void bgm_play(u8 song)   A = 曲の番号(songs.h の SONG_。0 = 止める)
-;   曲の見出しを読む(ページ2を音のモジュールにして読み、元に戻す)
+; void fm_play(u8 song)   A = 曲の番号(songs.h の SONG_。0 = 止める)— 曲の見出しを読む(ページ2 = SEG_SND)
 ; ---------------------------------------------------------------------------
-_bgm_play::
+_fm_play::
 	push	af
-	call	_bgm_stop
+	call	_fm_stop
 	xor	a, a
 	ld	(fm_nmel), a
 	ld	(fm_rhy), a
+	ld	(_g_psg_top), a
+	ld	(_g_psg_top + 1), a
 	pop	af
 	or	a, a
 	ret	z
 	push	ix
-	push	af
-	ld	a, (_g_seg2)
-	ld	(bp_seg), a
-	ld	a, #SEG_SND
-	call	_sys_seg2
-	pop	af
 	dec	a
 	add	a, a
 	ld	e, a
 	ld	d, #0
-	ld	hl, #0x8001		; 曲の表
+	ld	hl, #SONG_TAB + 1	; 曲の表
 	add	hl, de
 	ld	e, (hl)
 	inc	hl
@@ -88,6 +85,7 @@ _bgm_play::
 	ld	a, (hl)
 	inc	hl
 	ld	c, a
+	ld	(fm_flags), a
 	and	a, #1
 	ld	(fm_rhy), a		; bit0 = リズム
 	bit	1, c
@@ -108,6 +106,7 @@ _bgm_play::
 	jr	z, 5$
 	ld	ix, #fm_ch + FMC_SIZE * FM_MEL
 	call	ch_init
+	ld	(fm_hdr), hl
 	ld	hl, #rhy_init
 	ld	b, #10
 4$:
@@ -119,9 +118,17 @@ _bgm_play::
 	pop	hl
 	inc	hl
 	djnz	4$
+	; リズムの初期化の表を読んだので、見出しの続きの番地を戻す
+	ld	hl, (fm_hdr)
 5$:
-	ld	a, (bp_seg)
-	call	_sys_seg2
+	ld	a, (fm_flags)		; bit2 = PSG のパート(見出しの最後の番地)
+	bit	2, a
+	jr	z, 7$
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	ld	(_g_psg_top), de
+7$:
 	ld	a, #1
 	ld	(_g_bgm_on), a
 	pop	ix
@@ -150,9 +157,9 @@ ch_init:
 	ret
 
 ; ---------------------------------------------------------------------------
-; void bgm_stop(void) — 止めて、FM の全チャンネルをキーオフ(リズムモードも切る)
+; void fm_stop(void) — 止めて、FM の全チャンネルをキーオフ(リズムモードも切る)
 ; ---------------------------------------------------------------------------
-_bgm_stop::
+_fm_stop::
 	xor	a, a
 	ld	(_g_bgm_on), a
 	ld	b, #9
@@ -360,13 +367,7 @@ rhy_tick:
 	call	_fm_write
 	pop	hl
 	pop	af
-	bit	3, a
-	jr	z, 32$
-	push	af
-	ld	a, #1
-	ld	(_g_snr), a		; スネア: PSG のノイズも重ねる(sound.c)
-	pop	af
-32$:
+	ld	(_g_drm), a		; 打った音(スネア・シンバル・ハイハットに PSG のノイズを重ねる。sndtick.c)
 	or	a, #0x20
 	push	hl
 	ld	l, a

@@ -228,8 +228,9 @@ void main(void)
     cfg_defaults();
     sys_seg2(SEG_ENV);               /* 地形モジュールをセグメント 5 へ(以後ページ2はふだんゲームのセグメント) */
     mod_load(ENV_BANK);
-    sys_seg2(SEG_SND);               /* 音のモジュール(FM の曲)をセグメント 8 へ */
+    sys_seg2(SEG_SND);               /* 音のモジュール(効果音・曲のドライバと FM の曲)をセグメント 8 へ */
     mod_load(SND_BANK);
+    g_snd_ok = 1;                    /* ここから割り込みが音の処理を呼ぶ */
     sys_seg2(SEG_VOICE);             /* 声のモジュール(内蔵 PCM の英語の声)をセグメント 9 へ */
     mod_load(VOICE_BANK);
     sys_seg2(SEG_GAME);
