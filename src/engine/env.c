@@ -21,6 +21,51 @@
 #include "env.h"
 #include "rail.h"
 
+/* 地形モジュールはステージごと(Makefile が ENV_S1〜ENV_S6 を付けて env.c をコンパイルし、ステージの始めに読み込む)。
+ * その面で使う地形の処理だけを入れて、空いた所を面ごとの景色の変化に使う。ほかの面の地形を zones に書くと、何も描かない(空中と同じ) */
+#if defined(ENV_S1)
+#define HAS_EXIT   1       /* 坑道の入口(ステージ 2 へ) */
+#define HAS_PARK   1       /* 遊園地の高架・丘・柵沿い(空中は種類の分からない地形と同じ処理) */
+#elif defined(ENV_S2)
+#define HAS_EXIT   1
+#define HAS_LAKE   1
+#elif defined(ENV_S3)
+#define HAS_FOREST 1
+#elif defined(ENV_S4)
+#define HAS_EXIT   1       /* 岬のトンネル */
+#define HAS_BRIDGE 1
+#elif defined(ENV_S5)
+#define HAS_TOWN   1
+#elif defined(ENV_S6)
+#define HAS_HOME   1
+#else
+#error "ENV_S1〜ENV_S6 のどれかを付けてコンパイルする"
+#endif
+#ifndef HAS_CAVE
+#define HAS_CAVE   0       /* 炭鉱の坑道(今はどの面も使っていない) */
+#endif
+#ifndef HAS_EXIT
+#define HAS_EXIT   0
+#endif
+#ifndef HAS_LAKE
+#define HAS_LAKE   0
+#endif
+#ifndef HAS_FOREST
+#define HAS_FOREST 0
+#endif
+#ifndef HAS_TOWN
+#define HAS_TOWN   0
+#endif
+#ifndef HAS_HOME
+#define HAS_HOME   0
+#endif
+#ifndef HAS_PARK
+#define HAS_PARK   0
+#endif
+#ifndef HAS_BRIDGE
+#define HAS_BRIDGE 0
+#endif
+
 #define RSTEP 4            /* リングの間隔[m] */
 #define NF    5            /* 前方の区間数(20m) */
 #define NB    5            /* 後方の区間数 */
@@ -125,7 +170,9 @@ static const i16 base_uv[K_COUNT][12] = {
 #define EAVE_V    520      /* 軒の高さ */
 #define RIDGE_U   950      /* 棟の横位置と高さ */
 #define RIDGE_V   900
+#if HAS_TOWN || HAS_HOME
 static u8 hs_st[2], hs_cnt[2], hs_col[2];   /* 家並み: 左右それぞれの今の状態(1 = 家)・残りリング数・壁の色 */
+#endif
 static u8 rail_col;
 
 /* 地形 kind のリング r の断面・色・飾りを作る。w / h は幅と高さのゆっくりした変化(256 = 基本) */
@@ -159,6 +206,7 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         p[k * 2 + 1] = v;
     }
     switch (kind) {
+#if HAS_CAVE
     case K_CAVE:
         /* 天井は板張り(暗い茶)、壁は石炭(黒〜濃い灰、ときどき明るい岩)、床は土 */
         for (k = 0; k < 6; k++) {
@@ -172,10 +220,14 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         if (rnd() < 40) d |= D_ROCK_L;
         if (rnd() < 40) d |= D_ROCK_R;
         break;
+#endif
+#if HAS_EXIT
     case K_EXIT:                                /* 洞窟の出口(屋外のパレット: 暗い岩と土だけで描く) */
         for (k = 0; k < 6; k++) t[k] = (k == 3 || (rnd() & 1)) ? C_ROCK1 : C_ROCK0;
         d = D_TIMBER;
         break;
+#endif
+#if HAS_LAKE
     case K_LAKE:
         /* 天井は暗い岩、岩壁は岩棚(上)と水際(下)、水面は波の縞 */
         t[0] = C_ROCK0;
@@ -188,7 +240,9 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         if (rnd() < 40) d |= D_ROCK_L;          /* 水面の岩 */
         else if (rnd() < 40) d |= D_ROCK_R;
         break;
-    case K_PARK:                                /* 高架の軌道: 面は無く、レールと枕木と支柱だけ(下の地面まで見える) */
+#endif
+#if HAS_PARK
+    case K_PARK:                              /* 高架の軌道: 面は無く、レールと枕木と支柱だけ(下の地面まで見える) */
         for (k = 0; k < 6; k++) t[k] = 0;
         d = D_OPEN | D_EMPTY;
         if (!(r & 3)) d |= (r & 4) ? D_LAMP_L : D_LAMP_R;   /* 遠くのテント */
@@ -205,10 +259,6 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         if (rnd() < 60) d |= D_ROCK_L;          /* 茂み */
         if (rnd() < 60) d |= D_ROCK_R;
         break;
-    case K_AIR:
-        for (k = 0; k < 6; k++) t[k] = 0;
-        d = D_OPEN | D_NORAIL | D_EMPTY;
-        break;
     case K_PARKSIDE:                            /* 左 = 縞の柵(リングごとに赤と黄)、道、右 = 下る草の斜面 */
         t[0] = t[1] = 0;
         t[2] = C_GRASS;
@@ -219,6 +269,8 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         if (rnd() < 90) d |= D_ROCK_R;          /* 右の茂み */
         if (rnd() < 90) d |= D_LAMP_R;          /* 右の柵の杭 */
         break;
+#endif
+#if HAS_TOWN || HAS_HOME
     case K_TOWN:
     case K_HOME: {
         /* 家並み: 左右それぞれ「家(1〜3 リング)」と「間(1〜2 リング)」を交互に。
@@ -247,13 +299,17 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         }
         break;
     }
+#endif
+#if HAS_BRIDGE
     case K_BRIDGE:                              /* 線路(面 3。12m より先だけ)と、左右の上弦材(面 1・5 の細い帯)だけを塗る */
         t[0] = t[2] = t[4] = 0;
         t[1] = t[5] = C_DIRT0;
         t[3] = C_ROCK1;
         d = D_OPEN;
         break;
-    default:                                    /* 森 */
+#endif
+#if HAS_FOREST
+    case K_FOREST:
         t[0] = 0;
         t[1] = C_DIRT0; t[5] = C_DIRT0;         /* 茂み(濃い緑) */
         t[2] = C_GRASS; t[4] = C_GRASS;         /* 下草 */
@@ -262,6 +318,11 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         if (rnd() < 170) d |= D_LAMP_L;         /* 左の幹 */
         if (rnd() < 170) d |= D_LAMP_R;         /* 右の幹 */
         if (rnd() < 150) d |= D_TIMBER;         /* 頭上の葉 */
+        break;
+#endif
+    default:                                    /* 空中(とこのモジュールに入っていない地形): 何も描かない */
+        for (k = 0; k < 6; k++) t[k] = 0;
+        d = D_OPEN | D_NORAIL | D_EMPTY;
         break;
     }
     DECO[r] = d;
@@ -276,8 +337,10 @@ void envm_build(void)
     const u8 *zones = g_env_zones;
     rng = g_env_seed;
     rail_col = *zones++;
+#if HAS_TOWN || HAS_HOME
     hs_st[0] = hs_st[1] = 0;
     hs_cnt[0] = hs_cnt[1] = 0;
+#endif
     n = (u8)(rail_len / RSTEP + 2);
     if (n > MAX_RINGS) n = MAX_RINGS;
     for (r = 0; r < n; r++) {
@@ -288,9 +351,11 @@ void envm_build(void)
         h += jit(12); if (h < 240) h = 240; if (h > 285) h = 285;
         ring_build(r, kind, w, h);
     }
+#if HAS_HOME
     /* 自宅: レールの終わりのリングに正面を置く */
     r = (u8)((rail_len - 1) / RSTEP);
     if (r < n && KIND[r] == K_HOME) DECO[r] |= D_TIMBER;
+#endif
 }
 
 /* ---------------------------------------------------------------------------
@@ -380,6 +445,7 @@ void rquad_a(u8 idx);
 
 #define FLOOR_V (-333)
 
+#if HAS_BRIDGE
 static u8 br_long;                /* 1 = 鉄橋のレールを区間ごとでなく bridge_rails で 1 枚に描く(前か後ろだけを見ていて、仮リングが鉄橋) */
 
 /* 床の無い鉄橋の、区間の途中の枕木 2 本(約 1.3m ごと)。リング a・b の枕木の両端を画面で 3 等分した位置に 1 行の横線で描く
@@ -405,6 +471,7 @@ static void ties_mid(u8 a, u8 b)
         rect_fill();
     }
 }
+#endif
 
 /* 区間(リング a → b)の床のレール 2 本と枕木 */
 static void rails_draw(u8 a, u8 b)
@@ -414,20 +481,23 @@ static void rails_draw(u8 a, u8 b)
     if (DECO[ring_no[a < b ? a : b]] & D_NORAIL) return;
     /* 枕木(区間の手前のリングの面に、横長の板) */
     RQUAD(a, -180, 180, FLOOR_V, FLOOR_V + 14, C_WOOD);
+#if HAS_BRIDGE
     if (KIND[ring_no[a < b ? a : b]] == K_BRIDGE) {
         ties_mid(a, b);
         if (br_long) return;                   /* レールは bridge_rails が手前から 12m 先まで 1 枚で描く */
     }
+#endif
     for (side = 0; side < 2; side++) {
         i16 u0 = side ? 102 : -128, u1 = side ? 128 : -102;
         RPT(0, a, u0, FLOOR_V);
         RPT(1, a, u1, FLOOR_V);
         RPT(2, b, u1, FLOOR_V);
         RPT(3, b, u0, FLOOR_V);
-        raster(4, KIND[ring_no[a < b ? a : b]] == K_CAVE ? C_RAIL : rail_col);
+        raster(4, (HAS_CAVE && KIND[ring_no[a < b ? a : b]] == K_CAVE) ? C_RAIL : rail_col);
     }
 }
 
+#if HAS_CAVE || HAS_EXIT || HAS_LAKE || HAS_PARK
 /* 床の石(三角形)。u0..u1 の幅、高さ ht */
 static void rock_draw(u8 idx, i16 u0, i16 u1, i16 ht, u8 color)
 {
@@ -436,9 +506,11 @@ static void rock_draw(u8 idx, i16 u0, i16 u1, i16 ht, u8 color)
     RPT(2, idx, (u0 + u1) >> 1, FLOOR_V + ht);
     raster(3, color);
 }
+#endif
 
 static u8 view_back;              /* 1 = 後ろだけを見ている(家の奥の妻壁を描く) */
 
+#if HAS_TOWN || HAS_HOME
 /* 家の妻壁(リング面の、道から奥への壁と三角の破風、窓 2 つ)。sgn = 1 右 / -1 左 */
 static void house_end(u8 idx, i8 sgn, u8 col)
 {
@@ -451,7 +523,9 @@ static void house_end(u8 idx, i8 sgn, u8 col)
     RQUAD(idx, 720 * sgn, 880 * sgn, 170, 380, C_ROCK0);
     RQUAD(idx, 1020 * sgn, 1180 * sgn, 170, 380, C_ROCK0);
 }
+#endif
 
+#if HAS_HOME
 /* 村の門(道の突き当たり): 太い柱 2 本、冠木と小さな屋根、村の名の札(14 番の色)。門の前で村人が出迎える */
 static void home_draw(u8 idx)
 {
@@ -470,7 +544,9 @@ static void home_draw(u8 idx)
         RQUAD(idx, u + 15, u + 75, FLOOR_V + 230, FLOOR_V + 300, C_DIRT1);
     }
 }
+#endif
 
+#if HAS_PARK
 /* 遊園地の出し物(u = 横位置、g = 地面の高さ)。柵の外から見るときは g を柵の上端にして、柵より上に見える部分だけを描く
  * (柵より下を描くと、手前の柵の前に出てしまうため) */
 static void park_tent(u8 idx, i16 u, i16 g)
@@ -542,6 +618,7 @@ static void park_arch(u8 idx)
         RQUAD(idx, 375, 405, v, v + 30, c);
     }
 }
+#endif
 
 /* リング idx の面の飾り
  *   洞窟: 坑木の枠組(柱 2 本と梁)、カンテラ、床の落石
@@ -553,6 +630,7 @@ static void deco_draw(u8 idx)
     no = ring_no[idx];
     d = DECO[no];
     switch (KIND[no]) {
+#if HAS_CAVE || HAS_EXIT
     case K_CAVE:
     case K_EXIT:
         if (d & D_TIMBER) {
@@ -565,6 +643,8 @@ static void deco_draw(u8 idx)
         if (d & D_ROCK_L) rock_draw(idx, -275, -170, 70, C_ROCK2);
         if (d & D_ROCK_R) rock_draw(idx, 170, 270, 60, C_ROCK2);
         break;
+#endif
+#if HAS_LAKE
     case K_LAKE:
         /* 天井から垂れ下がる鍾乳石と、水面から顔を出した岩 */
         if (d & D_LAMP_L) {
@@ -578,6 +658,8 @@ static void deco_draw(u8 idx)
         if (d & D_ROCK_L) rock_draw(idx, -760, -500, 150, C_ROCK0);
         if (d & D_ROCK_R) rock_draw(idx, 480, 720, 130, C_ROCK0);
         break;
+#endif
+#if HAS_FOREST
     case K_FOREST: {
         i16 o = (no & 1) ? 90 : 0;                        /* 幹の位置をリングごとにずらす */
         if (d & D_TIMBER) {                               /* 頭上の葉の塊 */
@@ -589,6 +671,8 @@ static void deco_draw(u8 idx)
         if (d & D_LAMP_R) RQUAD(idx, 490 - o, 580 - o, FLOOR_V, 940, C_WOOD);
         break;
     }
+#endif
+#if HAS_PARK
     case K_PARK:
         /* 高架の支柱(軌道の下へ)、遠くのテント(赤い幕と三角の屋根)、観覧車(暗い輪)、軌道わきの灯り */
         RQUAD(idx, -215, -185, FLOOR_V - 1300, FLOOR_V, C_ROCK0);
@@ -612,6 +696,14 @@ static void deco_draw(u8 idx)
         if (d & D_ROCK_R) rock_draw(idx, 650, 900, 130, C_ROCK0);
         break;
     }
+    case K_HILL:
+        if (d & D_LAMP_L) RQUAD(idx, -620, -580, FLOOR_V, FLOOR_V + 160, C_WOOD);
+        if (d & D_LAMP_R) RQUAD(idx, 580, 620, FLOOR_V, FLOOR_V + 160, C_WOOD);
+        if (d & D_ROCK_L) rock_draw(idx, -860, -600, 160, C_ROCK0);
+        if (d & D_ROCK_R) rock_draw(idx, 600, 860, 140, C_ROCK0);
+        break;
+#endif
+#if HAS_BRIDGE
     case K_BRIDGE:
         /* 頭上の梁と床の下の横桁はリングごと(4m ごと)。左右の縦材は 8m より先だけ(手前は斜材が描かれる。縦材は手前ほど行が多く重い) */
         RQUAD(idx, -BR_U, BR_U, BR_CHD, BR_TOP, C_DIRT0);
@@ -621,12 +713,8 @@ static void deco_draw(u8 idx)
             RQUAD(idx, BR_U - 30, BR_U + 30, BR_GIR, BR_CHD, C_DIRT0);
         }
         break;
-    case K_HILL:
-        if (d & D_LAMP_L) RQUAD(idx, -620, -580, FLOOR_V, FLOOR_V + 160, C_WOOD);
-        if (d & D_LAMP_R) RQUAD(idx, 580, 620, FLOOR_V, FLOOR_V + 160, C_WOOD);
-        if (d & D_ROCK_L) rock_draw(idx, -860, -600, 160, C_ROCK0);
-        if (d & D_ROCK_R) rock_draw(idx, 600, 860, 140, C_ROCK0);
-        break;
+#endif
+#if HAS_TOWN || HAS_HOME
     case K_TOWN:
     case K_HOME:
         /* 前を見ているときは家の手前の妻壁、後ろを見ているときは奥の妻壁(見えない側は道側の壁に隠れる) */
@@ -637,11 +725,15 @@ static void deco_draw(u8 idx)
             if (d & D_ROCK_R) house_end(idx, 1, TONE[(no - 1) * 6 + 2]);
             if (d & D_ROCK_L) house_end(idx, -1, TONE[(no - 1) * 6 + 4]);
         }
+#if HAS_HOME
         if (d & D_TIMBER) home_draw(idx);
+#endif
         break;
+#endif
     }
 }
 
+#if HAS_BRIDGE
 /* ---------------------------------------------------------------------------
  * 鉄橋
  * --------------------------------------------------------------------------- */
@@ -734,6 +826,7 @@ static void bridge_rails(i8 dir)
     sq_ua = 102; sq_ub = 128;
     strip_q(far, rail_col);
 }
+#endif
 
 /* ---------------------------------------------------------------------------
  * 区間
@@ -748,14 +841,14 @@ static void set_band_col(u8 na, u8 dist)
     u8 kind = KIND[na];
     for (k = 0; k < 6; k++) {
         c = t[k];
-        if (kind == K_EXIT || kind == K_LAKE) {
+        if ((HAS_EXIT && kind == K_EXIT) || (HAS_LAKE && kind == K_LAKE)) {
             /* 奥は暗い岩(水面はそのまま) */
             if (dist >= 2 && c != C_WATER && c != C_WATER1) c = C_ROCK0;
-        } else if (kind == K_CAVE && dist >= 2) {
+        } else if (HAS_CAVE && kind == K_CAVE && dist >= 2) {
             if (c == C_ROCK2) c = C_ROCK1;
             else if (c == C_ROCK1 || c == C_DIRT0) c = C_ROCK0;
             else c = C_DIRT0;
-        } else if (kind == K_BRIDGE && k == 3 && dist < 3) {
+        } else if (HAS_BRIDGE && kind == K_BRIDGE && k == 3 && dist < 3) {
             c = 0;                              /* 鉄橋の手前 12m は床を塗らない(枕木とレールの隙間に海が見える) */
         }
         band_col[k] = c;
@@ -777,7 +870,7 @@ static void band_draw(u8 a, u8 b, u8 dist)
     na = ring_no[a < b ? a : b];
     if (DECO[na] & D_EMPTY) {
         /* 面の無い区間(遊園地の高架・空中)。高架はレールだけが見えるので遠くまで描く */
-        if (KIND[na] == K_PARK) rails_draw(a, b);
+        if (HAS_PARK && KIND[na] == K_PARK) rails_draw(a, b);
         return;
     }
     set_band_col(na, dist);
@@ -808,7 +901,9 @@ static void band_draw(u8 a, u8 b, u8 dist)
     }
     if (dist < 3) rails_draw(a, b);
     /* トラスの斜材は 8m まで(その先は細くて目立たない。縦材・頭上の梁・上弦材は遠くまで描く。12m までにすると 1 フレーム約 2ms 重い) */
+#if HAS_BRIDGE
     if (dist < 2 && KIND[na] == K_BRIDGE && fa == 0x3F && fb == 0x3F) truss_draw(a, b);
+#endif
 }
 
 /* 区間 r(リング r と r+1 の間) */
@@ -837,25 +932,30 @@ static u8 cap_ok(i8 r)
 static u8 far_ok(i8 r)
 {
     u8 idx = (u8)(r + NB);
-    return cap_ok(r) && KIND[ring_no[idx]] != K_LAKE;
+    return cap_ok(r) && !(HAS_LAKE && KIND[ring_no[idx]] == K_LAKE);
 }
 
 /* リング r〜r+2 の 2 区間を 1 つの帯で描いてよいか: 3 本とも森か地底湖(断面の形がなめらかに変わる地形)。
  * 町の家並みや遊園地の建物は、リングごとに形が変わるので、途中のリングを飛ばすと遠くの屋根や建物の形が欠ける */
 static u8 merge_ok(i8 r)
 {
+#if HAS_FOREST || HAS_LAKE
     u8 i, kd;
     for (i = 0; i < 3; i++) {
         kd = KIND[ring_no[(u8)(r + NB + i)]];
         if (kd != K_FOREST && kd != K_LAKE) return 0;
     }
     return 1;
+#else
+    (void)r;
+    return 0;
+#endif
 }
 
 /* 奥の開口部を塞ぐ色: 坑道は闇(黒)、地底湖は岩壁と同じ暗い岩の色(黒い穴に見えないように) */
 static u8 cap_col(i8 r)
 {
-    return KIND[ring_no[(u8)(r + NB)]] == K_LAKE ? C_ROCK0 : C_BLACK;
+    return (HAS_LAKE && KIND[ring_no[(u8)(r + NB)]] == K_LAKE) ? C_ROCK0 : C_BLACK;
 }
 
 static void hex_draw(i8 r, u8 color)
@@ -866,6 +966,7 @@ static void hex_draw(i8 r, u8 color)
 
 static u8 sky_row;                /* 地平線の行(sky_draw) */
 
+#if HAS_BRIDGE
 /* 鉄橋のまわりの海の白波。海面は目の 12m 下にあるものとして、白波の点(左右 ±15.5m、奥行き 6〜70m を回る)を投影し、
  * 1 行の短い線で描く。近くの枕木や横桁より遅く流れるので、海が橋のずっと下にあると分かる。back = 後ろを見ている */
 extern u16 wave_inv[256];        /* 8192 / (24 + i)(白波の奥行き(1/4m)の逆数。truss.s。初めて使うときに作る。割り算は 1 回 約 150µs) */
@@ -913,6 +1014,7 @@ static void sea_waves(u16 s, u8 back)
         rect_fill();
     }
 }
+#endif
 
 /* 空と地面(地平線の高さで 2 色に塗り分ける)。far = 一番遠くに見える地形 */
 static void sky_draw(u8 far)
@@ -984,7 +1086,9 @@ void envm_draw(u16 s, u16 look16)
         if (open) {
             /* 屋外が見える: 空と地面を塗ってから描く(奥の開口部は塞がない) */
             sky_draw(far);
+#if HAS_BRIDGE
             if (far == K_BRIDGE && fwd != back) sea_waves(s, back);
+#endif
             capped = 0;
         } else {
             /* トンネルの内側からは壁が視界を全部覆うので、奥の開口部を黒く塞げば
@@ -1017,7 +1121,9 @@ void envm_draw(u16 s, u16 look16)
         /* 仮リングを先に作る(鉄橋のレールを 1 枚で描けるかを、区間を描く前に決める) */
         vok = vring_make(sv);
         if (!vok) ring_late();
+#if HAS_BRIDGE
         br_long = vok && KIND[ring_no[VR]] == K_BRIDGE;
+#endif
         for (k = kn - 1; k >= rn; k--) {
             if (k == NF - 1 && kn == NF && k - 1 >= rn && merge_ok(NF - 2)) {
                 /* 遠い 2 区間(12〜20m)は 1 つの帯で描く(途中の 16m のリングは飾りの位置にだけ使う) */
@@ -1030,14 +1136,20 @@ void envm_draw(u16 s, u16 look16)
             seg_draw(k); frame_draw(k + 1);
         }
         if (vok) {
+#if HAS_BRIDGE
             if (br_long) handrail_draw(1);
+#endif
             band_draw(VR, (u8)(rn + NB), 0);
             frame_draw(rn);
+#if HAS_BRIDGE
             if (br_long) bridge_rails(1);
+#endif
         } else {
             for (k = rn - 1; k >= 0; k--) { seg_draw(k); frame_draw(k + 1); }
         }
+#if HAS_BRIDGE
         br_long = 0;
+#endif
         return;
     }
     if (back && !fwd && s >= VR_D + 6) {
@@ -1057,7 +1169,9 @@ void envm_draw(u16 s, u16 look16)
         rn = ((u16)ring_m0 * 64 + 6 < sv) ? 0 : -1;
         vok = vring_make(sv);
         if (!vok) ring_late();
+#if HAS_BRIDGE
         br_long = vok && KIND[ring_no[VR]] == K_BRIDGE;
+#endif
         for (k = kn; k < rn; k++) {
             if (k == -lb && kn == -lb && k + 2 <= rn && merge_ok(-lb)) {
                 band_draw((u8)(NB - lb), (u8)(NB - lb + 2), 3);  /* 遠い 2 区間は 1 つの帯で(前と同じ) */
@@ -1069,14 +1183,20 @@ void envm_draw(u16 s, u16 look16)
             seg_draw(k); frame_draw(k);
         }
         if (vok) {
+#if HAS_BRIDGE
             if (br_long) handrail_draw(-1);
+#endif
             band_draw((u8)(rn + NB), VR, 0);
             frame_draw(rn);
+#if HAS_BRIDGE
             if (br_long) bridge_rails(-1);
+#endif
         } else {
             for (k = rn; k <= 0; k++) { seg_draw(k); frame_draw(k); }
         }
+#if HAS_BRIDGE
         br_long = 0;
+#endif
         return;
     }
     if (capped) {

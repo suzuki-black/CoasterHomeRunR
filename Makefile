@@ -121,9 +121,16 @@ $(BUILD)/ressyms.s: $(BUILD)/engine.ihx $(TOOLS)/ressyms.py
 $(BUILD)/ressyms.rel: $(BUILD)/ressyms.s
 	$(AS) -l -o $@ $<
 
-# 地形モジュール(マッパーのセグメント 5 に置く)
-$(BUILD)/envmod.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env.rel $(BUILD)/truss.rel $(BUILD)/ressyms.rel
+# 地形モジュール(マッパーのセグメント 5 に、ステージの始めに読み込む)。ステージごとに、その面の地形の処理だけを入れる
+# (env.c を ENV_S1〜ENV_S6 でコンパイルする。鉄橋のトラスと海の asm(truss.s)はステージ 4 だけ)
+$(BUILD)/env%.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env_s%.rel $(BUILD)/ressyms.rel
 	$(CC) $(MODFLAGS) --code-loc 0x8006 -o $@ $^
+
+$(BUILD)/env4.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env_s4.rel $(BUILD)/truss.rel $(BUILD)/ressyms.rel
+	$(CC) $(MODFLAGS) --code-loc 0x8006 -o $@ $^
+
+$(BUILD)/env_s%.rel: $(ENG)/env.c $(HDRS) Makefile | $(BUILD)
+	$(CC) $(CFLAGS) -DENV_S$* -c -o $@ $<
 
 # 音のモジュール(マッパーのセグメント 8 に置く。効果音・ドラムのノイズ・PSG のパート・FM の曲のドライバ。曲のデータは 0x8C00- に
 # tools/mkrom.py が合わせる)。割り込み(Z80 転送の間も)から動くので、C は Z80_SAFE_C で確かめる
@@ -175,10 +182,11 @@ $(BUILD)/boot.ihx: $(BUILD)/boot.rel
 	$(CC) -mz80 --no-std-crt0 --code-loc 0x4000 --data-loc 0xC000 -o $@ $<
 
 GAMES = $(foreach n,1 2 3 4 5 6,$(BUILD)/game$(n).ihx)
+ENVS  = $(foreach n,1 2 3 4 5 6,$(BUILD)/env$(n).ihx)
 
-$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/envmod.ihx $(GAMES) $(BUILD)/sndmod.ihx $(BUILD)/songs.bin src/sound/voicemod.bin $(TOOLS)/mkrom.py
+$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(ENVS) $(GAMES) $(BUILD)/sndmod.ihx $(BUILD)/songs.bin src/sound/voicemod.bin $(TOOLS)/mkrom.py
 	$(PYTHON) $(TOOLS)/mkrom.py $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/engine.noi $@ \
-	  $(BUILD)/envmod.ihx $(BUILD)/envmod.noi \
+	  $(foreach n,1 2 3 4 5 6,$(BUILD)/env$(n).ihx $(BUILD)/env$(n).noi) \
 	  $(foreach n,1 2 3 4 5 6,$(BUILD)/game$(n).ihx $(BUILD)/game$(n).noi) $(BUILD)/sndmod.ihx $(BUILD)/sndmod.noi $(BUILD)/songs.bin src/sound/voicemod.bin
 	cp $@ "$(BUILD)/$(ROMNAME) [ASCII8].rom"
 
@@ -233,7 +241,7 @@ perf: $(ROM)
 # PC のサンプリングによる統計プロファイル(tools/pcprof.tcl)。関数・ローカルラベル単位の比率
 pcprof: $(ROM)
 	@mkdir -p $(RUNDIR)
-	$(PYTHON) $(TOOLS)/prof_syms.py $(BUILD) $(BUILD)/prof_syms.txt
+	$(PYTHON) $(TOOLS)/prof_syms.py $(BUILD) $(BUILD)/prof_syms.txt $(or $(PROF_STAGE),1)
 	cp $(TOOLS)/pcprof.tcl $(RUNDIR)/
 	TH_NOI=$(abspath $(BUILD)/engine.noi) TH_OUT=$(abspath $(RUNDIR)) PROF_SYMS=$(abspath $(BUILD)/prof_syms.txt) \
 	  timeout $(TIMEOUT) $(OPENMSX_ROM) -script $(abspath $(RUNDIR))/pcprof.tcl >/dev/null 2>&1 || true
@@ -243,7 +251,7 @@ pcprof: $(ROM)
 STAGE ?= 3
 overdraw: $(ROM)
 	@mkdir -p $(RUNDIR)
-	$(PYTHON) $(TOOLS)/prof_syms.py $(BUILD) $(BUILD)/prof_syms.txt
+	$(PYTHON) $(TOOLS)/prof_syms.py $(BUILD) $(BUILD)/prof_syms.txt $(STAGE)
 	cp $(TOOLS)/overdraw.tcl $(RUNDIR)/
 	TH_NOI=$(abspath $(BUILD)/engine.noi) TH_OUT=$(abspath $(RUNDIR)) PROF_SYMS=$(abspath $(BUILD)/prof_syms.txt) \
 	  PROF_STAGE=$(STAGE) OD_FRAMES="60 900 20" ALT_DRAW=$$(awk '/DEF _alt_draw/ {print $$3}' $(BUILD)/game$(STAGE).noi) \

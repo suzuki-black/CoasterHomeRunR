@@ -92,16 +92,17 @@ typedef struct {
 } Stage;
 
 /* モジュール(仕様書 7.3 のオーバーレイ)。ROM の 2 バンク(16KB)ずつ
- *   地形モジュール: バンク 4〜5 → マッパーのセグメント 5(起動時に 1 回)
+ *   地形モジュール: ステージごと(その面の地形の処理だけ)。ステージ 1 はバンク 4〜5、ステージ n(2〜)はバンク 14 + 2n〜
+ *     (18〜27)→ マッパーのセグメント 5。ステージの始めに読み込む
  *   ゲームモジュール: ステージ n(1〜)はバンク 4 + 2n〜 → ページ2(セグメント 1)。ステージの始めに読み込む。
  *     0x8000 = jp game_run、0x8003 = そのステージの Stage へのポインタ */
-#define ENV_BANK     4
+#define ENV_BANK(n)  ((n) == 1 ? 4 : 14 + 2 * (n))
 #define GAME_BANK(n) (4 + 2 * (n))
 #define STAGE_COUNT  6
 #define SEG_GAME     1
 #define SEG_ENV      5
 #define SEG_SND      8   /* 音のモジュール(FM の曲。起動時に 1 回読み込む) */
-#define SND_BANK     28  /* 音のモジュールの ROM のバンク(28-29。6〜27 はステージのモジュールに空けておく) */
+#define SND_BANK     28  /* 音のモジュールの ROM のバンク(28-29。6〜17 はゲームモジュール、18〜27 はステージ 2〜6 の地形モジュール) */
 #define SEG_VOICE    9   /* 声のモジュール(内蔵 PCM の声。起動時に 1 回読み込む) */
 #define VOICE_BANK   30  /* 声のモジュールの ROM のバンク(30-31) */
 #define MOD_STAGE    (*(const Stage * const *)0x8003)

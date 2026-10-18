@@ -102,7 +102,7 @@ make flow RUNDIR=/path/to/scratch GOD=1
 
 ```
 src/boot/boot.s       ROM bank0: 起動・スロット検出・CPU 切替・ローダー
-src/engine/           エンジン。常駐部(RAM 0x4000-0x7FFF)とモジュール(ページ2 0x8000-: 地形 = env.c、ステージごとのゲーム = game.c・models.c・ステージのデータ)
+src/engine/           エンジン。常駐部(RAM 0x4000-0x7FFF)とモジュール(ページ2 0x8000-: ステージごとの地形 = env.c、ステージごとのゲーム = game.c・models.c・ステージのデータ)
   crt0.s              エンジンの入口
   sys.s               H.TIMI 割り込み・入力・PSG・タイマ
   vdp.s               SCREEN 3 の転送(パック変換つき)

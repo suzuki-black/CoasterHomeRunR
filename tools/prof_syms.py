@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """pcprof.tcl 用のシンボル表を作る: .noi のグローバルと、.rst(リンク後の番地が入ったリスト)のラベル。
 
-  prof_syms.py build out.txt
+  prof_syms.py build out.txt [stage]
+
+stage(既定 1)は計測するステージ。地形モジュールとゲームモジュールはステージごとなので、そのステージの .noi と、地形は
+env_s<stage>.rst を使う。
 
 出力の各行は「領域 番地 名前」。領域はページ2のどのコードかを分ける:
   R  常駐部(ページ0・ページ1)
-  E  地形モジュール(ページ2、セグメント 5: env.c)
+  E  地形モジュール(ページ2、セグメント 5: env.c をステージごとにコンパイルしたもの)
   G  ゲームモジュール(ページ2、セグメント 1: game.c・models.c・stageN.c)
 アセンブラのローカルラベル(1$ など)は「直前のラベル+1$」として出す。C の static 関数も .rst のラベルから拾える。
 """
@@ -24,18 +27,18 @@ PAGE0 = [
 ]
 
 
-def region_of(rst):
+def region_of(rst, stage):
     b = os.path.basename(rst)
-    if b == 'env.rst':
-        return 'E'
+    if b.startswith('env_s'):
+        return 'E' if b == f'env_s{stage}.rst' else None
     if b in ('game.rst', 'models.rst') or b.startswith('stage'):
         return 'G'
     return 'R'
 
 
-def main(build, out):
+def main(build, out, stage='1'):
     syms = {'R': {}, 'E': {}, 'G': {}}
-    for reg, noi in (('R', 'engine.noi'), ('E', 'envmod.noi'), ('G', 'game1.noi')):
+    for reg, noi in (('R', 'engine.noi'), ('E', f'env{stage}.noi'), ('G', f'game{stage}.noi')):
         for line in open(os.path.join(build, noi)):
             m = re.match(r'DEF (\S+) 0x([0-9A-Fa-f]+)', line)
             if m and not m.group(1).startswith(('s__', 'l__')):
@@ -44,7 +47,9 @@ def main(build, out):
                 if lo <= a < hi:
                     syms[reg][a] = m.group(1)
     for rst in glob.glob(os.path.join(build, '*.rst')):
-        reg = region_of(rst)
+        reg = region_of(rst, stage)
+        if reg is None:
+            continue
         lo, hi = (0x4000, 0x8000) if reg == 'R' else (0x8000, 0xC000)
         cur = None
         for line in open(rst, errors='replace'):

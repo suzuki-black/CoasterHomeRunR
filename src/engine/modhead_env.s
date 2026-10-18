@@ -1,5 +1,5 @@
 ; modhead_env.s — 地形モジュールの先頭(ページ2 = マッパーのセグメント 5、0x8000)
-;   env.c を 0x8000 に合わせてリンクし、ROM の 2 バンクに置く。起動時に 1 回セグメント 5 へ読み込む。
+;   env.c をステージごとに(ENV_S1〜ENV_S6)0x8000 に合わせてリンクし、ROM の 2 バンクずつに置く。ステージの始めにセグメント 5 へ読み込む。
 ;   常駐部の env_build / env_draw(sys.s)がページ2を切り替えてここを呼ぶ。
 	.module	modhead_env
 	.globl	_envm_build, _envm_draw

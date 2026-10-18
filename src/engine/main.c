@@ -178,9 +178,11 @@ static void ending_run(const Stage *st)
 void bench_run(void);
 #endif
 
-/* ステージ n(1〜)のゲームモジュールを ROM から読み込み、その Stage を返す(仕様書 7.3 のオーバーレイ) */
+/* ステージ n(1〜)の地形モジュールとゲームモジュールを ROM から読み込み、その Stage を返す(仕様書 7.3 のオーバーレイ) */
 static const Stage *stage_load(u8 n)
 {
+    sys_seg2(SEG_ENV);
+    mod_load(ENV_BANK(n));
     sys_seg2(SEG_GAME);
     mod_load(GAME_BANK(n));
     return MOD_STAGE;
@@ -226,8 +228,6 @@ void main(void)
     sys_page0_data();                /* 表(sin・逆数・フォント・敵の絵など)とタイトル・コンフィグをページ0へ */
     sys_z80x_init();                 /* 実機のファームウェアなら描画バッファを Z80 で送る(vdp.s の vdp_xfer) */
     cfg_defaults();
-    sys_seg2(SEG_ENV);               /* 地形モジュールをセグメント 5 へ(以後ページ2はふだんゲームのセグメント) */
-    mod_load(ENV_BANK);
     sys_seg2(SEG_SND);               /* 音のモジュール(効果音・曲のドライバと FM の曲)をセグメント 8 へ */
     mod_load(SND_BANK);
     g_snd_ok = 1;                    /* ここから割り込みが音の処理を呼ぶ */
