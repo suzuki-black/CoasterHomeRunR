@@ -3,6 +3,7 @@
 #
 #  make            ASCII8 メガロム build/TrolleyHomeRun.rom を生成(WebMSX 用に "… [ASCII8].rom" も)
 #  make fpsrom     計測用 ROM build/fps/TrolleyHomeRun_FPS [ASCII8].rom(fps 表示、タイトルに CPU の状態)
+#  make shotrom    景色を確かめる ROM build/shot/TrolleyHomeRun_SHOT [ASCII8].rom(敵を出さない)
 #  make vdpbench   VDP への書き込みの速さを測る ROM build/vdpb/TrolleyHomeRun_VDPBENCH [ASCII8].rom
 #  make run        openMSX(開発用機種 TH_turboR_dev)で起動して目視
 #  make test       openMSX で起動〜ゲーム進行を判定(tools/test_game.tcl)
@@ -73,7 +74,7 @@ HDRS = $(wildcard $(ENG)/*.h) $(BUILD)/songs.h
 
 ROM = $(BUILD)/TrolleyHomeRun.rom
 
-.PHONY: all fpsrom vdpbench run test flow slotcheck perf pcprof overdraw machine clean
+.PHONY: all fpsrom shotrom vdpbench run test flow slotcheck perf pcprof overdraw machine clean
 
 all: $(ROM)
 
@@ -193,6 +194,10 @@ $(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(ENVS) $(GAMES) $(BUILD)/sndmod.i
 # 計測用 ROM(fps 表示、タイトルに CPU の状態)。オブジェクトが混ざらないよう build/fps に分けてビルドする
 fpsrom:
 	$(MAKE) BUILD=build/fps EXTRA_CFLAGS=-DDEBUG_FPS ROMNAME=TrolleyHomeRun_FPS
+
+# 景色を確かめる ROM(敵を出さない。SHOT_NO_FOES)。オブジェクトが混ざらないよう build/shot に分けてビルドする
+shotrom:
+	$(MAKE) BUILD=build/shot EXTRA_CFLAGS=-DSHOT_NO_FOES ROMNAME=TrolleyHomeRun_SHOT
 
 # VDP への書き込みの速さ(表示中・垂直帰線中・画面オフ・50Hz)を測って画面に出す ROM(src/engine/vdpbench.c)
 vdpbench:

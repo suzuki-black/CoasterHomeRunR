@@ -158,6 +158,10 @@ static const i16 base_uv[K_COUNT][12] = {
     /* 空中 */  { -400, 200,  400, 200,  230, -333,  200, -333, -200, -333, -230, -333 },
     /* 柵沿い */{ -520, 560, 1000, 200, 1000, -700,  400, -345, -400, -345, -520, -345 },
     /* 鉄橋 */  { -520, 900,  520, 900,  520, 840,  200, -345, -200, -345, -520, 840 },
+    /* 空き地 */{-1700, 700, 1700, 700, 1400,  -60,  420, -345, -420, -345,-1400,  -60 },
+    /* 小川 */  { -900,1400,  900,1400, 1500, -430,  240, -345, -240, -345,-1500, -430 },
+    /* 倒木 */  { -330, 330,  330, 330,  400,    0,  300, -345, -300, -345, -400,    0 },
+    /* 祠   */  { -760,1400,  760,1400,  720,  250,  420, -345, -420, -345, -720,  250 },
 };
 /* 鉄橋: トラスの面(u = ±BR_U)、上弦材の上端と下端(断面の面 1・5 を細い帯にして上弦材にする)。
  * 床の無い橋(枕木とレールの隙間から、ずっと下の海が見える)。断面の床(面 3)は線路の幅 ±200 で、12m より先だけ塗る */
@@ -185,9 +189,9 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
     for (k = 0; k < 6; k++) {
         i16 u = b[k * 2];
         i16 v = b[k * 2 + 1];
-        if (kind >= K_TOWN) {
+        if (kind >= K_TOWN && kind <= K_BRIDGE) {
             /* 町: 家の壁はまっすぐ(幅も変えない。妻壁の位置と合わせる)。町より後の種類(遊園地・丘・柵沿い・鉄橋など)も凹凸を付けない */
-        } else if (kind <= K_EXIT) {
+        } else if (kind <= K_EXIT || kind == K_HOLLOW) {   /* 坑道と倒木の中: 手掘り・木の洞の凹凸 */
             u = (i16)(((i32)u * w) >> 8);
             if (k == 3 || k == 4) {            /* 床は平らに(レールを敷く) */
                 u += jit(12);
@@ -318,6 +322,37 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         if (rnd() < 170) d |= D_LAMP_L;         /* 左の幹 */
         if (rnd() < 170) d |= D_LAMP_R;         /* 右の幹 */
         if (rnd() < 150) d |= D_TIMBER;         /* 頭上の葉 */
+        if (rnd() < 30) d |= D_ROCK_L;          /* 頭上を横切る倒木 */
+        break;
+    case K_GLADE:                               /* 空き地: 遠くの低い木立(濃い緑)と、日の当たる明るい草地 */
+        t[0] = 0;
+        t[1] = t[5] = C_DIRT0;
+        t[2] = t[4] = C_DIRT1;
+        t[3] = C_ROCK1;
+        d = D_OPEN;
+        if (rnd() < 150) d |= D_LAMP_L;         /* 花 */
+        if (rnd() < 150) d |= D_LAMP_R;
+        if (rnd() < 70) d |= D_ROCK_L;          /* 切り株 */
+        if (!(r % 3)) d |= D_TIMBER;            /* 遠くの一本木(左右交互) */
+        break;
+    case K_STREAM:                              /* 小川: 足元は丸太の橋、左右は明るい水面(固定色の水色。空の色だと岸が宙に浮いて見えた)、その先は岸の茂み */
+        t[0] = 0;
+        t[1] = t[5] = C_DIRT0;
+        t[2] = t[4] = C_CYAN;
+        t[3] = C_WOOD;
+        d = D_OPEN;
+        break;
+    case K_HOLLOW:                              /* 倒木の中: 木の洞(幹の色と影の木目)。奥ほど暗い(set_band_col) */
+        for (k = 0; k < 6; k++) t[k] = (k == 3) ? C_ROCK1 : ((rnd() & 1) ? C_WOOD : C_ROCK0);
+        d = 0;
+        if (r && KIND[r - 1] != K_HOLLOW) d |= D_LAMP_L;   /* 入口の切り口(出口は envm_build が後で印を付ける) */
+        break;
+    case K_SHRINE:                              /* 祠のある所: 森と同じ色で、左は木を立てずに祠 */
+        t[0] = 0;
+        t[1] = t[5] = C_DIRT0;
+        t[2] = t[4] = C_GRASS;
+        t[3] = C_ROCK1;
+        d = D_OPEN;
         break;
 #endif
     default:                                    /* 空中(とこのモジュールに入っていない地形): 何も描かない */
@@ -351,6 +386,16 @@ void envm_build(void)
         h += jit(12); if (h < 240) h = 240; if (h > 285) h = 285;
         ring_build(r, kind, w, h);
     }
+#if HAS_FOREST
+    /* 倒木のトンネルの出口: 最後のリングは道だけを塗り(次の森のリングへ広がる木の面を描かない)、切り口の印を付ける */
+    for (r = 1; r < n; r++) {
+        if (KIND[r] == K_HOLLOW && (r + 1 >= n || KIND[r + 1] != K_HOLLOW)) {
+            u8 *t = &TONE[r * 6];
+            t[0] = t[1] = t[2] = t[4] = t[5] = 0;
+            DECO[r] |= D_LAMP_R | D_OPEN;
+        }
+    }
+#endif
 #if HAS_HOME
     /* 自宅: レールの終わりのリングに正面を置く */
     r = (u8)((rail_len - 1) / RSTEP);
@@ -669,8 +714,96 @@ static void deco_draw(u8 idx)
         }
         if (d & D_LAMP_L) RQUAD(idx, -560 + o, -470 + o, FLOOR_V, 900, C_WOOD);
         if (d & D_LAMP_R) RQUAD(idx, 490 - o, 580 - o, FLOOR_V, 940, C_WOOD);
+        if (d & D_ROCK_L) {                               /* 頭上を斜めに横切る倒木(長方形 2 つの段で斜めに見せる。多角形の塗りより軽い) */
+            RQUAD(idx, -900, 0, 560, 670, C_WOOD);
+            RQUAD(idx, 0, 900, 640, 750, C_WOOD);
+        }
         break;
     }
+    case K_GLADE:
+        /* 草地の花(黄・白・赤の小さな点。草の斜面の高さに置く)、切り株、木立の手前の一本木 */
+        if (d & D_LAMP_L) {
+            RQUAD(idx, -905, -855, -215, -175, C_YELLOW);
+            RQUAD(idx, -1125, -1075, -160, -120, C_WHITE);
+        }
+        if (d & D_LAMP_R) {
+            RQUAD(idx, 825, 875, -230, -190, C_RED);
+            RQUAD(idx, 1055, 1105, -165, -125, C_YELLOW);
+        }
+        if (d & D_ROCK_L) {
+            RQUAD(idx, -760, -640, -265, -150, C_WOOD);
+            RQUAD(idx, -760, -640, -150, -125, C_ROCK1);  /* 切り口 */
+        }
+        if (d & D_TIMBER) {
+            i16 uc = (no & 1) ? 2100 : -2100;
+            RQUAD(idx, uc - 80, uc + 80, -100, 700, C_WOOD);
+            RQUAD(idx, uc - 450, uc + 450, 600, 1300, C_DIRT0);
+            RQUAD(idx, uc - 300, uc + 150, 1000, 1250, C_DIRT1);
+        }
+        break;
+    case K_STREAM:
+        /* 水面のさざ波(リングごとにずらす)と、丸太の橋の縁の杭 */
+        {
+            i16 o = (no & 1) ? 160 : 0;
+            RQUAD(idx, -1000 + o, -800 + o, -405, -388, C_WHITE);
+            RQUAD(idx, 700 + o, 900 + o, -400, -383, C_WHITE);
+        }
+        RQUAD(idx, -265, -235, FLOOR_V, -150, C_WOOD);
+        RQUAD(idx, 235, 265, FLOOR_V, -150, C_WOOD);
+        break;
+    case K_HOLLOW:
+        /* 丸太の切り口(木の洞の口のまわりの明るい輪)。外から見るときだけ: 入口はカメラより前、出口は後ろにあるとき
+         * (中から見ると、洞の壁の上に描いてしまう) */
+        if (((d & D_LAMP_L) && idx > NB) || ((d & D_LAMP_R) && idx <= NB)) {
+            static const i16 cut_o[12] = { -560, 820, 560, 820, 900, 240, 700, -345, -700, -345, -900, 240 };
+            static const i16 cut_b[12] = { -660, 960, 660, 960, 1040, 270, 820, -345, -820, -345, -1040, 270 };
+            u8 k, k1;
+            if ((idx >= NB + 2 || idx + 2 <= NB) && ring_front[idx] == 0x3F) {
+                /* 8m より遠い: 樹皮の六角形、切り口の六角形、暗い口(断面の速い塗り)の 3 枚。輪を 10 枚の多角形で描くと
+                 * 入口が見えている間ずっと 1 フレーム約 7ms 重い。遠い口の中はもともと暗い色なので、見た目はほぼ同じ */
+                for (k = 0; k < 6; k++) RPT(k, idx, cut_b[k * 2], cut_b[k * 2 + 1]);
+                raster(6, C_WOOD);
+                for (k = 0; k < 6; k++) RPT(k, idx, cut_o[k * 2], cut_o[k * 2 + 1]);
+                raster(6, C_ROCK1);
+                g_color = C_ROCK0;
+                hex_fast(idx);
+                break;
+            }
+            /* 近い: 内側 = 洞の断面、その外に明るい切り口の輪(cut_o)、いちばん外に樹皮の縁(cut_b)を輪の形で(口の中が見える) */
+            {
+            const i16 *pi = &PROF[no * 12];
+            for (k = 0; k < 6; k++) {
+                if (k == 3) continue;                     /* 底(地面に接する所)は輪が無い */
+                k1 = (k == 5) ? 0 : k + 1;
+                RPT(0, idx, cut_o[k * 2], cut_o[k * 2 + 1]);
+                RPT(1, idx, cut_o[k1 * 2], cut_o[k1 * 2 + 1]);
+                RPT(2, idx, cut_b[k1 * 2], cut_b[k1 * 2 + 1]);
+                RPT(3, idx, cut_b[k * 2], cut_b[k * 2 + 1]);
+                raster(4, C_WOOD);
+                RPT(0, idx, pi[k * 2], pi[k * 2 + 1]);
+                RPT(1, idx, pi[k1 * 2], pi[k1 * 2 + 1]);
+                RPT(2, idx, cut_o[k1 * 2], cut_o[k1 * 2 + 1]);
+                RPT(3, idx, cut_o[k * 2], cut_o[k * 2 + 1]);
+                raster(4, C_ROCK1);
+            }
+            }
+        }
+        break;
+    case K_SHRINE:
+        /* 左の苔むした祠(石の台、木の祠、苔の屋根、紙垂)と、線路をまたぐ赤い鳥居 */
+        RQUAD(idx, -700, -460, FLOOR_V, -250, C_ROCK0);
+        RQUAD(idx, -670, -490, -250, -20, C_WOOD);
+        RQUAD(idx, -620, -540, -230, -60, C_ROCK0);
+        RPT(0, idx, -730, -20); RPT(1, idx, -430, -20); RPT(2, idx, -580, 140);
+        raster(3, C_DIRT0);
+        RQUAD(idx, -645, -625, -70, -20, C_WHITE);
+        RQUAD(idx, -535, -515, -70, -20, C_WHITE);
+        RQUAD(idx, -380, -320, FLOOR_V, 620, C_RED);
+        RQUAD(idx, 320, 380, FLOOR_V, 620, C_RED);
+        RQUAD(idx, -380, 380, 500, 550, C_RED);
+        RQUAD(idx, -480, 480, 620, 700, C_RED);
+        RQUAD(idx, -500, 500, 700, 730, C_BLACK);
+        break;
 #endif
 #if HAS_PARK
     case K_PARK:
@@ -844,6 +977,8 @@ static void set_band_col(u8 na, u8 dist)
         if ((HAS_EXIT && kind == K_EXIT) || (HAS_LAKE && kind == K_LAKE)) {
             /* 奥は暗い岩(水面はそのまま) */
             if (dist >= 2 && c != C_WATER && c != C_WATER1) c = C_ROCK0;
+        } else if (HAS_FOREST && kind == K_HOLLOW) {
+            if (dist >= 2 && c) c = C_ROCK0;    /* 倒木の奥は影(出口のリングの塗らない面はそのまま) */
         } else if (HAS_CAVE && kind == K_CAVE && dist >= 2) {
             if (c == C_ROCK2) c = C_ROCK1;
             else if (c == C_ROCK1 || c == C_DIRT0) c = C_ROCK0;
@@ -867,7 +1002,9 @@ static void band_draw(u8 a, u8 b, u8 dist)
     fa = ring_front[a];
     fb = ring_front[b];
     if (!fa && !fb) return;
-    na = ring_no[a < b ? a : b];
+    /* 面の色は区間の手前のリングの表から。仮リング(カメラのいる区間の途中)を含むときは、その区間のリング(ring_no[VR])
+     * (番号の小さいほうだと、前を見ているときに区間の先のリングの色になり、地形の境目で 1 区間ずれる) */
+    na = (a == VR || b == VR) ? ring_no[VR] : ring_no[a < b ? a : b];
     if (DECO[na] & D_EMPTY) {
         /* 面の無い区間(遊園地の高架・空中)。高架はレールだけが見えるので遠くまで描く */
         if (HAS_PARK && KIND[na] == K_PARK) rails_draw(a, b);
@@ -1028,7 +1165,7 @@ static void sky_draw(u8 far)
     g_rh = row;
     buf_fill_rows(C_SKY, 0);
     g_rh = 48 - row;
-    buf_fill_rows(far == K_FOREST ? C_DIRT0 : far >= K_PARK ? C_GRASS : C_ROCK1, row);
+    buf_fill_rows((far == K_FOREST || far >= K_STREAM) ? C_DIRT0 : far >= K_PARK ? C_GRASS : C_ROCK1, row);   /* 森(小川・倒木・祠も)は茂みの色 */
 }
 
 void envm_draw(u16 s, u16 look16)

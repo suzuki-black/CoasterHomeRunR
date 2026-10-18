@@ -753,13 +753,17 @@ static void script_update(void)
         }
         sc_ev++;
         switch (EV_CMD(ev->cmd)) {
+#ifndef SHOT_NO_FOES
         case EV_SPAWN: spawn(ev->a, ev->b, ev->c); break;
+#endif
         case EV_DIR:   attack_dir = ev->a; break;
         case EV_GO:    hold = ev->a; break;
         case EV_BOSS:
             /* ボスを出したら、倒すまで次の命令へ進まない(同じフレームで続きの「クリア」などを実行しない)。
              * 警告の向きはボスの出る側にする(ステージのスクリプトが向きを出し忘れても、後ろのボスに気づけるように) */
+#ifndef SHOT_NO_FOES
             spawn(ev->a, ev->b, 0);
+#endif
             attack_dir = (ev->b < 0) ? DIR_BACK : DIR_FRONT;
             return;
         case EV_END:   sc_end = 1; break;
