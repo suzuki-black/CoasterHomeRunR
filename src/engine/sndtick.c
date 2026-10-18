@@ -54,9 +54,11 @@ static u8 se_cur;
 /* ---- PSG のパート(ch A) ----
  * データ(tools/gen_music.py): 0x90|周期の上位 4 ビット, 周期の下位, 長さ = 音(デチューンは周期に入れてある)、0x80 n = 休み、
  *   0x85 n = 今の音を伸ばす、0x81 v = 音量、0x82 g = 音の終わりの g ティック前に切る、0x88 d = d ティックごとに音量を 1 下げる
- *   (0 = 下げない)、0x83 = ループで戻る所、0xFF = ループへ、0xFE = 終わり */
+ *   (0 = 下げない)、0x83 = ループで戻る所、0xFF = ループへ、0xFE = 終わり、0x87 n … 0x89 = n 回くり返す(2 段まで) */
 static const u8 *pa_p, *pa_loop;
 static u8 pa_wait, pa_vol, pa_cur, pa_dec, pa_dcnt, pa_gate, pa_on;
+static const u8 *pa_rp[2];
+static u8 pa_rn[2], pa_rsp;
 
 static void psg_part(void)
 {
@@ -95,7 +97,17 @@ static void psg_part(void)
         if (c == 0x82) { pa_gate = *p++; continue; }
         if (c == 0x88) { pa_dec = *p++; continue; }
         if (c == 0x83) { pa_loop = p; continue; }
-        if (c == 0xFF) { p = pa_loop ? pa_loop : g_psg_top; continue; }
+        if (c == 0x87) {                         /* くり返しの始め(段は 0 か 1) */
+            if (pa_rsp) { pa_rn[1] = *p++; pa_rp[1] = p; pa_rsp = 2; }
+            else { pa_rn[0] = *p++; pa_rp[0] = p; pa_rsp = 1; }
+            continue;
+        }
+        if (c == 0x89) {                         /* くり返しの終わり */
+            if (pa_rsp == 2) { if (--pa_rn[1]) p = pa_rp[1]; else pa_rsp = 1; }
+            else { if (--pa_rn[0]) p = pa_rp[0]; else pa_rsp = 0; }
+            continue;
+        }
+        if (c == 0xFF) { p = pa_loop ? pa_loop : g_psg_top; pa_rsp = 0; continue; }
         pa_p = 0;                                /* 0xFE: 終わり */
         pa_on = 0;
         psg_write(8, 0);
@@ -121,6 +133,7 @@ void sndm_play(u8 song)
     pa_dec = 0;
     pa_gate = 0;
     pa_on = 0;
+    pa_rsp = 0;
     psg_write(8, 0);
 }
 

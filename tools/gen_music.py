@@ -14,6 +14,8 @@ songs.h は曲の番号(SONG_名前。1 から。0 = 無し)。鳴らすのは s
   @voice 61 61 1E 06 72 61 25 16   オリジナル音色(音色 0、@0 で使う)。YM2413 のレジスタ 0x00〜0x07 の値(16 進)。
                              内蔵の音色だけだと YM2413 らしい音になりがちなので、どの曲にも書き、どれかのパートで @0 を使う。
                              何個でも書ける(書いた順に 0, 1, 2 …)。曲の始めは 0 番
+    K+3                      (本文)このチャンネルの音程を F ナンバーで +3 ずらす(K0 で戻す。メロディのチャンネルだけ)。
+                             同じ旋律を別のチャンネルで K+3 などにして重ねると、うなって太い音になる(ユニゾン・デチューン)
     @v1                      (本文)ここからオリジナル音色を 1 番に替える。同時に持てるのは 1 つなので、@0 を使っている
                              全チャンネルの音色が替わる。場面の切れ目で替え、曲の頭に戻ったときのために旋律の頭に @v0 を置く
   A 〜 F で始まる行          メロディのチャンネル(出てきた順に FM の ch0〜5。同じ名前の行は続けて書ける)
@@ -52,6 +54,8 @@ songs.h は曲の番号(SONG_名前。1 から。0 = 無し)。鳴らすのは s
     0x83                     ループで戻る所
     0x85 len                 今の音をそのまま len ティック伸ばす(長い音・タイ)
     0x86 x × 8               オリジナル音色(レジスタ 0x00〜0x07)を書き換える
+    0x8A d                   音程のずらし(F ナンバーに足す。符号つき)。同じ旋律を 2 チャンネルで鳴らして片方をずらすとうなって太くなる
+    0x87 n … 0x89            n 回くり返す(入れ子は 2 段まで。同じ並びが続く所を gen_music.py がまとめる。メロディ・リズム・PSG 共通)
     0xFE                     終わり(止まる)
     0xFF                     ループで戻る所(無ければ頭)へ
   チャンネル(PSG のパート): 0x90|周期の上位 4 ビット, 周期の下位, len = 音(デチューン込みの周期)、0x81 v = 音量(0〜15)、
@@ -172,6 +176,11 @@ def compile_melody(text, tempo, name, voices):
             ev.append(('voice', voices[k]))
             i += len(m.group(0))
             continue
+        m = re.match(r'K([+-]?\d+)', s[i:])
+        if m:
+            ev.append(('kdet', int(m.group(1))))
+            i += len(m.group(0))
+            continue
         m = re.match(r'D([+-]?\d+)', s[i:])
         if m:
             ev.append(('det', int(m.group(1))))
@@ -233,6 +242,8 @@ def melody_bytes(ev):
             out += [0x83]
         elif e[0] == 'voice':
             out += [0x86] + list(e[1])
+        elif e[0] == 'kdet':
+            out += [0x8A, e[1] & 0xFF]
         elif e[0] == 'rest':
             t = e[1]
             while t > 0:
@@ -413,7 +424,7 @@ def stream_ticks(b, rhythm):
         elif x in (0x80, 0x85):
             t += b[i + 1]
             i += 2
-        elif x in (0x81, 0x82):
+        elif x in (0x81, 0x82, 0x8A):
             i += 2
         elif x == 0x84:
             i += 4
@@ -422,6 +433,97 @@ def stream_ticks(b, rhythm):
         else:
             i += 1
     return t
+
+
+OPLEN = {0x80: 2, 0x81: 2, 0x82: 2, 0x83: 1, 0x84: 4, 0x85: 2, 0x86: 9, 0x88: 2, 0x8A: 2, 0xFE: 1, 0xFF: 1}
+
+
+def tokens(b, kind):
+    """バイト列を命令ごとに区切る(kind: 'mel' / 'rhy' / 'psg')"""
+    out = []
+    i = 0
+    while i < len(b):
+        x = b[i]
+        if kind == 'psg' and (x & 0xF0) == 0x90:
+            n = 3
+        elif x < 0x80:
+            n = 2
+        else:
+            n = OPLEN[x]
+        out.append(tuple(b[i:i + n]))
+        i += n
+    return out
+
+
+def compress(t, depth=0):
+    """同じ並びが続く所を 0x87 n … 0x89 にまとめる(入れ子は 2 段まで。ループの印・終わりを含む並びはまとめない)"""
+    out = []
+    i = 0
+    while i < len(t):
+        best = None
+        if depth < 2:
+            for L in range(1, min(128, (len(t) - i) // 2) + 1):
+                body = t[i:i + L]
+                if any(x[0] in (0x83, 0xFE, 0xFF) for x in body):
+                    break
+                n = 1
+                while n < 255 and t[i + n * L:i + (n + 1) * L] == body:
+                    n += 1
+                if n < 2:
+                    continue
+                inner = compress(body, depth + 1)
+                size = sum(len(x) for x in flat(inner))
+                saving = n * sum(len(x) for x in body) - (size + 3)
+                if saving > 0 and (best is None or saving > best[0]):
+                    best = (saving, n, L, inner)
+        if best:
+            _, n, L, inner = best
+            out.append(('rep', n, inner))
+            i += n * L
+        else:
+            out.append(t[i])
+            i += 1
+    return out
+
+
+def flat(t):
+    out = []
+    for x in t:
+        if x[0] == 'rep':
+            out.append((0x87, x[1]))
+            out += flat(x[2])
+            out.append((0x89,))
+        else:
+            out.append(x)
+    return out
+
+
+def unpack(t):
+    """くり返しを展開する(確かめ用。ドライバと同じ動き)"""
+    out, stack, i = [], [], 0
+    while i < len(t):
+        x = t[i]
+        i += 1
+        if x[0] == 0x87:
+            stack.append([i, x[1]])
+        elif x[0] == 0x89:
+            stack[-1][1] -= 1
+            if stack[-1][1]:
+                i = stack[-1][0]
+            else:
+                stack.pop()
+        else:
+            out.append(x)
+    return out
+
+
+def pack(b, kind):
+    t = flat(compress(tokens(b, kind)))
+    if unpack(t) != tokens(b, kind):
+        raise SystemExit('gen_music: くり返しをまとめた結果が元と合わない(gen_music.py の compress)')
+    if max((sum(1 for y in t[:k] if y[0] == 0x87) - sum(1 for y in t[:k] if y[0] == 0x89)) for k in range(len(t) + 1)) > 2:
+        raise SystemExit('gen_music: くり返しの入れ子が 2 段を超えた')
+    return [v for x in t for v in x]
 
 
 def main(src, out_bin, out_h):
@@ -489,7 +591,7 @@ def main(src, out_bin, out_h):
     for k, (name, chans, rhy, voice, psg) in enumerate(blobs):
         hdr_at = len(data)
         data[1 + 2 * k:3 + 2 * k] = (BASE + hdr_at).to_bytes(2, 'little')
-        streams = chans + ([rhy] if rhy else []) + ([psg] if psg else [])
+        streams = [pack(c, 'mel') for c in chans] + ([pack(rhy, 'rhy')] if rhy else []) + ([pack(psg, 'psg')] if psg else [])
         hdr = bytearray([len(chans), (1 if rhy else 0) | 2 | (4 if psg else 0)]) + bytes(voice) + bytes(2 * len(streams))
         data += hdr
         hdr_at += 8                     # チャンネルの番地はオリジナル音色の後(メロディ、リズム、PSG のパートの順)

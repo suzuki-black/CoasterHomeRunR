@@ -19,7 +19,13 @@ FMC_WAIT = 6			; 今の音・休みの残りティック
 FMC_GATE = 7			; 音の終わりのこのティック前に音を切る(0 = 切らない)
 FMC_HI	= 8			; レジスタ 0x20+ch の値(キーオンを除く)
 FMC_ON	= 9			; 1 = キーオン中
-FMC_SIZE = 10
+FMC_RSP	= 10			; くり返しの段(0〜2)
+FMC_R0P	= 11			; くり返し 1 段目: 戻る所(2)と残りの回数(1)
+FMC_R0N	= 13
+FMC_R1P	= 14			; 2 段目
+FMC_R1N	= 16
+FMC_DET	= 17			; 音程のずらし(F ナンバーに足す。符号つき。同じ旋律を 2 チャンネルで鳴らしてうならせる)
+FMC_SIZE = 18
 FM_MEL	= 6
 
 	.area	_DATA
@@ -150,6 +156,8 @@ ch_init:
 	ld	FMC_GATE (ix), a
 	ld	FMC_HI (ix), a
 	ld	FMC_ON (ix), a
+	ld	FMC_RSP (ix), a
+	ld	FMC_DET (ix), a
 	inc	a
 	ld	FMC_WAIT (ix), a
 	ld	de, #FMC_SIZE
@@ -260,6 +268,17 @@ mel_tick:
 	ld	e, (hl)
 	inc	hl
 	ld	d, (hl)			; E = F ナンバーの下位、D = 上位とブロック
+	ld	a, FMC_DET (ix)		; 音程のずらし(符号つき)を F ナンバーに足す
+	ld	l, a
+	add	a, a
+	sbc	a, a			; 上位(0 か 0xFF)
+	ld	h, a
+	ld	a, e
+	add	a, l
+	ld	e, a
+	ld	a, d
+	adc	a, h
+	ld	d, a
 	ld	FMC_HI (ix), d
 	ld	a, c
 	add	a, #0x10
@@ -295,14 +314,14 @@ mel_tick:
 	call	_fm_write
 	pop	hl
 	inc	hl
-	jr	11$
+	jp	11$
 22$:
 	cp	a, #0x82
 	jr	nz, 23$
 	ld	a, (hl)
 	inc	hl
 	ld	FMC_GATE (ix), a
-	jr	11$
+	jp	11$
 23$:
 	cp	a, #0x83
 	jr	nz, 24$
@@ -320,12 +339,23 @@ mel_tick:
 	ret
 27$:
 	cp	a, #0x86
-	jr	nz, 25$
+	jr	nz, 28$
 	call	fm_voice		; オリジナル音色を書き換える(曲の途中で替える)
 	jp	11$
+28$:
+	cp	a, #0x8A
+	jr	nz, 29$
+	ld	a, (hl)			; 音程のずらし
+	inc	hl
+	ld	FMC_DET (ix), a
+	jp	11$
+29$:
+	call	rep_op			; 0x87 / 0x89: くり返し
+	jp	nc, 11$
 25$:
 	cp	a, #0xFF
 	jr	nz, 26$
+	ld	FMC_RSP (ix), #0
 	ld	l, FMC_LOOP (ix)
 	ld	h, FMC_LOOP + 1 (ix)
 	ld	a, h
@@ -407,8 +437,11 @@ rhy_tick:
 	ld	FMC_LOOP + 1 (ix), h
 	jr	31$
 43$:
+	call	rep_op			; 0x87 / 0x89: くり返し
+	jr	nc, 31$
 	cp	a, #0xFF
 	jr	nz, 44$
+	ld	FMC_RSP (ix), #0
 	ld	l, FMC_LOOP (ix)
 	ld	h, FMC_LOOP + 1 (ix)
 	ld	a, h
@@ -427,6 +460,55 @@ rhy_tick:
 39$:
 	ld	FMC_P (ix), l
 	ld	FMC_P + 1 (ix), h
+	ret
+
+; rep_op: A = 命令、HL = 次のバイト、IX = チャンネル。0x87 n(くり返しの始め、n 回)と 0x89(くり返しの終わり)なら処理して
+;   キャリー 0 で戻る(HL = 次に読む所)。それ以外はキャリー 1 で戻る(A・HL はそのまま)。BC は保つ
+rep_op:
+	cp	a, #0x87
+	jr	z, 1$
+	cp	a, #0x89
+	jr	z, 3$
+	scf
+	ret
+1$:
+	ld	e, (hl)			; 回数
+	inc	hl
+	ld	a, FMC_RSP (ix)
+	inc	FMC_RSP (ix)
+	or	a, a
+	jr	nz, 2$
+	ld	FMC_R0P (ix), l
+	ld	FMC_R0P + 1 (ix), h
+	ld	FMC_R0N (ix), e
+	or	a, a			; キャリー 0
+	ret
+2$:
+	ld	FMC_R1P (ix), l
+	ld	FMC_R1P + 1 (ix), h
+	ld	FMC_R1N (ix), e
+	or	a, a
+	ret
+3$:
+	ld	a, FMC_RSP (ix)
+	cp	a, #2
+	jr	z, 5$
+	dec	FMC_R0N (ix)		; 1 段目
+	jr	z, 4$
+	ld	l, FMC_R0P (ix)
+	ld	h, FMC_R0P + 1 (ix)
+	or	a, a
+	ret
+5$:
+	dec	FMC_R1N (ix)		; 2 段目
+	jr	z, 4$
+	ld	l, FMC_R1P (ix)
+	ld	h, FMC_R1P + 1 (ix)
+	or	a, a
+	ret
+4$:
+	dec	FMC_RSP (ix)		; 回し終わった: 段を戻して先へ
+	or	a, a
 	ret
 
 ; fm_voice: HL = オリジナル音色の 8 バイト → レジスタ 0x00〜0x07 に書き、HL を次へ。BC は保つ
