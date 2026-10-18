@@ -164,7 +164,7 @@ static void ending_run(const Stage *st)
     vdp_out((const u8 *)"0", 1);
     vdp_wreg(1, 0xE2);                                 /* 表示オン、垂直帰線割り込み */
     if (st->end_bgm) bgm_play(st->end_bgm);
-    for (t = 0; t < 480; t++) {
+    for (t = 0; t < 570; t++) {                        /* 約 9.5 秒: エンディングの曲が 1 周鳴り終わるまで(1 周 約 9.6 秒) */
         wait_tick();
         in = input_raw();
         if (t > 60 && (in & IN_A) && !(prev & IN_A)) break;
