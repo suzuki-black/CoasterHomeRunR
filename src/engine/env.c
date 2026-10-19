@@ -168,6 +168,10 @@ static const i16 base_uv[K_COUNT][12] = {
     /* 門   */  { -380, 560,  380, 560,  450,  300,  450, -345, -450, -345, -450,  300 },
     /* 田   */  {-3200,-430, 3200,-430,  620, -430,  470, -345, -470, -345, -620, -430 },
     /* 水車 */  {-3200,-430, 3200,-430,  620, -430,  470, -345, -470, -345, -620, -430 },
+    /* 滝   */  {-1300,1400, 1300,1400, 1150,  420, 1000, -380,-1000, -380,-1150,  420 },
+    /* 結晶 */  { -900, 900,  900, 900,  850,  300,  750, -380, -750, -380, -850,  300 },
+    /* 残骸 */  {-1300,1400, 1300,1400, 1150,  420, 1000, -380,-1000, -380,-1150,  420 },
+    /* 岩門 */  { -600, 600,  600, 600,  700,  150,  620, -380, -620, -380, -700,  150 },
 };
 /* 鉄橋: トラスの面(u = ±BR_U)、上弦材の上端と下端(断面の面 1・5 を細い帯にして上弦材にする)。
  * 床の無い橋(枕木とレールの隙間から、ずっと下の海が見える)。断面の床(面 3)は線路の幅 ±200 で、12m より先だけ塗る */
@@ -183,6 +187,8 @@ static const i16 base_uv[K_COUNT][12] = {
 #if HAS_TOWN
 static u8 hs_st[2], hs_cnt[2], hs_col[2];   /* 家並み: 左右それぞれの今の状態(1 = 家)・残りリング数・壁の色 */
 #endif
+/* 水面のある地底湖の地形(遠くを断面 1 枚で近似しない、奥の開口部を暗い岩で塞ぐ、奥を暗くしても水面はそのまま) */
+#define LAKEISH(k) ((k) == K_LAKE || ((k) >= K_FALLS && (k) <= K_ARCH))
 static u8 rail_col;
 static u8 nk;                     /* 地形を作っているリングの次のリングの種類(envm_build) */
 
@@ -196,7 +202,7 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
     for (k = 0; k < 6; k++) {
         i16 u = b[k * 2];
         i16 v = b[k * 2 + 1];
-        if ((kind >= K_TOWN && kind <= K_BRIDGE) || kind >= K_FAIR) {
+        if ((kind >= K_TOWN && kind <= K_BRIDGE) || (kind >= K_FAIR && kind <= K_MILL)) {
             /* 町: 家の壁はまっすぐ(幅も変えない。妻壁の位置と合わせる)。人の作った所(村・遊園地・鉄橋・町の中・田んぼなど)も凹凸を付けない */
         } else if (kind <= K_EXIT || kind == K_HOLLOW) {   /* 坑道と倒木の中: 手掘り・木の洞の凹凸 */
             u = (i16)(((i32)u * w) >> 8);
@@ -250,6 +256,30 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         if (rnd() < 110) d |= D_LAMP_R;
         if (rnd() < 40) d |= D_ROCK_L;          /* 水面の岩 */
         else if (rnd() < 40) d |= D_ROCK_R;
+        break;
+    case K_FALLS:                               /* 滝: 湖と同じ色で、左の岩壁に滝 */
+    case K_WRECK:                               /* 残骸: 湖と同じ色で、最初のリングにトロッコ、ほかは浮いた板 */
+        t[0] = C_ROCK0;
+        t[1] = t[5] = C_ROCK1;
+        t[2] = t[4] = (rnd() & 1) ? C_ROCK1 : C_ROCK0;
+        t[3] = (r & 1) ? C_WATER : C_WATER1;
+        d = D_NORAIL;
+        if (kind == K_FALLS) d |= D_TIMBER;
+        else if (KIND[r - 1] != K_WRECK) d |= D_TIMBER;
+        else d |= (r & 1) ? D_ROCK_L : D_ROCK_R;
+        break;
+    case K_CRYSTAL:                             /* 結晶の洞: 暗い岩に、結晶の光で明るい水面 */
+        t[0] = C_ROCK0;
+        t[1] = t[5] = C_ROCK0;
+        t[2] = t[4] = C_ROCK1;
+        t[3] = C_WATER1;
+        d = D_NORAIL;
+        break;
+    case K_ARCH:                                /* 岩の門: 暗い岩のトンネルに、密な鍾乳石 */
+        t[0] = t[1] = t[5] = C_ROCK0;
+        t[2] = t[4] = C_ROCK1;
+        t[3] = (r & 1) ? C_WATER : C_WATER1;
+        d = D_NORAIL | D_LAMP_L | D_LAMP_R;
         break;
 #endif
 #if HAS_PARK
@@ -879,6 +909,50 @@ static void deco_draw(u8 idx)
         if (d & D_ROCK_L) rock_draw(idx, -760, -500, 150, C_ROCK0);
         if (d & D_ROCK_R) rock_draw(idx, 480, 720, 130, C_ROCK0);
         break;
+    case K_FALLS: {
+        /* 左の岩壁を流れ落ちる滝(明るい水の幕に、下へ流れる白い筋 2 本)と、滝つぼのしぶき */
+        i16 o = (i16)(((u8)g_tick * 12) & 0x1FF);
+        RQUAD(idx, -1300, -820, -380, 1400, C_WATER1);
+        RQUAD(idx, -1220, -1180, 1100 - o, 1400 - o, C_WHITE);
+        RQUAD(idx, -1080, -1040, 700 - o, 1000 - o, C_WHITE);
+        RQUAD(idx, -940, -900, 900 - o, 1200 - o, C_WHITE);
+        RQUAD(idx, -1450, -650, -380, -230, C_WHITE);
+        break;
+    }
+    case K_CRYSTAL: {
+        /* 壁と天井から生えた光る結晶(紫と水色の三角)。輝きがリングごとにずれて明滅する */
+        u8 on = (u8)((no + (g_tick >> 4)) & 1);
+        RPT(0, idx, -850, 120); RPT(1, idx, -850, 420); RPT(2, idx, -560, 330);
+        raster(3, C_PURPLE);
+        RPT(0, idx, -760, -380); RPT(1, idx, -640, -380); RPT(2, idx, -690, -60);
+        raster(3, on ? C_WHITE : C_CYAN);
+        RPT(0, idx, 850, 200); RPT(1, idx, 850, 480); RPT(2, idx, 580, 300);
+        raster(3, on ? C_CYAN : C_WHITE);
+        RPT(0, idx, -120, 900); RPT(1, idx, 120, 900); RPT(2, idx, (no & 1) ? 60 : -60, 620);
+        raster(3, C_PURPLE);
+        break;
+    }
+    case K_WRECK:
+        if (d & D_TIMBER) {
+            /* ひっくり返って半分沈んだトロッコ(右。車体は傾き、車輪が上)と、水から突き出た折れたレール(左) */
+            RPT(0, idx, 380, -380); RPT(1, idx, 1150, -380); RPT(2, idx, 1100, 60); RPT(3, idx, 440, -40);
+            raster(4, C_RED);
+            RPT(0, idx, 440, -40); RPT(1, idx, 1100, 60); RPT(2, idx, 1095, 120); RPT(3, idx, 445, 20);
+            raster(4, C_ROCK0);
+            RQUAD(idx, 500, 660, 10, 150, C_BLACK);
+            RQUAD(idx, 880, 1040, 60, 200, C_BLACK);
+            RPT(0, idx, -700, -380); RPT(1, idx, -660, -380); RPT(2, idx, -480, 100); RPT(3, idx, -520, 100);
+            raster(4, C_ROCK0);
+        } else if (d & D_ROCK_L) RQUAD(idx, -720, -480, -385, -355, C_WOOD);   /* 浮いた板 */
+        else RQUAD(idx, 460, 700, -385, -355, C_WOOD);
+        break;
+    case K_ARCH:
+        /* 岩の門の天井から密に下がる鍾乳石 */
+        RPT(0, idx, -520, 600); RPT(1, idx, -300, 600); RPT(2, idx, -420, 250);
+        raster(3, C_ROCK2);
+        RPT(0, idx, 260, 600); RPT(1, idx, 480, 600); RPT(2, idx, 380, 300);
+        raster(3, C_ROCK2);
+        break;
 #endif
 #if HAS_FOREST
     case K_FOREST: {
@@ -1199,7 +1273,7 @@ static void set_band_col(u8 na, u8 dist)
     u8 kind = KIND[na];
     for (k = 0; k < 6; k++) {
         c = t[k];
-        if ((HAS_EXIT && kind == K_EXIT) || (HAS_LAKE && kind == K_LAKE)) {
+        if ((HAS_EXIT && kind == K_EXIT) || (HAS_LAKE && LAKEISH(kind))) {
             /* 奥は暗い岩(水面はそのまま) */
             if (dist >= 2 && c != C_WATER && c != C_WATER1) c = C_ROCK0;
         } else if ((HAS_FOREST && kind == K_HOLLOW) || (HAS_TOWN && kind == K_GATE)) {
@@ -1294,7 +1368,7 @@ static u8 cap_ok(i8 r)
 static u8 far_ok(i8 r)
 {
     u8 idx = (u8)(r + NB);
-    return cap_ok(r) && !(HAS_LAKE && KIND[ring_no[idx]] == K_LAKE);
+    return cap_ok(r) && !(HAS_LAKE && LAKEISH(KIND[ring_no[idx]]));
 }
 
 /* リング r〜r+2 の 2 区間を 1 つの帯で描いてよいか: 3 本とも森か地底湖(断面の形がなめらかに変わる地形)。
@@ -1317,7 +1391,7 @@ static u8 merge_ok(i8 r)
 /* 奥の開口部を塞ぐ色: 坑道は闇(黒)、地底湖は岩壁と同じ暗い岩の色(黒い穴に見えないように) */
 static u8 cap_col(i8 r)
 {
-    return (HAS_LAKE && KIND[ring_no[(u8)(r + NB)]] == K_LAKE) ? C_ROCK0 : C_BLACK;
+    return (HAS_LAKE && LAKEISH(KIND[ring_no[(u8)(r + NB)]])) ? C_ROCK0 : C_BLACK;
 }
 
 static void hex_draw(i8 r, u8 color)
