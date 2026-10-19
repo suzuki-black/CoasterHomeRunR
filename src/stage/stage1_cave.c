@@ -277,12 +277,13 @@ static const Event cave_events[] = {
 };
 
 /* 地形: (このリングまで, 種類)。リング = 4m。先頭はレールの色。
- * 遊園地の高架 → 空中 → 丘 → 柵沿い → 丘(分岐点のまわり。両側が開けているので分かれる線路が見える)→ 柵沿い → 丘
- * → 柵沿い(大ボス)→ 坑道の入口(ステージ 2 へ) */
+ * 遊園地の高架 → 空中 → 丘 → 柵沿い(152〜180m に右の斜面の下の宙返りの輪)→ 丘(280〜316m に屋台の並ぶ道。分岐点のまわりは
+ * 両側が開けているので分かれる線路が見える)→ 柵沿い(412〜444m に右の丘の上のお城と花火)→ 丘 → 柵沿い(大ボス)
+ * → 坑道の入口(ステージ 2 へ) */
 static const u8 cave_zones[] = {
     10,
-    14, K_PARK, 20, K_AIR, 33, K_HILL, 63, K_PARKSIDE, 91, K_HILL, 131, K_PARKSIDE, 155, K_HILL,
-    167, K_PARKSIDE, 0xFF, K_EXIT,
+    14, K_PARK, 20, K_AIR, 33, K_HILL, 38, K_PARKSIDE, 45, K_LOOP, 63, K_PARKSIDE, 70, K_HILL, 79, K_STALLS,
+    91, K_HILL, 103, K_PARKSIDE, 111, K_CASTLE, 131, K_PARKSIDE, 155, K_HILL, 167, K_PARKSIDE, 0xFF, K_EXIT,
 };
 
 const Stage stage_data = {

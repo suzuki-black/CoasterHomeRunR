@@ -172,6 +172,9 @@ static const i16 base_uv[K_COUNT][12] = {
     /* 結晶 */  { -900, 900,  900, 900,  850,  300,  750, -380, -750, -380, -850,  300 },
     /* 残骸 */  {-1300,1400, 1300,1400, 1150,  420, 1000, -380,-1000, -380,-1150,  420 },
     /* 岩門 */  { -600, 600,  600, 600,  700,  150,  620, -380, -620, -380, -700,  150 },
+    /* 屋台道 */{ -900, 400,  900, 400,  900, -250,  380, -345, -380, -345, -900, -250 },
+    /* 宙返り */{ -520, 560, 1000, 200, 1000, -700,  400, -345, -400, -345, -520, -345 },
+    /* 城   */  { -520, 560, 1000, 200, 1000, -700,  400, -345, -400, -345, -520, -345 },
 };
 /* 鉄橋: トラスの面(u = ±BR_U)、上弦材の上端と下端(断面の面 1・5 を細い帯にして上弦材にする)。
  * 床の無い橋(枕木とレールの隙間から、ずっと下の海が見える)。断面の床(面 3)は線路の幅 ±200 で、12m より先だけ塗る */
@@ -202,7 +205,7 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
     for (k = 0; k < 6; k++) {
         i16 u = b[k * 2];
         i16 v = b[k * 2 + 1];
-        if ((kind >= K_TOWN && kind <= K_BRIDGE) || (kind >= K_FAIR && kind <= K_MILL)) {
+        if ((kind >= K_TOWN && kind <= K_BRIDGE) || (kind >= K_FAIR && kind <= K_MILL) || kind >= K_STALLS) {
             /* 町: 家の壁はまっすぐ(幅も変えない。妻壁の位置と合わせる)。人の作った所(村・遊園地・鉄橋・町の中・田んぼなど)も凹凸を付けない */
         } else if (kind <= K_EXIT || kind == K_HOLLOW) {   /* 坑道と倒木の中: 手掘り・木の洞の凹凸 */
             u = (i16)(((i32)u * w) >> 8);
@@ -309,6 +312,22 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         d = D_OPEN;
         if (rnd() < 90) d |= D_ROCK_R;          /* 右の茂み */
         if (rnd() < 90) d |= D_LAMP_R;          /* 右の柵の杭 */
+        break;
+    case K_STALLS:                              /* 屋台の並ぶ道: 丘の道と同じ草の斜面 */
+        t[0] = t[1] = t[5] = 0;
+        t[2] = t[4] = C_GRASS;
+        t[3] = C_ROCK1;
+        d = D_OPEN;
+        break;
+    case K_LOOP:
+    case K_CASTLE:                              /* 柵沿いと同じ(左 = 縞の柵)。区間の 2 本目のリングに大きな出し物 */
+        t[0] = t[1] = 0;
+        t[2] = C_GRASS;
+        t[3] = C_ROCK1;
+        t[4] = C_GRASS;
+        t[5] = (r & 1) ? C_DIRT0 : C_DIRT1;
+        d = D_OPEN;
+        if (r >= 2 && KIND[r - 1] == kind && KIND[r - 2] != kind) d |= D_TIMBER;
         break;
 #endif
 #if HAS_TOWN
@@ -869,6 +888,72 @@ static void park_arch(u8 idx)
         RQUAD(idx, 375, 405, v, v + 30, c);
     }
 }
+
+/* 右の斜面の下のジェットコースターの宙返りの輪(中心 u = 2700、斜面の下 -700 の 900 上): 暗い軌道の輪(内を空の色で抜く)、
+ * ハの字の支柱、輪を回る赤いコースター。左の柵の向こうに置くと、近くでは画面の上まで届く柵に隠れる */
+#define LP_U 2700
+#define LP_V 200
+static void park_loop(u8 idx)
+{
+    u8 j, k, a = (u8)(g_tick << 2);
+    RPT(0, idx, LP_U - 60, LP_V); RPT(1, idx, LP_U + 60, LP_V);
+    RPT(2, idx, LP_U + 700, -700); RPT(3, idx, LP_U - 700, -700);
+    raster(4, C_ROCK0);
+    for (j = 0; j < 2; j++) {
+        i16 r = j ? 780 : 900;
+        for (k = 0; k < 8; k++) RPT(k, idx, LP_U + fmul(r, SIN(k * 32)), LP_V + fmul(r, COS(k * 32)));
+        raster(8, j ? C_SKY : C_ROCK0);
+    }
+    {
+        i16 u = LP_U + fmul(840, SIN(a)), v = LP_V + fmul(840, COS(a));
+        RQUAD(idx, u - 110, u + 110, v - 90, v + 90, C_DIRT0);
+    }
+}
+
+/* 右の斜面の向こうの丘の上のお城(中心 u = 3000): 白い城壁と 3 本の塔、赤い円錐の屋根、旗。夕暮れの空に花火(広がって消える 8 つの光) */
+static void park_castle(u8 idx)
+{
+    static const i16 tw[3][3] = { { 2200, 1100, 300 }, { 2950, 1700, 380 }, { 3800, 1100, 300 } };   /* 塔: 中心・上端・半幅 */
+    u8 k, t = (u8)g_tick & 63;
+    RQUAD(idx, 1900, 4100, -700, 500, C_WHITE);
+    for (k = 0; k < 3; k++) {
+        i16 c = tw[k][0], top = tw[k][1], w = tw[k][2];
+        RQUAD(idx, c - w, c + w, 300, top, C_WHITE);
+        RQUAD(idx, c - 60, c + 60, top - 500, top - 250, C_ROCK0);   /* 窓 */
+        RPT(0, idx, c - w - 80, top); RPT(1, idx, c + w + 80, top); RPT(2, idx, c, top + 700);
+        raster(3, C_DIRT0);
+    }
+    RQUAD(idx, 2950 - 10, 2950 + 10, 2400, 2700, C_ROCK0);         /* 旗竿と旗 */
+    RQUAD(idx, 2960, 3150, 2580, 2700, C_DIRT1);
+    if (t < 40) {
+        i16 r = 120 + t * 25;
+        u8 c = (t < 20) ? C_DIRT1 : C_WHITE;
+        for (k = 0; k < 8; k++) {
+            i16 u = 1700 + fmul(r, SIN(k * 32)), v = 3100 + fmul(r, COS(k * 32));
+            RQUAD(idx, u - 50, u + 50, v - 50, v + 50, c);
+        }
+    }
+}
+
+/* 遊園地の外の屋台の並ぶ道: 左右の屋台(縞の日よけ。14m より近いときは台も)と、3 リングおきに通りをまたぐ提灯の綱。
+ * 長方形 1 つでも約 0.2ms かかる。品物・柱まで毎リング描くと 1 フレーム平均 52ms になった(屋台の無い丘は 42ms) */
+static void park_stalls(u8 idx, u8 no)
+{
+    u8 i, c = (no & 1) ? C_DIRT0 : C_WHITE;
+    RQUAD(idx, -800, -440, -90, 10, c);                  /* 日よけは台のすぐ上(柱を描かないので、高いと宙に浮いて見えた) */
+    RQUAD(idx, 440, 800, -90, 10, c == C_WHITE ? C_DIRT0 : C_WHITE);
+    if ((u16)ring_c[idx][2] >= 2400) {
+        RQUAD(idx, -760, -480, -330, -140, C_WOOD);
+        RQUAD(idx, 480, 760, -330, -140, C_WOOD);
+    }
+    if (!(no % 3)) {
+        RQUAD(idx, -840, 840, 480, 500, C_ROCK0);
+        for (i = 0; i < 3; i++) {
+            i16 u = -400 + i * 400;
+            RQUAD(idx, u - 60, u + 60, 360, 480, (i & 1) ? C_ORANGE : C_DIRT0);
+        }
+    }
+}
 #endif
 
 /* リング idx の面の飾り
@@ -1068,17 +1153,27 @@ static void deco_draw(u8 idx)
         if (d & D_ROCK_L) RQUAD(idx, -260, -230, FLOOR_V, FLOOR_V + 90, C_DIRT1);
         if (d & D_ROCK_R) RQUAD(idx, 230, 260, FLOOR_V, FLOOR_V + 90, C_DIRT1);
         break;
+    case K_LOOP:
+    case K_CASTLE:
     case K_PARKSIDE: {
         /* 柵の上の灯り(点滅)、柵の上に見える出し物(柵の上端より上だけ)、右の茂みと杭 */
         u8 on = (u8)(g_tick >> 3) & 1;
         RQUAD(idx, -545, -505, 520, 580, ((no + on) & 1) ? C_DIRT1 : C_ROCK0);
-        if (no % 5 == 1) park_tent(idx, -1600, 560);
-        if (no % 10 == 4) park_carousel(idx, -2300, 560 - 650, 0);
-        if (no % 10 == 8 && (u16)ring_c[idx][2] < 2400) park_wheel(idx, -3000, 560);
+        if (KIND[no] == K_PARKSIDE) {
+            if (no % 5 == 1) park_tent(idx, -1600, 560);
+            if (no % 10 == 4) park_carousel(idx, -2300, 560 - 650, 0);
+            if (no % 10 == 8 && (u16)ring_c[idx][2] < 2400) park_wheel(idx, -3000, 560);
+        } else if (d & D_TIMBER) {
+            if (KIND[no] == K_LOOP) park_loop(idx);
+            else park_castle(idx);
+        }
         if (d & D_LAMP_R) RQUAD(idx, 580, 620, FLOOR_V - 60, FLOOR_V + 120, C_WOOD);
         if (d & D_ROCK_R) rock_draw(idx, 650, 900, 130, C_ROCK0);
         break;
     }
+    case K_STALLS:
+        park_stalls(idx, no);
+        break;
     case K_HILL:
         if (d & D_LAMP_L) RQUAD(idx, -620, -580, FLOOR_V, FLOOR_V + 160, C_WOOD);
         if (d & D_LAMP_R) RQUAD(idx, 580, 620, FLOOR_V, FLOOR_V + 160, C_WOOD);
@@ -1466,7 +1561,7 @@ static u8 ground_col(u8 far)
 {
     if (far == K_FOREST || far == K_STREAM || far == K_HOLLOW || far == K_SHRINE) return C_DIRT0;
     if (far == K_CANAL) return C_CYAN;
-    if ((far >= K_PARK && far <= K_GLADE) || far == K_HOME || far == K_PADDY || far == K_MILL) return C_GRASS;
+    if ((far >= K_PARK && far <= K_GLADE) || far == K_HOME || far == K_PADDY || far == K_MILL || far >= K_STALLS) return C_GRASS;
     return C_ROCK1;
 }
 
