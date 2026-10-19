@@ -152,7 +152,7 @@ static const i16 base_uv[K_COUNT][12] = {
     /* 地底湖 */{-1300,1400, 1300,1400, 1150,  420, 1000, -380,-1000, -380,-1150,  420 },
     /* 森   */  { -760,1400,  760,1400,  720,  250,  420, -345, -420, -345, -720,  250 },
     /* 町   */  { -950, 900,  950, 900,  650,  520,  650, -345, -650, -345, -650,  520 },
-    /* 村   */  { -950, 900,  950, 900,  650,  520,  650, -345, -650, -345, -650,  520 },
+    /* 村   */  {-3000, 100, 3000, 100,  560, -150,  480, -345, -480, -345, -560, -150 },
     /* 遊園地 */{ -400, 200,  400, 200,  230, -333,  200, -333, -200, -333, -230, -333 },
     /* 丘   */  { -900, 400,  900, 400,  900, -250,  380, -345, -380, -345, -900, -250 },
     /* 空中 */  { -400, 200,  400, 200,  230, -333,  200, -333, -200, -333, -230, -333 },
@@ -162,6 +162,12 @@ static const i16 base_uv[K_COUNT][12] = {
     /* 小川 */  { -900,1400,  900,1400, 1500, -430,  240, -345, -240, -345,-1500, -430 },
     /* 倒木 */  { -330, 330,  330, 330,  400,    0,  300, -345, -300, -345, -400,    0 },
     /* 祠   */  { -760,1400,  760,1400,  720,  250,  420, -345, -420, -345, -720,  250 },
+    /* 屋台 */  { -950, 900,  950, 900,  650,  520,  650, -345, -650, -345, -650,  520 },
+    /* 運河 */  { -480,-170,  480,-170,  480, -345,  200, -345, -200, -345, -480, -345 },
+    /* 広場 */  {-2300,1000, 2300,1000, 2200, -345,  650, -345, -650, -345,-2200, -345 },
+    /* 門   */  { -380, 560,  380, 560,  450,  300,  450, -345, -450, -345, -450,  300 },
+    /* 田   */  {-3200,-430, 3200,-430,  620, -430,  470, -345, -470, -345, -620, -430 },
+    /* 水車 */  {-3200,-430, 3200,-430,  620, -430,  470, -345, -470, -345, -620, -430 },
 };
 /* 鉄橋: トラスの面(u = ±BR_U)、上弦材の上端と下端(断面の面 1・5 を細い帯にして上弦材にする)。
  * 床の無い橋(枕木とレールの隙間から、ずっと下の海が見える)。断面の床(面 3)は線路の幅 ±200 で、12m より先だけ塗る */
@@ -174,10 +180,11 @@ static const i16 base_uv[K_COUNT][12] = {
 #define EAVE_V    520      /* 軒の高さ */
 #define RIDGE_U   950      /* 棟の横位置と高さ */
 #define RIDGE_V   900
-#if HAS_TOWN || HAS_HOME
+#if HAS_TOWN
 static u8 hs_st[2], hs_cnt[2], hs_col[2];   /* 家並み: 左右それぞれの今の状態(1 = 家)・残りリング数・壁の色 */
 #endif
 static u8 rail_col;
+static u8 nk;                     /* 地形を作っているリングの次のリングの種類(envm_build) */
 
 /* 地形 kind のリング r の断面・色・飾りを作る。w / h は幅と高さのゆっくりした変化(256 = 基本) */
 static void ring_build(u8 r, u8 kind, i16 w, i16 h)
@@ -189,8 +196,8 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
     for (k = 0; k < 6; k++) {
         i16 u = b[k * 2];
         i16 v = b[k * 2 + 1];
-        if (kind >= K_TOWN && kind <= K_BRIDGE) {
-            /* 町: 家の壁はまっすぐ(幅も変えない。妻壁の位置と合わせる)。町より後の種類(遊園地・丘・柵沿い・鉄橋など)も凹凸を付けない */
+        if ((kind >= K_TOWN && kind <= K_BRIDGE) || kind >= K_FAIR) {
+            /* 町: 家の壁はまっすぐ(幅も変えない。妻壁の位置と合わせる)。人の作った所(村・遊園地・鉄橋・町の中・田んぼなど)も凹凸を付けない */
         } else if (kind <= K_EXIT || kind == K_HOLLOW) {   /* 坑道と倒木の中: 手掘り・木の洞の凹凸 */
             u = (i16)(((i32)u * w) >> 8);
             if (k == 3 || k == 4) {            /* 床は平らに(レールを敷く) */
@@ -274,10 +281,11 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         if (rnd() < 90) d |= D_LAMP_R;          /* 右の柵の杭 */
         break;
 #endif
-#if HAS_TOWN || HAS_HOME
+#if HAS_TOWN
     case K_TOWN:
-    case K_HOME: {
-        /* 家並み: 左右それぞれ「家(1〜3 リング)」と「間(1〜2 リング)」を交互に。
+    case K_FAIR: {
+        /* 家並み: 左右それぞれ「家(1〜3 リング)」と「間(1〜2 リング)」を交互に。屋台の通りは家を切らさない。
+         * 次のリングから家並みでない地形(運河・広場・門)なら、このリングで家を終える。
          * 家の始まりのリングに手前の妻壁、終わりのリングに奥の妻壁の印を付ける */
         u8 sd;
         t[0] = 0;
@@ -285,16 +293,24 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         d = D_OPEN;
         for (sd = 0; sd < 2; sd++) {
             u8 prev = hs_st[sd];
-            if (!hs_cnt[sd]) {
-                hs_st[sd] ^= 1;
-                if (hs_st[sd]) {
-                    hs_cnt[sd] = 1 + (rnd() % 3);
-                    hs_col[sd] = (kind == K_TOWN && (rnd() & 1)) ? C_DIRT1 : C_ROCK2;
-                } else {
-                    hs_cnt[sd] = (rnd() < 100) ? 2 : 1;
+            if (nk != K_TOWN && nk != K_FAIR) {
+                hs_st[sd] = 0;
+                hs_cnt[sd] = 0;
+            } else if (kind == K_FAIR) {
+                if (!hs_st[sd]) { hs_st[sd] = 1; hs_col[sd] = (rnd() & 1) ? C_DIRT1 : C_ROCK2; }
+                hs_cnt[sd] = 0;
+            } else {
+                if (!hs_cnt[sd]) {
+                    hs_st[sd] ^= 1;
+                    if (hs_st[sd]) {
+                        hs_cnt[sd] = 1 + (rnd() % 3);
+                        hs_col[sd] = (rnd() & 1) ? C_DIRT1 : C_ROCK2;
+                    } else {
+                        hs_cnt[sd] = (rnd() < 100) ? 2 : 1;
+                    }
                 }
+                hs_cnt[sd]--;
             }
-            hs_cnt[sd]--;
             if (hs_st[sd] && !prev) d |= sd ? D_LAMP_R : D_LAMP_L;
             if (!hs_st[sd] && prev) d |= sd ? D_ROCK_R : D_ROCK_L;
             /* 右 = 面 1(屋根)・2(壁)、左 = 面 5(屋根)・4(壁) */
@@ -303,6 +319,49 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         }
         break;
     }
+    case K_CANAL:                               /* 石の橋: 欄干(面 1・5)と路面。欄干の外は空と水面(sky_draw) */
+        t[0] = 0;
+        t[1] = t[5] = C_DIRT1;
+        t[2] = t[3] = t[4] = C_ROCK1;
+        d = D_OPEN;
+        break;
+    case K_PLAZA:                               /* 広場: 遠くの建物の正面(面 1・5)と石畳(リングごとに色を替える) */
+        t[0] = 0;
+        t[1] = t[5] = (r & 2) ? C_DIRT1 : C_ROCK2;
+        t[2] = t[4] = (r & 1) ? C_ROCK1 : C_ROCK2;
+        t[3] = C_ROCK1;
+        d = D_OPEN;
+        if (r >= 3 && KIND[r - 1] == K_PLAZA && KIND[r - 2] == K_PLAZA && KIND[r - 3] != K_PLAZA) d |= D_TIMBER;   /* 噴水(広場の 3 本目) */
+        break;
+    case K_GATE:                                /* 門の中: 青灰色の石と暗い天井。奥ほど暗い(set_band_col) */
+        t[0] = C_ROCK0;
+        t[1] = t[5] = C_DIRT1;
+        t[2] = t[4] = (r & 1) ? C_DIRT1 : C_ROCK0;
+        t[3] = C_ROCK1;
+        d = 0;
+        if (r && KIND[r - 1] != K_GATE) d |= D_LAMP_L;     /* 入口の門塔(出口は envm_build が後で印を付ける) */
+        break;
+#endif
+#if HAS_HOME
+    case K_HOME:                                /* 村へ続く道: 両側の草の縁に柵の杭、その外は畑の緩い斜面、ときどき茅葺きの農家 */
+        t[0] = 0;
+        t[1] = t[5] = C_GRASS;
+        t[2] = t[4] = C_GRASS;                  /* 縁を木の色で塗ると、近くで大きな土手に見えた */
+        t[3] = C_ROCK1;
+        d = D_OPEN;
+        if (rnd() < 70) d |= D_LAMP_L;          /* 農家 */
+        else if (rnd() < 70) d |= D_LAMP_R;
+        break;
+    case K_PADDY:
+    case K_MILL:                                /* 田んぼ: 水を張った田(固定色の水色)と、道の両側のあぜの斜面 */
+        t[0] = 0;
+        t[1] = t[5] = C_CYAN;
+        t[2] = t[4] = C_GRASS;
+        t[3] = C_ROCK1;
+        d = D_OPEN;
+        if (kind == K_PADDY && rnd() < 50) d |= (rnd() & 1) ? D_LAMP_L : D_LAMP_R;   /* かかし */
+        if (kind == K_MILL && r >= 2 && KIND[r - 1] == K_MILL && KIND[r - 2] != K_MILL) d |= D_TIMBER;   /* 水車(2 本目) */
+        break;
 #endif
 #if HAS_BRIDGE
     case K_BRIDGE:                              /* 線路(面 3。12m より先だけ)と、左右の上弦材(面 1・5 の細い帯)だけを塗る */
@@ -372,7 +431,7 @@ void envm_build(void)
     const u8 *zones = g_env_zones;
     rng = g_env_seed;
     rail_col = *zones++;
-#if HAS_TOWN || HAS_HOME
+#if HAS_TOWN
     hs_st[0] = hs_st[1] = 0;
     hs_cnt[0] = hs_cnt[1] = 0;
 #endif
@@ -381,6 +440,7 @@ void envm_build(void)
     for (r = 0; r < n; r++) {
         while (r >= zones[0]) zones += 2;
         kind = zones[1];
+        nk = (r + 1 >= zones[0]) ? zones[3] : kind;
         /* 幅と高さはゆっくり変える(少し狭い所・広い所) */
         w += jit(14); if (w < 235) w = 235; if (w > 290) w = 290;
         h += jit(12); if (h < 240) h = 240; if (h > 285) h = 285;
@@ -393,6 +453,21 @@ void envm_build(void)
             u8 *t = &TONE[r * 6];
             t[0] = t[1] = t[2] = t[4] = t[5] = 0;
             DECO[r] |= D_LAMP_R | D_OPEN;
+        }
+    }
+#endif
+#if HAS_TOWN
+    /* 町の地形の終わりのリング: 門は道だけを塗って出口の門塔の印、運河と広場は左右の面を塗らない
+     * (区間の面の色は手前のリングの表から引くので、次の家並みへ斜めに伸びる面になる) */
+    for (r = 1; r < n; r++) {
+        u8 kd = KIND[r];
+        if ((kd == K_GATE || kd == K_CANAL || kd == K_PLAZA) && (r + 1 >= n || KIND[r + 1] != kd)) {
+            u8 *t = &TONE[r * 6];
+            t[1] = t[5] = 0;
+            if (kd == K_GATE) {
+                t[0] = t[2] = t[4] = 0;
+                DECO[r] |= D_LAMP_R | D_OPEN;
+            }
         }
     }
 #endif
@@ -555,7 +630,7 @@ static void rock_draw(u8 idx, i16 u0, i16 u1, i16 ht, u8 color)
 
 static u8 view_back;              /* 1 = 後ろだけを見ている(家の奥の妻壁を描く) */
 
-#if HAS_TOWN || HAS_HOME
+#if HAS_TOWN
 /* 家の妻壁(リング面の、道から奥への壁と三角の破風、窓 2 つ)。sgn = 1 右 / -1 左 */
 static void house_end(u8 idx, i8 sgn, u8 col)
 {
@@ -568,9 +643,110 @@ static void house_end(u8 idx, i8 sgn, u8 col)
     RQUAD(idx, 720 * sgn, 880 * sgn, 170, 380, C_ROCK0);
     RQUAD(idx, 1020 * sgn, 1180 * sgn, 170, 380, C_ROCK0);
 }
+
+/* 屋台の通り: 左右の屋台(台と縞の日よけ。近いときだけ台の上の品物)と、1 リングおきに通りをまたぐ提灯の綱 */
+static void fair_draw(u8 idx, u8 no)
+{
+    u8 i, c = (no & 1) ? C_RED : C_WHITE;
+    RQUAD(idx, -640, -470, FLOOR_V, -170, C_WOOD);
+    RQUAD(idx, 470, 640, FLOOR_V, -170, C_WOOD);
+    RQUAD(idx, -650, -430, 130, 230, c);                  /* 日よけ(壁から張り出す) */
+    RQUAD(idx, 430, 650, 130, 230, c == C_RED ? C_WHITE : C_RED);
+    if ((u16)ring_c[idx][2] >= 4096) {                    /* 8m より近い */
+        RQUAD(idx, -620, -565, -170, -120, C_ORANGE);
+        RQUAD(idx, -545, -490, -170, -130, C_YELLOW);
+        RQUAD(idx, 490, 545, -170, -125, C_YELLOW);
+        RQUAD(idx, 565, 620, -170, -130, C_RED);
+    }
+    if (!(no & 1)) {                                      /* 提灯の綱(軒の下の高さ。高いと画面の上の端に隠れる) */
+        RQUAD(idx, -650, 650, 470, 490, C_BLACK);
+        for (i = 0; i < 5; i++) {
+            i16 u = -480 + i * 240;
+            RQUAD(idx, u - 55, u + 55, 350, 470, (i & 1) ? C_ORANGE : C_RED);
+        }
+    }
+}
+
+/* 門塔の正面(門の入口・出口のリング面): 左右と上の石の壁、アーチの角、窓、赤い三角の屋根 */
+static void gate_face(u8 idx)
+{
+    RQUAD(idx, -1500, -450, FLOOR_V, 1300, C_DIRT1);
+    RQUAD(idx, 450, 1500, FLOOR_V, 1300, C_DIRT1);
+    RQUAD(idx, -450, 450, 560, 1300, C_DIRT1);
+    RPT(0, idx, 380, 560); RPT(1, idx, 450, 560); RPT(2, idx, 450, 300);
+    raster(3, C_DIRT1);
+    RPT(0, idx, -450, 300); RPT(1, idx, -450, 560); RPT(2, idx, -380, 560);
+    raster(3, C_DIRT1);
+    RQUAD(idx, -150, 150, 800, 1050, C_ROCK0);
+    RPT(0, idx, -1700, 1300); RPT(1, idx, 1700, 1300); RPT(2, idx, 0, 2000);
+    raster(3, C_DIRT0);
+}
+
+/* 噴水(広場の左): 石の水盤、柱、吹き上がる水(高さが揺れる)、しぶき */
+static void fountain_draw(u8 idx)
+{
+    i16 h = ((u8)g_tick & 8) ? 650 : 600;
+    RQUAD(idx, -1800, -800, FLOOR_V, -200, C_ROCK2);
+    RQUAD(idx, -1750, -850, -230, -200, C_CYAN);
+    RQUAD(idx, -1350, -1250, -200, 250, C_ROCK2);
+    RQUAD(idx, -1330, -1270, 250, h, C_WHITE);
+    RQUAD(idx, -1550, -1050, h - 100, h, C_CYAN);
+}
 #endif
 
 #if HAS_HOME
+/* 茅葺きの農家(畑の斜面の上)。白い壁と柱、戸、藁の屋根。sgn = 1 右 / -1 左 */
+static void farm_house(u8 idx, i8 sgn)
+{
+    i16 a = sgn > 0 ? 1200 : -1900, b = a + 700, m = a + 350;
+    RQUAD(idx, a, b, -80, 250, C_WHITE);
+    RQUAD(idx, a, a + 50, -80, 250, C_WOOD);
+    RQUAD(idx, b - 50, b, -80, 250, C_WOOD);
+    RQUAD(idx, m - 100, m + 100, -80, 150, C_WOOD);
+    RPT(0, idx, a - 150, 250); RPT(1, idx, b + 150, 250); RPT(2, idx, m, 650);
+    raster(3, C_DIRT0);
+}
+
+/* かかし(田の中): 杭と腕、白い顔、藁の笠。sgn = 1 右 / -1 左 */
+static void scarecrow(u8 idx, i8 sgn)
+{
+    i16 u = 1300 * sgn;
+    RQUAD(idx, u - 15, u + 15, -430, -100, C_WOOD);
+    RQUAD(idx, u - 150, u + 150, -200, -170, C_WOOD);
+    RQUAD(idx, u - 40, u + 40, -100, -20, C_WHITE);
+    RPT(0, idx, u - 110, -20); RPT(1, idx, u + 110, -20); RPT(2, idx, u, 60);
+    raster(3, C_DIRT0);
+}
+
+/* 水車と水車小屋(右)。木の円盤に明るいスポーク 3 本と外周の羽根 6 枚が回る(羽根だけだと散らばった点に見えた) */
+#define MW_U 1150
+#define MW_V (-120)
+static void mill_draw(u8 idx)
+{
+    u8 k, rot = (u8)(g_tick << 1);
+    RQUAD(idx, 1650, 2500, -430, 150, C_WHITE);
+    RQUAD(idx, 1950, 2150, -430, 0, C_WOOD);
+    RPT(0, idx, 1500, 150); RPT(1, idx, 2650, 150); RPT(2, idx, 2075, 600);
+    raster(3, C_DIRT0);
+    for (k = 0; k < 6; k++) {
+        u8 a = (u8)(k * 43 + rot);
+        RPT(k, idx, MW_U + fmul(430, SIN(a)), MW_V + fmul(430, COS(a)));
+    }
+    raster(6, C_WOOD);
+    for (k = 0; k < 3; k++) {
+        u8 a = (u8)(k * 85 + rot);
+        i16 du = fmul(400, SIN(a)), dv = fmul(400, COS(a)), eu = fmul(30, COS(a)), ev = -fmul(30, SIN(a));
+        RPT(0, idx, MW_U - du - eu, MW_V - dv - ev); RPT(1, idx, MW_U - du + eu, MW_V - dv + ev);
+        RPT(2, idx, MW_U + du + eu, MW_V + dv + ev); RPT(3, idx, MW_U + du - eu, MW_V + dv - ev);
+        raster(4, C_ROCK1);
+    }
+    for (k = 0; k < 6; k++) {
+        u8 a = (u8)(k * 43 + rot + 21);
+        i16 u = MW_U + fmul(480, SIN(a)), v = MW_V + fmul(480, COS(a));
+        RQUAD(idx, u - 70, u + 70, v - 70, v + 70, C_WOOD);
+    }
+}
+
 /* 村の門(道の突き当たり): 太い柱 2 本、冠木と小さな屋根、村の名の札(14 番の色)。門の前で村人が出迎える */
 static void home_draw(u8 idx)
 {
@@ -847,9 +1023,9 @@ static void deco_draw(u8 idx)
         }
         break;
 #endif
-#if HAS_TOWN || HAS_HOME
+#if HAS_TOWN
     case K_TOWN:
-    case K_HOME:
+    case K_FAIR:
         /* 前を見ているときは家の手前の妻壁、後ろを見ているときは奥の妻壁(見えない側は道側の壁に隠れる) */
         if (!view_back) {
             if (d & D_LAMP_R) house_end(idx, 1, TONE[no * 6 + 2]);
@@ -858,10 +1034,59 @@ static void deco_draw(u8 idx)
             if (d & D_ROCK_R) house_end(idx, 1, TONE[(no - 1) * 6 + 2]);
             if (d & D_ROCK_L) house_end(idx, -1, TONE[(no - 1) * 6 + 4]);
         }
-#if HAS_HOME
-        if (d & D_TIMBER) home_draw(idx);
-#endif
+        if (KIND[no] == K_FAIR) fair_draw(idx, no);
         break;
+    case K_CANAL:
+        /* 欄干の街灯(1 リングおき)と、ずっと下の水面の小舟 */
+        if (no & 1) {
+            RQUAD(idx, -500, -465, -170, 500, C_ROCK0);
+            RQUAD(idx, -535, -430, 500, 580, C_YELLOW);
+        }
+        if (no % 3 == 1) RQUAD(idx, 900, 1600, -1050, -950, C_WOOD);
+        break;
+    case K_PLAZA:
+        if (d & D_TIMBER) fountain_draw(idx);
+        else if (no & 1) {                                /* 街灯 */
+            RQUAD(idx, -920, -880, FLOOR_V, 450, C_ROCK0);
+            RQUAD(idx, -950, -850, 450, 540, C_YELLOW);
+            RQUAD(idx, 880, 920, FLOOR_V, 450, C_ROCK0);
+            RQUAD(idx, 850, 950, 450, 540, C_YELLOW);
+        }
+        break;
+    case K_GATE:
+        /* 門塔の正面は外から見るときだけ(入口はカメラより前、出口は後ろ。中から見ると門の中の壁の上に描いてしまう) */
+        if (((d & D_LAMP_L) && idx > NB) || ((d & D_LAMP_R) && idx <= NB)) gate_face(idx);
+        break;
+#endif
+#if HAS_HOME
+    case K_HOME:
+        RQUAD(idx, -580, -540, -170, 20, C_WOOD);         /* 柵の杭と横木 */
+        RQUAD(idx, 540, 580, -170, 20, C_WOOD);
+        RQUAD(idx, -760, -540, -60, -30, C_WOOD);
+        RQUAD(idx, 540, 760, -60, -30, C_WOOD);
+        if (d & D_LAMP_L) farm_house(idx, -1);
+        if (d & D_LAMP_R) farm_house(idx, 1);
+        if (d & D_TIMBER) home_draw(idx);
+        break;
+    case K_PADDY:
+    case K_MILL: {
+        u8 mill = KIND[no] == K_MILL;
+        /* あぜ(3 リングごとに田を区切る緑の線)と苗の列。水車の所は右が水車の池 */
+        if (!(no % 3)) {
+            RQUAD(idx, -3200, -620, -430, -405, C_GRASS);
+            if (!mill) RQUAD(idx, 620, 3200, -430, -405, C_GRASS);
+        }
+        RQUAD(idx, -1030, -970, -430, -385, C_GRASS);
+        RQUAD(idx, -1630, -1570, -430, -385, C_GRASS);
+        if (!mill) {
+            RQUAD(idx, 970, 1030, -430, -385, C_GRASS);
+            RQUAD(idx, 1570, 1630, -430, -385, C_GRASS);
+        }
+        if (d & D_LAMP_L) scarecrow(idx, -1);
+        if (d & D_LAMP_R) scarecrow(idx, 1);
+        if (d & D_TIMBER) mill_draw(idx);
+        break;
+    }
 #endif
     }
 }
@@ -977,8 +1202,8 @@ static void set_band_col(u8 na, u8 dist)
         if ((HAS_EXIT && kind == K_EXIT) || (HAS_LAKE && kind == K_LAKE)) {
             /* 奥は暗い岩(水面はそのまま) */
             if (dist >= 2 && c != C_WATER && c != C_WATER1) c = C_ROCK0;
-        } else if (HAS_FOREST && kind == K_HOLLOW) {
-            if (dist >= 2 && c) c = C_ROCK0;    /* 倒木の奥は影(出口のリングの塗らない面はそのまま) */
+        } else if ((HAS_FOREST && kind == K_HOLLOW) || (HAS_TOWN && kind == K_GATE)) {
+            if (dist >= 2 && c) c = C_ROCK0;    /* 倒木・門の奥は影(出口のリングの塗らない面はそのまま) */
         } else if (HAS_CAVE && kind == K_CAVE && dist >= 2) {
             if (c == C_ROCK2) c = C_ROCK1;
             else if (c == C_ROCK1 || c == C_DIRT0) c = C_ROCK0;
@@ -1153,6 +1378,24 @@ static void sea_waves(u16 s, u8 back)
 }
 #endif
 
+#if HAS_HOME
+/* 村の遠くの山並み(地平線の上。横位置・幅・高さのブロック) */
+static const u8 mount[][3] = { { 0, 14, 2 }, { 4, 6, 4 }, { 10, 10, 3 }, { 24, 8, 2 }, { 38, 12, 3 }, { 44, 6, 5 }, { 52, 12, 2 }, { 58, 6, 3 } };
+#endif
+#if HAS_TOWN
+/* 運河の両岸の遠くの家並み(地平線の上。横位置・幅・高さのブロック。上の 1 行は屋根) */
+static const u8 bank_house[][3] = { { 0, 6, 3 }, { 6, 5, 4 }, { 11, 7, 3 }, { 18, 4, 2 }, { 42, 4, 2 }, { 46, 6, 4 }, { 52, 7, 3 }, { 59, 5, 4 } };
+#endif
+
+/* 地平線より下の地面の色。森(小川・倒木・祠も)は茂み、運河は水面、空き地・遊園地・村・田んぼは草(鉄橋では海)、ほかは道や岩 */
+static u8 ground_col(u8 far)
+{
+    if (far == K_FOREST || far == K_STREAM || far == K_HOLLOW || far == K_SHRINE) return C_DIRT0;
+    if (far == K_CANAL) return C_CYAN;
+    if ((far >= K_PARK && far <= K_GLADE) || far == K_HOME || far == K_PADDY || far == K_MILL) return C_GRASS;
+    return C_ROCK1;
+}
+
 /* 空と地面(地平線の高さで 2 色に塗り分ける)。far = 一番遠くに見える地形 */
 static void sky_draw(u8 far)
 {
@@ -1165,7 +1408,32 @@ static void sky_draw(u8 far)
     g_rh = row;
     buf_fill_rows(C_SKY, 0);
     g_rh = 48 - row;
-    buf_fill_rows((far == K_FOREST || far >= K_STREAM) ? C_DIRT0 : far >= K_PARK ? C_GRASS : C_ROCK1, row);   /* 森(小川・倒木・祠も)は茂みの色 */
+    buf_fill_rows(ground_col(far), row);
+#if HAS_HOME || HAS_TOWN
+    if (row >= 6 && row < GAME_ROWS) {
+        u8 i;
+#if HAS_HOME
+        if (far == K_HOME || far == K_PADDY || far == K_MILL) {
+            g_color = C_ROCK0;
+            for (i = 0; i < sizeof(mount) / 3; i++) {
+                g_rx = mount[i][0]; g_rw = mount[i][1]; g_rh = mount[i][2]; g_ry = row - mount[i][2];
+                rect_fill();
+            }
+        }
+#endif
+#if HAS_TOWN
+        if (far == K_CANAL) {
+            for (i = 0; i < sizeof(bank_house) / 3; i++) {
+                g_rx = bank_house[i][0]; g_rw = bank_house[i][1];
+                g_color = (i & 1) ? C_DIRT1 : C_ROCK2; g_rh = bank_house[i][2] - 1; g_ry = row - g_rh;
+                rect_fill();
+                g_color = C_DIRT0; g_rh = 1; g_ry = row - bank_house[i][2];
+                rect_fill();
+            }
+        }
+#endif
+    }
+#endif
 }
 
 void envm_draw(u16 s, u16 look16)
@@ -1204,7 +1472,7 @@ void envm_draw(u16 s, u16 look16)
         ring_d1 = d1;
     }
     {
-        u8 open = 0, far = K_CAVE;
+        u8 open = 0, far = K_CAVE, canal = 0;
         for (r = back ? -lb : 0; r <= (fwd ? lf : 1); r++) {
             k = (i8)(r + NB);
             if (r >= ring_d0 && r <= ring_d1) {
@@ -1218,11 +1486,12 @@ void envm_draw(u16 s, u16 look16)
             {
                 u8 no = ring_no[k];
                 if (DECO[no] & D_OPEN) { open = 1; far = KIND[no]; }
+                if (KIND[no] == K_CANAL) canal = 1;
             }
         }
         if (open) {
             /* 屋外が見える: 空と地面を塗ってから描く(奥の開口部は塞がない) */
-            sky_draw(far);
+            sky_draw(canal ? K_CANAL : far);   /* 運河が見えている間は、その先が町でも地平線の下を水面に */
 #if HAS_BRIDGE
             if (far == K_BRIDGE && fwd != back) sea_waves(s, back);
 #endif
