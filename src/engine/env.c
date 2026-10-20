@@ -175,6 +175,7 @@ static const i16 base_uv[K_COUNT][12] = {
     /* 屋台道 */{ -900, 400,  900, 400,  900, -250,  380, -345, -380, -345, -900, -250 },
     /* 宙返り */{ -520, 560, 1000, 200, 1000, -700,  400, -345, -400, -345, -520, -345 },
     /* 城   */  { -520, 560, 1000, 200, 1000, -700,  400, -345, -400, -345, -520, -345 },
+    /* アーチ */{ -520, 900,  520, 900,  520, 840,  200, -345, -200, -345, -520, 840 },   /* 上弦材の高さは ring_build が径間の中の位置で決める */
 };
 /* 鉄橋: トラスの面(u = ±BR_U)、上弦材の上端と下端(断面の面 1・5 を細い帯にして上弦材にする)。
  * 床の無い橋(枕木とレールの隙間から、ずっと下の海が見える)。断面の床(面 3)は線路の幅 ±200 で、12m より先だけ塗る */
@@ -192,6 +193,11 @@ static u8 hs_st[2], hs_cnt[2], hs_col[2];   /* 家並み: 左右それぞれの�
 #endif
 /* 水面のある地底湖の地形(遠くを断面 1 枚で近似しない、奥の開口部を暗い岩で塞ぐ、奥を暗くしても水面はそのまま) */
 #define LAKEISH(k) ((k) == K_LAKE || ((k) >= K_FALLS && (k) <= K_ARCH))
+#if HAS_BRIDGE
+#define AB_SPAN 7                 /* アーチ橋の径間のリング数(28m) */
+static u8 ab_j;                   /* アーチ橋の径間の中の位置(ring_build) */
+#define BRIDGEISH(k) ((k) == K_BRIDGE || (k) == K_ARCHBR)
+#endif
 static u8 rail_col;
 static u8 nk;                     /* 地形を作っているリングの次のリングの種類(envm_build) */
 
@@ -413,6 +419,16 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         break;
 #endif
 #if HAS_BRIDGE
+    case K_ARCHBR:
+        /* アーチ橋: 径間(AB_SPAN リング)の中の位置 j で、アーチ(面 1・5 の細い帯)の高さを放物線にする(両端は床の近く、中央が一番高い) */
+        if (!r || KIND[r - 1] != K_ARCHBR) ab_j = 0;
+        {
+            i16 h = -250 + (i16)(ab_j * (AB_SPAN - ab_j)) * 139;
+            p[1] = p[3] = h + 70;
+            p[5] = p[11] = h;
+        }
+        if (++ab_j == AB_SPAN) ab_j = 0;
+        /* fall through */
     case K_BRIDGE:                              /* 線路(面 3。12m より先だけ)と、左右の上弦材(面 1・5 の細い帯)だけを塗る */
         t[0] = t[2] = t[4] = 0;
         t[1] = t[5] = C_DIRT0;
@@ -651,7 +667,7 @@ static void rails_draw(u8 a, u8 b)
     /* 枕木(区間の手前のリングの面に、横長の板) */
     RQUAD(a, -180, 180, FLOOR_V, FLOOR_V + 14, C_WOOD);
 #if HAS_BRIDGE
-    if (KIND[ring_no[a < b ? a : b]] == K_BRIDGE) {
+    if (BRIDGEISH(KIND[ring_no[a < b ? a : b]])) {
         ties_mid(a, b);
         if (br_long) return;                   /* レールは bridge_rails が手前から 12m 先まで 1 枚で描く */
     }
@@ -1191,6 +1207,17 @@ static void deco_draw(u8 idx)
             RQUAD(idx, BR_U - 30, BR_U + 30, BR_GIR, BR_CHD, C_DIRT0);
         }
         break;
+    case K_ARCHBR: {
+        /* 床の下の横桁、アーチから下がる吊り材(左右)、アーチの高い所では頭上の横梁 */
+        i16 h = PROF[no * 12 + 5];
+        RQUAD(idx, -BR_U, BR_U, FLOOR_V - 60, FLOOR_V - 20, C_DIRT0);
+        if (h > FLOOR_V + 120) {
+            RQUAD(idx, -BR_U - 20, -BR_U + 20, BR_GIR, h, C_DIRT0);
+            RQUAD(idx, BR_U - 20, BR_U + 20, BR_GIR, h, C_DIRT0);
+        }
+        if (h > 900) RQUAD(idx, -BR_U, BR_U, h, h + 70, C_DIRT0);
+        break;
+    }
 #endif
 #if HAS_TOWN
     case K_TOWN:
@@ -1322,7 +1349,7 @@ static u8 far_ring(i8 k0, i8 dir)
     i8 k;
     for (k = k0; k != 0; k -= dir) {
         u8 idx = (u8)(k + NB);
-        if (ring_ok[idx] && ring_c[idx][2] && KIND[ring_no[idx]] == K_BRIDGE) return idx;
+        if (ring_ok[idx] && ring_c[idx][2] && BRIDGEISH(KIND[ring_no[idx]])) return idx;
     }
     return 0;
 }
@@ -1377,7 +1404,7 @@ static void set_band_col(u8 na, u8 dist)
             if (c == C_ROCK2) c = C_ROCK1;
             else if (c == C_ROCK1 || c == C_DIRT0) c = C_ROCK0;
             else c = C_DIRT0;
-        } else if (HAS_BRIDGE && kind == K_BRIDGE && k == 3 && dist < 3) {
+        } else if (HAS_BRIDGE && (kind == K_BRIDGE || kind == K_ARCHBR) && k == 3 && dist < 3) {
             c = 0;                              /* 鉄橋の手前 12m は床を塗らない(枕木とレールの隙間に海が見える) */
         }
         band_col[k] = c;
@@ -1507,6 +1534,57 @@ void sea_dots(void);
  * (Virtua Racing の Bay Bridge の地平線の岬にならう) */
 static const u8 coast[][3] = { { 0, 15, 1 }, { 3, 7, 2 }, { 41, 23, 1 }, { 49, 10, 2 }, { 53, 4, 3 } };
 
+/* 画面の長方形を、画面の中だけに切って塗る(灯台・港。はみ出す所は描かない) */
+static void clip_rect(i16 x, i16 y, i16 w, i16 h, u8 c)
+{
+    if (x < 0) { w += x; x = 0; }
+    if (y < 0) { h += y; y = 0; }
+    if (x + w > 64) w = 64 - x;
+    if (y + h > GAME_ROWS) h = GAME_ROWS - y;
+    if (w <= 0 || h <= 0) return;
+    g_color = c; g_rx = (u8)x; g_ry = (u8)y; g_rw = (u8)w; g_rh = (u8)h;
+    rect_fill();
+}
+
+/* 沖の小島の灯台(レールの 110m の所、左 22m)。白波と同じく、目の 12m 下の海面にあるものとして投影する。
+ * 紅白の塔、明滅する灯り、灯りが点いている間は左右に振れる光の帯 */
+#define LH_M (110 * 4)
+static void lighthouse(u16 m, u8 back)
+{
+    i16 dq = back ? (i16)m - LH_M : LH_M - (i16)m, inv, row, c, w, h, x;
+    u8 on = (u8)(g_tick >> 4) & 1;
+    if (dq < 24 || dq > 24 + 255) return;
+    inv = (i16)wave_inv[dq - 24];
+    row = sky_row + ((48 * inv) >> 8);
+    c = (88 * inv) >> 8;
+    c = back ? 32 + c : 32 - c;
+    w = (40 * inv) >> 8; if (w < 3) w = 3;
+    clip_rect(c - (w >> 1), row - 1, w, 2, C_ROCK1);                 /* 小島 */
+    w = (8 * inv) >> 8; if (w < 1) w = 1;
+    h = (56 * inv) >> 8; if (h < 3) h = 3;
+    x = c - (w >> 1);
+    clip_rect(x, row - 1 - h, w, h, C_WHITE);                        /* 塔 */
+    clip_rect(x, row - 1 - h + (h >> 2), w, (h >> 2) + 1, C_RED);    /* 赤い帯 */
+    clip_rect(x, row - 2 - h, w, 1, on ? C_YELLOW : C_ROCK0);        /* 灯り */
+    if (on) clip_rect((g_tick & 32) ? x + w : x - 6, row - 2 - h, 6, 1, C_DIRT1);   /* 光の帯 */
+}
+
+/* 向こう岸の港(右の岸に倉庫とクレーン)。レールの 140m から、近づくにつれて大きくなる */
+static void harbor(u16 m)
+{
+    u8 i, k;
+    if (m < 140 * 4) return;
+    k = (u8)((m - 140 * 4) >> 5);                        /* 8m ごとに 1 ずつ */
+    if (k > 4) k = 4;
+    for (i = 0; i < 3; i++) {
+        i16 x = 40 + i * (6 + k), h = 1 + (k >> 1);
+        clip_rect(x, sky_row - h, 5 + k, h, C_DIRT1);                 /* 倉庫の壁 */
+        clip_rect(x, sky_row - h - 1, 5 + k, 1, C_DIRT0);             /* 屋根 */
+    }
+    clip_rect(60, sky_row - 4 - k, 1, 4 + k, C_DIRT0);               /* クレーンの柱と腕 */
+    clip_rect(55, sky_row - 4 - k, 6, 1, C_DIRT0);
+}
+
 static void sea_waves(u16 s, u8 back)
 {
     u8 i;
@@ -1543,6 +1621,10 @@ static void sea_waves(u16 s, u8 back)
         g_color = C_WHITE;                               /* 帆 */
         g_rx = (u8)(col + (w >> 2)); g_rw = (u8)((w + 1) >> 1); g_ry = (u8)(row - 2); g_rh = 2;
         rect_fill();
+    }
+    if (sky_row >= 3 && sky_row + 2 < GAME_ROWS) {
+        lighthouse(m, back);
+        if (!back) harbor(m);
     }
 }
 #endif
@@ -1662,7 +1744,7 @@ void envm_draw(u16 s, u16 look16)
             /* 屋外が見える: 空と地面を塗ってから描く(奥の開口部は塞がない) */
             sky_draw(canal ? K_CANAL : far);   /* 運河が見えている間は、その先が町でも地平線の下を水面に */
 #if HAS_BRIDGE
-            if (far == K_BRIDGE && fwd != back) sea_waves(s, back);
+            if (BRIDGEISH(far) && fwd != back) sea_waves(s, back);
 #endif
             capped = 0;
         } else {
@@ -1697,7 +1779,7 @@ void envm_draw(u16 s, u16 look16)
         vok = vring_make(sv);
         if (!vok) ring_late();
 #if HAS_BRIDGE
-        br_long = vok && KIND[ring_no[VR]] == K_BRIDGE;
+        br_long = vok && BRIDGEISH(KIND[ring_no[VR]]);
 #endif
         for (k = kn - 1; k >= rn; k--) {
             if (k == NF - 1 && kn == NF && k - 1 >= rn && merge_ok(NF - 2)) {
@@ -1745,7 +1827,7 @@ void envm_draw(u16 s, u16 look16)
         vok = vring_make(sv);
         if (!vok) ring_late();
 #if HAS_BRIDGE
-        br_long = vok && KIND[ring_no[VR]] == K_BRIDGE;
+        br_long = vok && BRIDGEISH(KIND[ring_no[VR]]);
 #endif
         for (k = kn; k < rn; k++) {
             if (k == -lb && kn == -lb && k + 2 <= rn && merge_ok(-lb)) {
