@@ -4,7 +4,7 @@
 #include "rail.h"
 
 /* 敵モデル = カメラ正対の矩形の集まり(仕様書 7.4)。単位 1/16m、y は足元から上 */
-typedef struct { i8 x0, y0, x1, y1; u8 color; u8 part; } MRect;   /* part: 0=胴 1=頭 2=脚 */
+typedef struct { i8 x0, y0, x1, y1; u8 color; u8 part; } MRect;   /* part: 0=胴 1=頭 2=脚 3=飾り(縁取り・当たり判定に数えない細部) */
 typedef struct { const MRect *r; u8 n; } Model;
 extern const Model models[];     /* 敵の種類ごと(models.c、ページ0) */
 extern const Model model_e02b;   /* コウモリ人の翼を下げた絵 */
