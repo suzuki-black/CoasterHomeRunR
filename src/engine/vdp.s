@@ -47,6 +47,22 @@ _g_vdp_r1::	.ds	1	; 最後に書いた R#1
 	.area	_CODE
 
 ; void vdp_set_write(u16 addr)   HL=addr(0000h-3FFFh)
+; void vdp_set_write_hi(u8 hi, u16 addr)   A = VRAM の番地の A16〜A14(R#14)、DE = 下位 14 ビット。
+;   128KB の VRAM のどこへでも書けるように(タイトルの SCREEN 11 は 1 ページ 54KB で、2 ページ目は 0x10000-)
+_vdp_set_write_hi::
+	di
+	out	(0x99), a
+	ld	a, #0x8E		; R#14
+	out	(0x99), a
+	ld	a, e
+	out	(0x99), a
+	ld	a, d
+	and	a, #0x3F
+	or	a, #0x40
+	out	(0x99), a
+	ei
+	ret
+
 _vdp_set_write::
 	di
 	xor	a, a

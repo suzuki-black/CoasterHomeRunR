@@ -8,6 +8,7 @@
 #include "hud.h"
 #include "sound.h"
 #include "pcm.h"
+#include "title.h"
 
 u8 g_spr_attr[17];
 u8 g_perf_ticks;
@@ -74,7 +75,7 @@ void present(void)
     back_page ^= 1;
 }
 
-static void vdp_init(void)
+void vdp_init(void)
 {
     pcm_stop();                     /* VDP のレジスタを書き直すので、声(走査線割込み)を止めてふだんの割込みに戻す */
     static const u8 regs[] = {
@@ -113,6 +114,53 @@ static void vdp_init(void)
     vdp_set_palette(9, pal_title);
     stage_pal = pal_title;
     vdp_wreg(1, 0xEB);             /* 表示オン、垂直帰線割り込み */
+}
+
+/* ---------------------------------------------------------------------------
+ * タイトルの絵(2026-10-22)。SCREEN 11(V9958 の YJK + YAE: 自然画に、パレットの色の文字を重ねる)。
+ * 絵は tools/gen_title.py が data/title_art.webp から作り、ROM のバンク TITLE_BANK〜 に置く(1 ページ目 54272 バイトと、
+ * 文字の無い PUSH SPACE KEY の帯)。16KB ずつページ2(ゲームのセグメント。ステージを始めるときに読み直す)へ写して VRAM へ書く。
+ * 1 ページ目(0x00000-)は文字あり、2 ページ目(0x10000-)は PUSH SPACE KEY の帯だけ文字無し。表示するページを替えて点滅させる。
+ * 戻るときは vdp_init で SCREEN 3 に戻す
+ * --------------------------------------------------------------------------- */
+#define TITLE_BANK 32
+#define TITLE_PAGE 54272u                 /* 1 ページ(256 × 212) */
+static const u8 title_pal[32] = TITLE_PAL;
+
+void title_show(void)
+{
+    static const u8 regs[] = {
+        1, 0x20,        /* 表示オフ(書いている間)、垂直帰線割り込み */
+        0, 0x0E,        /* G7(SCREEN 8 の並び) */
+        8, 0x0A,        /* スプライトを出さない */
+        9, 0x80,        /* 212 ライン */
+        2, 0x1F,        /* 1 ページ目 */
+        7, 0x00,
+        25, 0x18,       /* YJK + YAE = SCREEN 11 */
+    };
+    u8 i;
+    u16 len;
+    while (g_flip_req) wait_tick();      /* SCREEN 3 の表示の切り替え(割り込みが R#2 を書く)を済ませてから */
+    for (i = 0; i < sizeof(regs); i += 2) vdp_wreg(regs[i], regs[i + 1]);
+    vdp_set_palette(0, title_pal);
+    sys_seg2(SEG_GAME);
+    for (i = 0; i < 4; i++) {
+        len = (i < 3) ? 0x4000 : (u16)(TITLE_PAGE - 0xC000);
+        rom_load(TITLE_BANK + i * 2);
+        vdp_set_write_hi(i, 0);           /* 1 ページ目 */
+        vdp_out((const u8 *)0x8000, len);
+        vdp_set_write_hi(4 + i, 0);       /* 2 ページ目 */
+        vdp_out((const u8 *)0x8000, len);
+    }
+    /* 2 ページ目の PUSH SPACE KEY の帯を、文字の無い絵に(最後に写した 16KB の、1 ページ目の後ろ) */
+    vdp_set_write_hi((u8)((0x10000ul + TITLE_BAND_Y * 256u) >> 14), (u16)(TITLE_BAND_Y * 256u) & 0x3FFF);
+    vdp_out((const u8 *)0x8000 + (TITLE_PAGE - 0xC000), TITLE_BAND_LEN);
+    vdp_wreg(1, 0x60);                    /* 表示オン */
+}
+
+void title_blink(u8 on)
+{
+    vdp_wreg(2, on ? 0x1F : 0x3F);
 }
 
 /* エンディング(仕様書 5.2): SCREEN 1 に切り替え、BIOS のフォント(ひらがな)で最後のステージの ending の文を出す。

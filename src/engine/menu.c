@@ -9,6 +9,7 @@
  */
 #include "game.h"
 #include "hud.h"
+#include "sound.h"
 
 Config g_cfg;
 extern const u8 pal_title[];
@@ -85,6 +86,35 @@ void title(void)
     u16 t = 0;
     u8 prev = 0xFF, in, key, kn = 0;
     g_scene = 0;
+    bgm_play(SONG_TITLE);                /* 馬鹿陽気なアメリカン(src/sound/songs.mml) */
+#ifndef DEBUG_FPS
+    /* タイトルの絵(SCREEN 11。main.c の title_show)。PUSH SPACE KEY は約 1 秒ごとに点滅 */
+    title_show();
+    for (;;) {
+        wait_tick();
+        t++;
+        if (!(t & 31)) title_blink(!(t & 32));
+        in = input_raw();
+        key = in & ~prev & (IN_UP | IN_DOWN | IN_LEFT | IN_RIGHT | IN_KEY_A | IN_KEY_B);
+        if (key) {
+            if (key == konami[kn]) kn++;
+            else kn = (key == konami[0]);
+            if (kn == sizeof(konami)) {
+                kn = 0;
+                vdp_init();
+                config();
+                title_show();
+                prev = 0xFF;
+                continue;
+            }
+        }
+        if ((in & IN_A) && !(prev & IN_A)) break;
+        prev = in;
+    }
+    bgm_stop();
+    vdp_init();                          /* SCREEN 3 に戻す */
+#else
+    /* 計測用 ROM: 文字だけのタイトル(CPU の状態を出す) */
     set_stage_palette(pal_title);
     g_spr_attr[0] = 209;
     g_spr_attr[4] = 209;
@@ -94,15 +124,11 @@ void title(void)
         text_center(6, "COASTER", C_YELLOW, 2);
         text_center(18, "HOME RUN", C_ORANGE, 2);
         if (t & 32) text_center(34, "PUSH SPACE", C_WHITE, 1);
-#ifdef DEBUG_FPS
         {   /* 計測用: CPU の状態(実機・WebMSX で R800 DRAM モードに入っているかの確認) */
             u8 c = sys_cpu_status();
             text_center(41, (c & 0x20) ? "CPU:Z80" : (c & 0x40) ? "CPU:R800 ROM" : "CPU:R800 DRAM",
                         (c & 0x60) ? C_RED : C_CYAN, 1);
         }
-#else
-        text_center(41, "A:FIRE  B:TURN", C_CYAN, 1);
-#endif
         present();
         t++;
         in = input_raw();
@@ -120,4 +146,6 @@ void title(void)
         if ((in & IN_A) && !(prev & IN_A)) break;
         prev = in;
     }
+    bgm_stop();
+#endif
 }

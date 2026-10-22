@@ -70,7 +70,7 @@ ifdef BENCH
 endif
 
 
-HDRS = $(wildcard $(ENG)/*.h) $(BUILD)/songs.h
+HDRS = $(wildcard $(ENG)/*.h) $(BUILD)/songs.h $(BUILD)/title.h
 
 ROM = $(BUILD)/TrolleyHomeRun.rom
 
@@ -182,13 +182,17 @@ $(BUILD)/boot.rel: $(BOOT)/boot.s Makefile | $(BUILD)
 $(BUILD)/boot.ihx: $(BUILD)/boot.rel
 	$(CC) -mz80 --no-std-crt0 --code-loc 0x4000 --data-loc 0xC000 -o $@ $<
 
+# タイトルの絵(SCREEN 11。data/title_art.webp を YJK + YAE に。文字は tools/gen_title.py が重ねる)
+$(BUILD)/title.bin $(BUILD)/title.h &: data/title_art.webp $(TOOLS)/gen_title.py | $(BUILD)
+	$(PYTHON) $(TOOLS)/gen_title.py data/title_art.webp $(BUILD)/title.bin $(BUILD)/title.h
+
 GAMES = $(foreach n,1 2 3 4 5 6,$(BUILD)/game$(n).ihx)
 ENVS  = $(foreach n,1 2 3 4 5 6,$(BUILD)/env$(n).ihx)
 
-$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(ENVS) $(GAMES) $(BUILD)/sndmod.ihx $(BUILD)/songs.bin src/sound/voicemod.bin $(TOOLS)/mkrom.py
+$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(ENVS) $(GAMES) $(BUILD)/sndmod.ihx $(BUILD)/songs.bin src/sound/voicemod.bin $(BUILD)/title.bin $(TOOLS)/mkrom.py
 	$(PYTHON) $(TOOLS)/mkrom.py $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/engine.noi $@ \
 	  $(foreach n,1 2 3 4 5 6,$(BUILD)/env$(n).ihx $(BUILD)/env$(n).noi) \
-	  $(foreach n,1 2 3 4 5 6,$(BUILD)/game$(n).ihx $(BUILD)/game$(n).noi) $(BUILD)/sndmod.ihx $(BUILD)/sndmod.noi $(BUILD)/songs.bin src/sound/voicemod.bin
+	  $(foreach n,1 2 3 4 5 6,$(BUILD)/game$(n).ihx $(BUILD)/game$(n).noi) $(BUILD)/sndmod.ihx $(BUILD)/sndmod.noi $(BUILD)/songs.bin src/sound/voicemod.bin $(BUILD)/title.bin
 	cp $@ "$(BUILD)/$(ROMNAME) [ASCII8].rom"
 
 # 計測用 ROM(fps 表示、タイトルに CPU の状態)。オブジェクトが混ざらないよう build/fps に分けてビルドする

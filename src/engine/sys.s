@@ -460,6 +460,17 @@ _sys_install_loader::
 	ldir
 	ret
 
+; void rom_load(u8 bank)   A = 最初のバンク。bank と bank+1(16KB)を、いまページ2に出ているセグメントの 0x8000- へそのまま写す
+;   (モジュールでないデータ用。変数の所を 0 で埋めない。タイトルの絵)
+_rom_load::
+	push	af
+	call	_pcm_stop
+	pop	af
+	ld	hl, #0x4000
+	ld	(RL_LEN), hl
+	ld	de, #MOD_ADDR
+	jp	RL_ADDR
+
 ; void mod_load(u8 bank)   A = 最初のバンク。bank と bank+1(16KB)を、いまページ2に出ているセグメントの 0x8000- へ写し、
 ;   モジュールの変数(0xBC00-0xBFFF)を 0 で埋める
 _mod_load::

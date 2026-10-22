@@ -310,3 +310,41 @@ P n88%36 n89%72 n84%36 r%36
 B @14 v12 q5 n41%36 n48%36 n45%36 n48%36 n46%36 n53%36 n50%36 n53%36 n48%36 n55%36 n52%36 n55%36
 B n41%36 n48%36 n41%72
 
+
+@song TITLE loop
+# タイトル: 馬鹿陽気なアメリカン(2026-10-22 ユーザーの指定)。西部の酒場のラグタイム風のオリジナル。ヘ長調、t150、16 小節。
+#   調子っ外れの酒場のピアノ(ホンキートンク)が旋律を弾き、同じピアノの左手がバンジョーのような裏打ち、チューバのような「ブン・パッ」の
+#   ベース、2 ビートのドラム。ステージ 2 の金管の楽隊とは楽器の感じを変える
+#   ホンキートンク: 打鍵の強いピアノ(帰還を強めて明るく)の旋律を、2 チャンネルで F ナンバーを +6 と大きくずらして重ねる(わざと音程の
+#   合っていない酒場のピアノのうなり)。PSG は旋律の 1 オクターブ上を +14 セントずらして弾くように減衰させる
+@tempo 150
+@voice 01 11 14 04 F3 F3 35 25   # オリジナル音色 0: 打鍵の強い酒場のピアノ(減衰、帰還 4)
+A @0 v13 q6 o5 l8
+A c c a g f4 a4 | g f e f g4 c4 | d d b- a g4 b-4 | a g f g a2 |
+A c c a g f4 a4 | > c4 < a f g4 e4 | f e d c < b- > c d e | f4 r c f4 r4 |
+A a4 a a a4 g4 | b-4 b- b- b-4 a4 | > c4 c c d4 c4 < | b- a g f g2 |
+A a4 a a a4 g4 | b-4 b- b- > d4 c4 < | a g f e d e f g | f4 c4 f4 r4 |
+F K+6 @0 v12 q6 o5 l8
+F c c a g f4 a4 | g f e f g4 c4 | d d b- a g4 b-4 | a g f g a2 |
+F c c a g f4 a4 | > c4 < a f g4 e4 | f e d c < b- > c d e | f4 r c f4 r4 |
+F a4 a a a4 g4 | b-4 b- b- b-4 a4 | > c4 c c d4 c4 < | b- a g f g2 |
+F a4 a a a4 g4 | b-4 b- b- > d4 c4 < | a g f e d e f g | f4 c4 f4 r4 |
+P D+14 v8 E2 q6 o6 l8
+P c c a g f4 a4 | g f e f g4 c4 | d d b- a g4 b-4 | a g f g a2 |
+P c c a g f4 a4 | > c4 < a f g4 e4 | f e d c < b- > c d e | f4 r c f4 r4 |
+P a4 a a a4 g4 | b-4 b- b- b-4 a4 | > c4 c c d4 c4 < | b- a g f g2 |
+P a4 a a a4 g4 | b-4 b- b- > d4 c4 < | a g f e d e f g | f4 c4 f4 r4 |
+#   バンジョーのような裏打ち(8 分の裏に和音の上の音と下の音)。F・C7・Gm・F / F・F・F C7・B♭ C7・F / F・B♭・C・C7 / F・B♭・C7・F
+B @0 v10 q3 o4 l8 [r a]4 | [r b-]4 | [r b-]4 | [r a]4 | [r a]4 | [r a]2 [r b-]2 | [r > d <]2 [r b-]2 | [r a]4 |
+B [r a]4 | [r > d <]4 | [r g]4 | [r b-]4 | [r a]4 | [r > d <]4 | [r b-]4 | [r a]4 |
+C @0 v9 q3 o4 l8 [r f]4 | [r e]4 | [r g]4 | [r f]4 | [r f]4 | [r f]2 [r e]2 | [r b-]2 [r e]2 | [r f]4 |
+C [r f]4 | [r b-]4 | [r e]4 | [r e]4 | [r f]4 | [r b-]4 | [r e]4 | [r f]4 |
+#   チューバのような「ブン・パッ」のベース(根音と 5 度を 2 分音符で)
+D @14 v15 q5 o2 l2
+D f > c < | > c < g | g > d < | f > c < | f > c < | f > c < | b- > c < | f > c < |
+D f > c < | b- f | > c < g | > c < g | f > c < | b- f | > c < g | f > c < |
+#   リズム: ラグタイムの 2 ビート(1・3 拍にバスドラム、2・4 拍にスネア、8 分のハイハット)、8 小節ごとにスネアとタムのフィル、頭にシンバル
+R V15,15,12,11,7
+R [ bc8 h8 sh8 h8 bh8 h8 sh8 h8
+R  [ bh8 h8 sh8 h8 bh8 h8 sh8 h8 ]6
+R    bh8 h8 sh8 s16 s16 t8 t8 bs8 s8 ]2

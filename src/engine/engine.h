@@ -55,6 +55,10 @@ u8   sys_cpu_status(void);          /* S1990 レジスタ 6(bit5 = 0 で R800、
 void sys_install_loader(void);
 void sys_page0_ram(void);           /* ページ0を自前の RAM に(0x0038 に割り込み処理) */
 void mod_load(u8 bank);             /* ROM の bank, bank+1(16KB)をページ2(いまのセグメント)の 0x8000- へ写す */
+void rom_load(u8 bank);             /* 同じく写すが、0xBC00- を 0 で埋めない(モジュールでないデータ。タイトルの絵) */
+void vdp_init(void);                /* SCREEN 3 を作り直す(main.c) */
+void title_show(void);              /* タイトルの絵(SCREEN 11)を出す(main.c) */
+void title_blink(u8 on);            /* タイトルの PUSH SPACE KEY を出す・消す(表示するページを替える) */
 void sys_seg2(u8 seg);              /* ページ2のマッパーのセグメントを切り替える */
 void sys_page0_data(void);          /* ページ0の表とコード(エリア _PAGE0 = 0x1A00-)を ROM のバンク 1 から読み込む */
 void bios_font(u8 *dst);            /* BIOS のフォント 2KB を dst へ(ページ2・3) */
@@ -65,6 +69,7 @@ void sys_z80x_init(void);           /* g_z80x_ok と g_z80x を決める(起動�
 /* ---- vdp.s ---- */
 void vdp_wreg(u8 reg, u8 val);
 void vdp_set_write(u16 addr);
+void vdp_set_write_hi(u8 hi, u16 addr);  /* 128KB の VRAM の番地(hi = A16〜A14、addr = 下位 14 ビット) */
 void vdp_out(const u8 *src, u16 len);
 void vdp_fill(u8 val, u16 len);
 void vdp_set_palette(u8 first, const u8 *pal);
