@@ -96,14 +96,16 @@ def outline(mask, x0, y0, x1, y1, w):
 def layout():
     """文字の配置。戻り値: 1 ページ目の文字(各ドットのパレット番号、0 = 絵)、2 ページ目(PUSH SPACE KEY 無し)、帯の行"""
     m = [[0] * W for _ in range(H)]
-    # タイトルは 2 行で大きく(2026-10-23 ユーザー: 「タイトルはドンと」)。COASTER は黄、HOME RUN は橙
+    # タイトルは 2 行で大きく(2026-10-23 ユーザー: 「タイトルはドンと」)。COASTER は黄、HOME RUN は橙。
+    # 2 行の間をあけて主人公の顔(絵の 31〜60 行目。目は 44〜49 行目)を見せる(ユーザー: 「間あけたら主人公の顔はいるよね」)
     t = 7
     s1, s2 = 'COASTER', 'HOME RUN'
-    y1 = 5
+    y1 = 3
     draw_tiles(m, s1, (W - text_width(s1, t)) // 2, y1, t, 2, 3)
-    y2 = y1 + 5 * t + 5
+    y2 = 84
     draw_tiles(m, s2, (W - text_width(s2, t)) // 2, y2, t, 4, 5)
-    outline(m, 0, y1, W, y2 + 5 * t, 2)
+    outline(m, 0, y1, W, y1 + 5 * t, 2)
+    outline(m, 0, y2, W, y2 + 5 * t, 2)
     # 著作権表示(一番下)
     cs = ' 2026 suzuki-black'
     ct = 2
@@ -114,10 +116,10 @@ def layout():
     draw_tiles(m, '2026 suzuki-black', cx + 9 + 2 + 4 * ct - ct, cy, ct, 8, 8)
     outline(m, 0, cy - 1, W, cy + 5 * ct + 1, 1)
     page2 = [r[:] for r in m]
-    # PUSH SPACE KEY(中段。タイトルの下と著作権表示の間)
+    # PUSH SPACE KEY(中段。HOME RUN の下と著作権表示の間の中ほど)
     ps = 'PUSH SPACE KEY'
     pt = 3
-    py = 138
+    py = 160
     draw_tiles(m, ps, (W - text_width(ps, pt)) // 2, py, pt, 6, 7)
     outline(m, 0, py, W, py + 5 * pt, 1)
     band = (py - 2, py + 5 * pt + 2)
