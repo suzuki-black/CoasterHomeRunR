@@ -56,7 +56,10 @@ void sys_install_loader(void);
 void sys_page0_ram(void);           /* ページ0を自前の RAM に(0x0038 に割り込み処理) */
 void mod_load(u8 bank);             /* ROM の bank, bank+1(16KB)をページ2(いまのセグメント)の 0x8000- へ写す */
 void rom_load(u8 bank);             /* 同じく写すが、0xBC00- を 0 で埋めない(モジュールでないデータ。タイトルの絵) */
-void vdp_init(void);                /* SCREEN 3 を作り直す(main.c) */
+void vdp_init(void);                /* SCREEN 3 を作り直す(場面のモジュール scene.c。sys.s の中継) */
+void ending_show(void);             /* エンディング(scene.c。文は g_end_txt) */
+void gameover_show(void);           /* ゲームオーバー(scene.c) */
+void config_show(void);             /* 隠しコンフィグ(scene.c) */
 void title_show(void);              /* タイトルの絵(SCREEN 11)を出す(main.c) */
 void title_blink(u8 on);            /* タイトルの PUSH SPACE KEY を出す・消す(表示するページを替える) */
 void sys_seg2(u8 seg);              /* ページ2のマッパーのセグメントを切り替える */

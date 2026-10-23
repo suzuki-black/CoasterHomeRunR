@@ -2,7 +2,7 @@
 """ASCII8 メガロム(512KB = 8KB × 64 バンク)を組み立てる。配置は src/boot/boot.s の冒頭を参照。
 
   mkrom.py boot.ihx engine.ihx engine.noi out.rom env1.ihx env1.noi ... env6.ihx env6.noi game1.ihx game1.noi ... game6.ihx game6.noi
-           snd.ihx snd.noi songs.bin voicemod.bin title.bin
+           snd.ihx snd.noi songs.bin voicemod.bin title.bin scene.ihx scene.noi
 
 - bank0     : ローダー(0x4000-0x5FFF)
 - bank1     : ページ0に置く表とコード(エリア _PAGE0 = RAM 0x1A00-0x3FFF。起動時に sys_page0_data が読み込む)
@@ -14,7 +14,8 @@
               起動時にセグメント 8 へ読み込む)
 - bank30-31 : 声のモジュール(内蔵 PCM の英語の声。tools/gen_voice.sh が作る src/sound/voicemod.bin。起動時にセグメント 9 へ)
 - bank32-39 : タイトルの絵(SCREEN 11。tools/gen_title.py が作る title.bin。タイトル画面で 16KB ずつ RAM へ写して VRAM へ)
-- bank40-63 : 空き
+- bank40-41 : 場面のモジュール(scene.c。エンディング・ゲームオーバー・隠しコンフィグ・SCREEN 3 の作り直し。起動時にセグメント 10 へ)
+- bank42-63 : 空き
 
 モジュール(オーバーレイ、仕様書 7.3)はどれも 0x8000-0xBBFF にコードと定数、0xBC00-0xBFFF に変数(読み込み後に 0 で埋める。
 初期値つきの変数は置けない)。常駐部の変数(DATA/BSS)が 0xCC00-0xDDFF に収まっているかも検査する。
@@ -25,6 +26,7 @@ import sys
 BANK = 0x2000
 ROM_BANKS = 64
 TITLE_BANK = 32                          # タイトルの絵(main.c の TITLE_BANK)
+SCENE_BANK = 40                          # 場面のモジュール(game.h の SCENE_BANK)
 SND_BANK = 28
 VOICE_BANK = 30
 DATA_BASE, DATA_LIMIT = 0xCC00, 0xDE00   # 0xDE00-0xDFFF は行の左右端(raster.s span_a/span_b)
@@ -137,8 +139,8 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path, *game_args):
             sys.exit(f'mkrom: ステージ {n} の地形モジュールのコードが 0x{ENV_CODE_LIMIT:04X}(地形の表)に食い込んだ: 0x{env_hi:04X}')
         place(ENV_BANK(n), envimg, f'env{n}')
         mods.append(f'env{n}={env_hi - MOD_BASE + 1}B/{ENV_CODE_LIMIT - MOD_BASE}')
-    snd_ihx, snd_noi, songs_bin, voice_bin, title_bin = game_args[-5:]
-    game_args = game_args[:-5]
+    snd_ihx, snd_noi, songs_bin, voice_bin, title_bin, scene_ihx, scene_noi = game_args[-7:]
+    game_args = game_args[:-7]
     if len(game_args) % 2:
         sys.exit('mkrom: ゲームモジュールは (ihx, noi) の組で渡す')
     for k in range(len(game_args) // 2):
@@ -167,6 +169,9 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path, *game_args):
         sys.exit(f'mkrom: タイトルの絵が {len(title)} B で、バンク {TITLE_BANK}〜{TITLE_BANK + 7} に収まらない')
     rom[TITLE_BANK * BANK:TITLE_BANK * BANK + len(title)] = title
     mods.append(f'title={len(title)}B')
+    sceneimg, info = check_module('scene', scene_ihx, scene_noi)
+    rom[SCENE_BANK * BANK:(SCENE_BANK + 2) * BANK] = sceneimg
+    mods.append(info)
     with open(out_path, 'wb') as f:
         f.write(rom)
     print(f'mkrom: {out_path} {len(rom)} B (ASCII8) '

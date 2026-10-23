@@ -182,6 +182,36 @@ _sys_seg2::
 	ret
 
 ; ---------------------------------------------------------------------------
+; void vdp_init(void) / ending_show(void) / gameover_show(void) / config_show(void) — 場面のモジュール(scene.c)を呼ぶ
+;   ページ2を場面のセグメントにして呼び、呼ぶ前のセグメントに戻す(タイトルからも、ゲームのあとからも呼ぶため)
+; ---------------------------------------------------------------------------
+SEG_SCENE = 10			; game.h の SEG_SCENE
+_vdp_init::
+	ld	hl, #MOD_ADDR
+	jr	scm_call
+_ending_show::
+	ld	hl, #MOD_ADDR + 3
+	jr	scm_call
+_gameover_show::
+	ld	hl, #MOD_ADDR + 6
+	jr	scm_call
+_config_show::
+	ld	hl, #MOD_ADDR + 9
+scm_call:
+	ld	a, (_g_seg2)
+	push	af
+	ld	a, #SEG_SCENE
+	ld	(_g_seg2), a
+	out	(0xFE), a
+	call	scm_jp
+	pop	af
+	ld	(_g_seg2), a
+	out	(0xFE), a
+	ret
+scm_jp:
+	jp	(hl)
+
+; ---------------------------------------------------------------------------
 ; void env_build(void) / void env_draw(u16 s, u16 look) — 地形モジュールを呼ぶ(ページ2を地形のセグメントにして呼び、戻す)
 ;   引数はレジスタ(HL, DE)だけで渡すこと。スタックで渡す引数があると、ここで積む戻り番地の分ずれる
 ; ---------------------------------------------------------------------------

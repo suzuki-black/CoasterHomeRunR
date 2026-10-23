@@ -104,6 +104,8 @@ typedef struct {
 #define SEG_SND      8   /* 音のモジュール(FM の曲。起動時に 1 回読み込む) */
 #define SND_BANK     28  /* 音のモジュールの ROM のバンク(28-29。6〜17 はゲームモジュール、18〜27 はステージ 2〜6 の地形モジュール) */
 #define SEG_VOICE    9   /* 声のモジュール(内蔵 PCM の声。起動時に 1 回読み込む) */
+#define SEG_SCENE   10   /* 場面のモジュール(エンディング・ゲームオーバー・隠しコンフィグ・SCREEN 3 の作り直し。起動時に 1 回) */
+#define SCENE_BANK  40   /* 場面のモジュールの ROM のバンク(40-41) */
 #define VOICE_BANK   30  /* 声のモジュールの ROM のバンク(30-31) */
 #define MOD_STAGE    (*(const Stage * const *)0x8003)
 typedef u8 (*GameRunFn)(const Stage *st, u8 first);

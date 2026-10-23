@@ -133,6 +133,10 @@ $(BUILD)/env4.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env_s4.rel $(BUILD)/truss.r
 $(BUILD)/env_s%.rel: $(ENG)/env.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -DENV_S$* -c -o $@ $<
 
+# 場面のモジュール(マッパーのセグメント 10 に置く。エンディング・ゲームオーバー・隠しコンフィグ・SCREEN 3 の作り直し)
+$(BUILD)/scenemod.ihx: $(BUILD)/modhead_scene.rel $(BUILD)/scene.rel $(BUILD)/ressyms.rel
+	$(CC) $(MODFLAGS) --code-loc 0x800C -o $@ $^
+
 # 音のモジュール(マッパーのセグメント 8 に置く。効果音・ドラムのノイズ・PSG のパート・FM の曲のドライバ。曲のデータは 0x8C00- に
 # tools/mkrom.py が合わせる)。割り込み(Z80 転送の間も)から動くので、C は Z80_SAFE_C で確かめる
 $(BUILD)/sndmod.ihx: $(BUILD)/modhead_snd.rel $(BUILD)/sndtick.rel $(BUILD)/sndfm.rel $(BUILD)/ressyms.rel
@@ -189,10 +193,11 @@ $(BUILD)/title.bin $(BUILD)/title.h &: data/title_art.webp $(TOOLS)/gen_title.py
 GAMES = $(foreach n,1 2 3 4 5 6,$(BUILD)/game$(n).ihx)
 ENVS  = $(foreach n,1 2 3 4 5 6,$(BUILD)/env$(n).ihx)
 
-$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(ENVS) $(GAMES) $(BUILD)/sndmod.ihx $(BUILD)/songs.bin src/sound/voicemod.bin $(BUILD)/title.bin $(TOOLS)/mkrom.py
+$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(ENVS) $(GAMES) $(BUILD)/sndmod.ihx $(BUILD)/songs.bin src/sound/voicemod.bin $(BUILD)/title.bin $(BUILD)/scenemod.ihx $(TOOLS)/mkrom.py
 	$(PYTHON) $(TOOLS)/mkrom.py $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/engine.noi $@ \
 	  $(foreach n,1 2 3 4 5 6,$(BUILD)/env$(n).ihx $(BUILD)/env$(n).noi) \
-	  $(foreach n,1 2 3 4 5 6,$(BUILD)/game$(n).ihx $(BUILD)/game$(n).noi) $(BUILD)/sndmod.ihx $(BUILD)/sndmod.noi $(BUILD)/songs.bin src/sound/voicemod.bin $(BUILD)/title.bin
+	  $(foreach n,1 2 3 4 5 6,$(BUILD)/game$(n).ihx $(BUILD)/game$(n).noi) $(BUILD)/sndmod.ihx $(BUILD)/sndmod.noi $(BUILD)/songs.bin src/sound/voicemod.bin $(BUILD)/title.bin \
+	  $(BUILD)/scenemod.ihx $(BUILD)/scenemod.noi
 	cp $@ "$(BUILD)/$(ROMNAME) [ASCII8].rom"
 
 # 計測用 ROM(fps 表示、タイトルに CPU の状態)。オブジェクトが混ざらないよう build/fps に分けてビルドする
