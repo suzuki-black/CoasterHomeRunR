@@ -12,7 +12,10 @@ void popups_draw(void);
 void debris_start(void);
 /* 倒した敵から破片が飛び散る(画面の位置 x, y、敵の色 c と白・黒) */
 void debris_burst(u8 x, u8 y, u8 c);
-void debris_draw(void);
+void debris_draw(void);            /* ボスの爆発(boom_start)もここで描く */
+/* ボスを倒したときの爆発(効果音 SE_BOSS の「ばごん」5 回に合わせて、画面の位置 x, y のまわりで 5 回) */
+void boom_start(u8 x, u8 y);
+extern u8 g_fx_shake;              /* 爆発の揺れの残りフレーム(render.c がカメラの揺れに足す) */
 /* 分岐点から先の、選ばれていない側の線路(game.c が rail_sample で g_alt に入れる) */
 #define ALT_N 12
 /* 実際に描く点の数(2m おき)。分岐点から 16m まで(16m より先は画面で 1〜2 ブロックにしかならず、省いても絵の違いは

@@ -510,7 +510,7 @@ static void kill_enemy(Enemy *e)
     e->timer = 0;
     e->flash = 12;
     e->v = (i16)cam_v;
-    se_play(SE_KILL);
+    se_play(boss ? SE_BOSS : SE_KILL);   /* ボスは派手な「ばごんばごんばごん…」 */
     /* 倒した手応え: 一瞬止める(ヒットストップ)、敵の色の破片を飛ばす。ふつうの敵は上へ跳ね上げて奥へ吹き飛ばす
      * (ボスは沈める。止める時間を長くして画面を揺らす) */
     debris_burst(g_pop_hx, g_pop_hy + 4, models[t].r[0].color);
@@ -518,6 +518,7 @@ static void kill_enemy(Enemy *e)
     if (boss) {
         hitstop = 10;
         shake = 8;
+        boom_start(g_pop_hx, (u8)(g_pop_hy + 6));   /* 効果音の「ばごん」5 回に合わせた爆発(fx.c) */
     } else {
         e->attacks = 48;                     /* 上向きの速さ(1/256m/フレーム。ST_DEAD で毎フレーム 6 ずつ落ちる) */
         e->v += ((i16)(e->s - cam_s) < 0) ? -MPS(4) : MPS(4);
@@ -1317,15 +1318,5 @@ u8 game_run(const Stage *st, u8 first)
     g_spr_attr[0] = 209;
     g_spr_attr[4] = 209;
     bgm_stop();
-    if (!over) return 1;
-    /* ゲームオーバー(約 4 秒) */
-    g_scene = 2;
-    for (i = 0; i < 120; i++) {
-        buf_fill(C_BLACK);
-        if (i & 16) text_center(12, "GAME", C_RED, 2);
-        if (i & 16) text_center(24, "OVER", C_RED, 2);
-        text_center(38, "COASTER BROKEN", C_YELLOW, 1);
-        present();
-    }
-    return 0;
+    return !over;                        /* ゲームオーバーの画面は常駐部(main.c の gameover_run) */
 }

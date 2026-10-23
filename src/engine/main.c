@@ -251,6 +251,32 @@ static void stage_card(const Stage *st)
     }
 }
 
+/* ゲームオーバー(約 4 秒)。GAME OVER の点滅、COASTER BROKEN、最終スコア(内部は 1/10 なので末尾に 0)。
+ * ゲームモジュールの置き場を使わないよう常駐部に置く */
+static void gameover_run(void)
+{
+    u8 i, k = 0;
+    char s[13], d[5];
+    u16 sc = g_score;
+    /* 「SCORE 300」のように、数字を詰めて全体を中央に(右詰めの欄だと間が空きすぎる) */
+    do { d[k++] = (char)('0' + sc % 10); sc /= 10; } while (sc);
+    for (i = 0; i < 6; i++) s[i] = "SCORE "[i];
+    while (k) s[i++] = d[--k];
+    if (g_score) s[i++] = '0';
+    s[i] = 0;
+    g_scene = 2;
+    for (i = 0; i < 120; i++) {
+        buf_fill(C_BLACK);
+        if (i & 16) {
+            text_center(4, "GAME", C_RED, 2);
+            text_center(16, "OVER", C_RED, 2);
+        }
+        text_center(29, "COASTER BROKEN", C_YELLOW, 1);
+        text_center(38, s, C_WHITE, 1);
+        present();
+    }
+}
+
 /* ステージ 1 から順に遊ぶ。ライフとスコアはステージをまたいで持ち越す */
 static void play(void)
 {
@@ -260,7 +286,7 @@ static void play(void)
         st = stage_load(n + 1);
         g_stage = n + 1;
         stage_card(st);
-        if (!MOD_GAME_RUN(st, n == n0)) return;
+        if (!MOD_GAME_RUN(st, n == n0)) { gameover_run(); return; }
     }
     g_score += (u16)life * 100;          /* 残りライフ × 1000 点(仕様書 5.2) */
     g_scene = 3;

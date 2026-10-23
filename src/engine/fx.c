@@ -98,9 +98,66 @@ void debris_burst(u8 x, u8 y, u8 c)
     debris_go((i16)x << 8, (i16)y << 8);
 }
 
+/* ボスを倒したときの爆発(2026-10-23 ユーザー: 「効果音とシンクロして謎の爆発の演出」)。効果音 SE_BOSS の「ばごん」(12 ティックごとに
+ * 5 回)に合わせて、ボスのまわりの 5 か所で順に爆発させる。1 つの爆発は 16 ティック: 白い芯が縮み、8 つの火の玉の輪が広がりながら
+ * 白 → 黄 → 橙 → 赤に変わる。爆発の始めに破片を飛ばし、画面を揺らす(g_fx_shake。render.c がカメラの揺れに足す)。
+ * 描くのは常駐部なので、ゲームモジュールの置き場を使わない(game.c は boom_start を呼ぶだけ) */
+#define BOOM_N 5
+#define BOOM_STEP 12                     /* sndtick.c の se_boss の「ばごん」1 つの長さ(ティック) */
+static const i8 boom_ofs[BOOM_N][2] = { { 0, 4 }, { -9, -2 }, { 8, 1 }, { -5, 10 }, { 6, 9 } };
+static u8 boom_x, boom_y, boom_k, boom_on;
+static u16 boom_t0;
+u8 g_fx_shake;
+
+void boom_start(u8 x, u8 y)
+{
+    boom_x = x; boom_y = y;
+    boom_t0 = g_tick;
+    boom_k = 0;
+    boom_on = 1;
+}
+
+static void boom_blast(i16 cx, i16 cy, u8 s)
+{
+    u8 k, c = (s < 4) ? C_WHITE : (s < 8) ? C_YELLOW : (s < 12) ? C_ORANGE : C_RED;
+    i16 r = 3 + s + (s >> 1), core = 6 - (s >> 1);
+    u8 sz = 4 - (s >> 2);                    /* 火の玉の大きさ(4 → 1 ブロック) */
+    for (k = 0; k < 8; k++) {                /* 火の玉の輪(少しずつ回りながら広がる) */
+        u8 a = (u8)(k * 32 + s * 4);
+        i16 x = cx + fmul(r, COS(a)), y = cy + fmul(r, SIN(a));
+        if (x < 2 || x > 60 || y < 2 || y >= GAME_ROWS - 4) continue;
+        g_rx = (u8)x - 2; g_ry = (u8)y - 2; g_rw = g_rh = sz; g_color = c;
+        rect_fill();
+    }
+    if (core > 0 && cx >= core && cx + core < 64 && cy >= core && cy + core < GAME_ROWS) {   /* 白い芯 */
+        g_rx = (u8)(cx - core); g_ry = (u8)(cy - core); g_rw = g_rh = (u8)(core * 2); g_color = C_WHITE;
+        rect_fill();
+    }
+}
+
+static void boom_draw(void)
+{
+    u16 t = g_tick - boom_t0;
+    u8 k;
+    if (g_fx_shake) g_fx_shake--;
+    if (!boom_on) return;
+    if (t >= BOOM_N * BOOM_STEP + 16) { boom_on = 0; return; }
+    while (boom_k < BOOM_N && t >= (u16)boom_k * BOOM_STEP) {   /* 爆発の始め: 破片と揺れ */
+        debris_burst((u8)(boom_x + boom_ofs[boom_k][0]), (u8)(boom_y + boom_ofs[boom_k][1]), (boom_k & 1) ? C_ORANGE : C_YELLOW);
+        g_fx_shake = 4;
+        boom_k++;
+    }
+    for (k = 0; k < BOOM_N; k++) {
+        u16 s = t - (u16)k * BOOM_STEP;
+        if (t < (u16)k * BOOM_STEP || s >= 16) continue;
+        boom_blast((i16)boom_x + boom_ofs[k][0], (i16)boom_y + boom_ofs[k][1], (u8)s);
+    }
+}
+
 void debris_draw(void)
 {
     u8 i;
+    boom_draw();                             /* ボスの爆発(破片より奥に) */
     if (!deb_t) return;
     deb_t--;
     for (i = 0; i < N_DEBRIS; i++) {
@@ -119,6 +176,8 @@ void fx_reset(void)
 {
     pop_t[0] = pop_t[1] = pop_t[2] = pop_t[3] = 0;
     deb_t = 0;
+    boom_on = 0;
+    g_fx_shake = 0;
     g_alt_n = 0;
 }
 

@@ -14,12 +14,14 @@ i16 cam_sin, cam_cos;
 extern u8 g_xf_ok;
 
 u8  g_cam_shake;                 /* 揺れの残りフレーム(0 = 揺れない)。カメラの向きを左右・上下に 1〜2 ブロック分ずらす */
+extern u8 g_fx_shake;            /* ボスの爆発の揺れ(fx.c) */
 
 void render_set_camera(i16 x, i16 y, i16 z, u16 yaw, i8 pitch)
 {
-    if (g_cam_shake) {
-        yaw += (g_cam_shake & 1) ? 0x0200 : (u16)-0x0200;
-        pitch += (g_cam_shake & 2) ? 3 : -3;
+    u8 sh = g_cam_shake | g_fx_shake;
+    if (sh) {
+        yaw += (sh & 1) ? 0x0200 : (u16)-0x0200;
+        pitch += (sh & 2) ? 3 : -3;
     }
     cam_x = x; cam_y = y; cam_z = z;
     cam_yaw = (u8)(yaw >> 8);
