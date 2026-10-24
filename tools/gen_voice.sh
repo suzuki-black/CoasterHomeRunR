@@ -1,8 +1,11 @@
 #!/bin/sh
 # 声(内蔵 PCM で鳴らす英語の声)を作り、声のモジュール src/sound/voicemod.bin(ROM のバンク 30-31。起動時にセグメント 9 へ)へ書く。
 #   sh tools/gen_voice.sh
-#   mac の読み上げ(say)を使うので、生成したファイルはリポジトリに入れておく(ビルドのたびには作らない)。
-#   声は Junior、速さ 300(2026-10-10 にユーザーが選んだ。「FIRE」で 0.31 秒)。検証は tools/lineirq192/ と docs/検証記録.md
+#   読み上げは flite(Carnegie Mellon University の Language Technologies Institute。BSD に似た許諾で、作った音は自由に配れる。
+#   条件は著作権表示を残すこと = README のクレジット)。brew install flite。生成したファイルはリポジトリに入れておく(ビルドのたびには作らない)。
+#   声は cmu_us_slt、速さは 1.3 倍(duration_stretch 0.77)。2026-10-25 にユーザーが選んだ。
+#   (はじめは mac の読み上げ(say)の Junior で作ったが、macOS の使用許諾は読み上げの声を公開・配布する使い方を認めていないので作り直した)
+#   検証は tools/lineirq192/ と docs/検証記録.md
 #   並び(番号は pcm.h の VOICE_。1 から): 1 Fire!(誘導弾) 2 Enemy ahead! 3 Enemy behind!(警告) 4 Warning!(ボス)
 # モジュールの形(0x8000-): db 声の数、(dw 番地, dw サンプル数) × 声の数、続けてサンプル(8bit unsigned、中心 0x80、3,996Hz)
 set -e
@@ -13,8 +16,8 @@ n=0
 for p in "fire:Fire!" "ahead:Enemy ahead!" "behind:Enemy behind!" "warning:Warning!"; do
   name=${p%%:*}
   text=${p#*:}
-  say -v Junior -r 300 -o "$OUT/$name.aiff" "$text"
-  afconvert -f WAVE -d LEI16@3996 -c 1 "$OUT/$name.aiff" "$OUT/$name.wav"
+  flite -voice slt --setf duration_stretch=0.77 -t "$text" -o "$OUT/$name.raw.wav"
+  afconvert -f WAVE -d LEI16@3996 -c 1 "$OUT/$name.raw.wav" "$OUT/$name.wav"
 done
 python3 - "$OUT" src/sound/voicemod.bin <<'PY'
 import struct, sys, wave

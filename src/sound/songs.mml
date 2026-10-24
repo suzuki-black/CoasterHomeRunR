@@ -244,18 +244,20 @@ R  [ bh16 h16 h16 h16 sh16 h16 h16 h16 bh16 h16 b16 h16 sh16 h16 h16 s16 ]2
 R    bh16 h16 h16 h16 sh16 h16 h16 h16 t16 t16 s16 s16 t16 s16 bs16 s16 ]4
 @song STAGE6 loop
 # ステージ 6「王」(ネッケ『クシコス・ポスト』とカバレフスキー『道化師のギャロップ』をイメージ)。イ短調、t150。
-#   トランペットの駆け足の旋律、後半はバイオリンが半音で駆け下り、蹄のような同じ音の連打で最後の戦いを急き立てる
+#   トランペットの駆け足の旋律、後半はバイオリンが和音の音で上下に駆け、蹄のような 2 回ずつの連打で最後の戦いを急き立てる。
+#   後半の半音階の駆け下りと、同じ音を打ちながら半音ずつ下がる形は、カバレフスキーの曲(著作権が残っている)の特徴の形に近いので、
+#   和音の音の形に書き直した(2026-10-25)
 #   ステージの音の個性(2026-10-18): 最後の戦いの歪んだリード(波形を両方半波にし帰還を最大に。エレキギターに近いざらついた音)を
 #   +3 ずらして 2 チャンネルで重ね、ベースはシンセベース、PSG は旋律の 1 オクターブ上
 @tempo 150
 @voice 21 21 0E 1F F2 F1 13 14   # オリジナル音色 0: 波形を半波に歪ませた鋭いリード
-@voice 61 61 13 06 F2 F2 13 15   # オリジナル音色 1: なめらかなのこぎり波(半音で駆け下りる 9〜11 小節)
+@voice 61 61 13 06 F2 F2 13 15   # オリジナル音色 1: なめらかなのこぎり波(和音の音で駆ける 9〜11 小節)
 A @0 @v0 v13 q6
 A o5 l8 a a o6 c o5 a o6 e4 d4 | o5 l8 g g b g o6 d4 c4 | o5 l8 f f a f o6 c o5 b a g+ | o5 a2 e2 |
 A o5 l8 a a o6 c o5 a o6 e4 d4 | o5 l8 g g b g o6 d e f d | o6 l8 e d c o5 b a g f e | o5 a2 r2 |
-A @v1 @0 v13 q7 o6 l16 e d+ d c+ c o5 b a+ a g+ a b o6 c d e f e | o6 l16 d c+ c o5 b a+ a g+ g f+ g a b o6 c d c o5 b |
-A o6 l16 e d+ d c+ c o5 b a+ a g+ a b o6 c d e f e | @v0 @0 q6 o5 l8 a e c e a4 r4 |
-A o5 l16 [a]4 [g+]4 [g]4 [f+]4 | o5 l16 [f]4 [e]4 [d+]4 [e]4 | o5 l8 a b o6 c d e f g+ a | o6 a4 e4 o5 a4 r4 |
+A @v1 @0 v13 q7 o6 l16 e c o5 a o6 c e a e c d o5 b g+ b o6 d e d o5 b | o6 l16 f d o5 a o6 d f a f d e o5 b g+ b o6 e g+ e o5 b |
+A o6 l16 a e c e a e c o5 a b o6 c d c o5 b a g+ b | @v0 @0 q6 o5 l8 a e c e a4 r4 |
+A o5 l16 a a o6 c c e e c c o5 a a o6 c c e e a a | o5 l16 a a o6 d d f f d d o5 b b o6 d d e e o5 b b | o5 l8 a b o6 c d e f g+ a | o6 a4 e4 o5 a4 r4 |
 B @0 v11 q8 o4 e2 a2 | d2 g2 | f2 e2 | e1 | e2 a2 | d2 g2 | e2 g+2 | a1 |
 B e2 g+2 | f2 g+2 | e2 a2 | e1 | e2 e2 | f2 g+2 | e2 g+2 | e1 |
 C @0 v10 q4 o5 l8 [r c]4 | o4 [r b]4 | [r a]4 | o5 [r c]4 | [r c]4 | o4 [r b]4 | [r b]4 | o5 [r c]4 |
@@ -267,15 +269,15 @@ E [a > a <]2 [e > e <]2 | [d > d <]2 [e > e <]2 | [a > a <]4 | [a > a <]4 | [a >
 F K+3 @0 @v0 v12 q6
 F o5 l8 a a o6 c o5 a o6 e4 d4 | o5 l8 g g b g o6 d4 c4 | o5 l8 f f a f o6 c o5 b a g+ | o5 a2 e2 |
 F o5 l8 a a o6 c o5 a o6 e4 d4 | o5 l8 g g b g o6 d e f d | o6 l8 e d c o5 b a g f e | o5 a2 r2 |
-F @v1 @0 v12 q7 o6 l16 e d+ d c+ c o5 b a+ a g+ a b o6 c d e f e | o6 l16 d c+ c o5 b a+ a g+ g f+ g a b o6 c d c o5 b |
-F o6 l16 e d+ d c+ c o5 b a+ a g+ a b o6 c d e f e | @v0 @0 q6 o5 l8 a e c e a4 r4 |
-F o5 l16 [a]4 [g+]4 [g]4 [f+]4 | o5 l16 [f]4 [e]4 [d+]4 [e]4 | o5 l8 a b o6 c d e f g+ a | o6 a4 e4 o5 a4 r4 |
+F @v1 @0 v12 q7 o6 l16 e c o5 a o6 c e a e c d o5 b g+ b o6 d e d o5 b | o6 l16 f d o5 a o6 d f a f d e o5 b g+ b o6 e g+ e o5 b |
+F o6 l16 a e c e a e c o5 a b o6 c d c o5 b a g+ b | @v0 @0 q6 o5 l8 a e c e a4 r4 |
+F o5 l16 a a o6 c c e e c c o5 a a o6 c c e e a a | o5 l16 a a o6 d d f f d d o5 b b o6 d d e e o5 b b | o5 l8 a b o6 c d e f g+ a | o6 a4 e4 o5 a4 r4 |
 P D+0 v8 q6
 P o6 l8 a a o7 c o6 a o7 e4 d4 | o6 l8 g g b g o7 d4 c4 | o6 l8 f f a f o7 c o6 b a g+ | o6 a2 e2 |
 P o6 l8 a a o7 c o6 a o7 e4 d4 | o6 l8 g g b g o7 d e f d | o7 l8 e d c o6 b a g f e | o6 a2 r2 |
-P q7 o7 l16 e d+ d c+ c o6 b a+ a g+ a b o7 c d e f e | o7 l16 d c+ c o6 b a+ a g+ g f+ g a b o7 c d c o6 b |
-P o7 l16 e d+ d c+ c o6 b a+ a g+ a b o7 c d e f e | q6 o6 l8 a e c e a4 r4 |
-P o6 l16 [a]4 [g+]4 [g]4 [f+]4 | o6 l16 [f]4 [e]4 [d+]4 [e]4 | o6 l8 a b o7 c d e f g+ a | o7 a4 e4 o6 a4 r4 |
+P q7 o7 l16 e c o6 a o7 c e a e c d o6 b g+ b o7 d e d o6 b | o7 l16 f d o6 a o7 d f a f d e o6 b g+ b o7 e g+ e o6 b |
+P o7 l16 a e c e a e c o6 a b o7 c d c o6 b a g+ b | q6 o6 l8 a e c e a4 r4 |
+P o6 l16 a a o7 c c e e c c o6 a a o7 c c e e a a | o6 l16 a a o7 d d f f d d o6 b b o7 d d e e o6 b b | o6 l8 a b o7 c d e f g+ a | o7 a4 e4 o6 a4 r4 |
 #   リズム(2026-10-17): 蹄のギャロップ(バスドラムとスネアを 16 分で交互に)、4 小節ごとのフィル、頭にシンバル
 R V15,15,12,11,7
 R [ bc16 h16 sh16 h16 b16 b16 sh16 h16 b16 h16 sh16 h16 b16 b16 sh16 s16

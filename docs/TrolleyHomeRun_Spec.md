@@ -723,7 +723,7 @@ TrolleyHomeRun/
 - 【TODO】エンディングの文を宝の量(残りライフ)で 3 通りにするか決める。ステージ 6 の冒頭の説明と ending_text の注釈には
   「行の bit7 で宝の量によって選ぶ。村の暮らしが 3 通り」とあるが、データにその行は無く、クリアすれば必ず 1 通りの文が出る
   (エンドロールを作るときに、3 通りにするか注釈を消すかを決める)。
-- 【TODO】README を ZeroNoHoukouR(https://github.com/suzuki-black/ZeroNoHoukouR)の README にならって整える(2026-10-21 抽出)。
+- (2026-10-25 済み) README を ZeroNoHoukouR(https://github.com/suzuki-black/ZeroNoHoukouR)の README にならって整える(2026-10-21 抽出)。
   足すもの:
   1. タイトル画面と見せ場のスクリーンショット(docs/media/。タイトル・鉄橋・町の祭り・ボスなど)
   2. 冒頭の「試作品(開発中)です」の注意書き
