@@ -134,6 +134,11 @@ void scm_ending(void)
     for (i = 0; i < 16; i += 4) g_spr_attr[i] = 209;
     for (i = 0; i < sizeof(regs); i += 2) vdp_wreg(regs[i], regs[i + 1]);
     bios_font(BUF);
+    {   /* 太字: 各行を 1 ドット右へずらして重ねる(BIOS のそのままのフォントは細い。2026-10-25 ユーザーの指定) */
+        u8 *f = BUF;
+        u16 j;
+        for (j = 0; j < 2048; j++, f++) *f |= *f >> 1;
+    }
     vdp_set_write(0x0000);
     vdp_out(BUF, 2048);
     for (i = 0; i < 32; i++) row[i] = 0x21;          /* 文字 = 白(2)、背景 = 黒(1)。8 文字ごとに 1 バイト */
