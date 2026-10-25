@@ -68,6 +68,7 @@ static const EDef edef[ET_COUNT] = {
     /* E06 半魚 */ EN_WALK(2, 8),
     /* 大ダコ人 */ { 60, MV_KEEP,  -21, -28,  2,  13, 64,   0,  0, AT_CYCLE, 30, 30,  90, 2, 30, ET_MAGIC, 35 },
     /* 大ダコの足*/{  3, MV_HOVER, -40,  36,  3,   0,  0,  24,  8, AT_MELEE, 25, 45, 100, 1,  1, 0,        0 },
+    /* 大ナマズ人*/{ 80, MV_KEEP,  -21,  26,  2,  20, 64,  24, 16, AT_CYCLE, 30, 30,  90, 3, 12, ET_MAGIC, 30 },
 };
 #define IS_SIGN(t) ((t) == ET_SIGNL || (t) == ET_SIGNR)
 /* ボスか(ボスはどれも動き方が MV_KEEP。種類を 1 つずつ比べるより小さい) */
@@ -295,7 +296,8 @@ static void update_ce(void)
     i16 d = (i16)(ce.s - cam_s);
     i16 keep = (i16)f->keep << 4;                    /* 1/4m → 1/64m */
     ce.anim++;
-    if (ce.flash && ce.state != ST_ATTACK) ce.flash--;
+    if (ce.flash) ce.flash--;                         /* 攻撃中も減らす(予備動作の点滅は attack・lunge が毎フレーム上書きする。
+                                                     * 攻撃中は減らさないでいたら、撃たれた・撃った光が攻撃の終わりまで残った) */
     if (f->sway) ce.lat_t = (ce.anim & f->swaym) ? ((i16)f->sway << 4) : -((i16)f->sway << 4);
     if (f->bob) ce.up = ((i16)f->up << 4) + ((ce.anim & f->bobm) ? f->bob : 0);
 
@@ -1237,7 +1239,7 @@ static void clear_tally(void)
 
 u8 game_run(const Stage *st, u8 first)
 {
-    u8 i, over = 0;
+    u8 i, over = 0, end_wait = 0;
     fx_reset();                          /* 演出と、分岐の選ばれていない側の線路を消す(この後の分岐の準備で入れ直す) */
     rail_begin();
     rail_add(st->track);
@@ -1311,7 +1313,9 @@ u8 game_run(const Stage *st, u8 first)
         render();
         present();
         if (!life) { over = 1; break; }
-        if (sc_end && !boss_alive) break;
+        /* 台本の終わり: 敵(敵弾も)が残っていればいなくなるまで待つ(最大 150 フレーム ≒ 6 秒。放っておかれた敵で止まらないように)。
+         * 残った敵がいても強制的にクリアにしていた(2026-10-25 ユーザーの指摘) */
+        if (sc_end && !boss_alive && (foe_side() == 0 || ++end_wait >= 150)) break;
     }
 
     if (!over) clear_tally();

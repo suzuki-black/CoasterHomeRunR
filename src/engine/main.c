@@ -21,7 +21,6 @@ u8 g_stage;                      /* 遊んでいるステージ(1 から) */
 static u8 back_page = 1;
 static u16 last_flip;
 const u8 *stage_pal;              /* いまの 9-15 の色(場面のモジュールの vdp_init も書く) */
-u8 g_end_txt[160];               /* エンディングの文(play が最後のステージのデータから写す。scene.c が出す) */
 u8 g_end_bgm;
 static u8 pal_state;             /* 0 = そのまま / 1 = 赤く光らせる / 2 = 元に戻す */
 
@@ -166,13 +165,7 @@ static void play(void)
     }
     g_score += (u16)life * 100;          /* 残りライフ × 1000 点(仕様書 5.2) */
     g_scene = 3;
-    {   /* エンディングの文と BGM を常駐部へ写す(場面のモジュールはページ2で動くので、ステージのデータを読めない) */
-        const u8 *q = st->ending;
-        u8 i = 0;
-        if (q) while (i < sizeof(g_end_txt) - 1 && *q != 0xFF) g_end_txt[i++] = *q++;
-        g_end_txt[i] = 0xFF;
-        g_end_bgm = st->end_bgm;
-    }
+    g_end_bgm = st->end_bgm;             /* エンドロール(scene.c。文とクレジットは場面のモジュールにある) */
     ending_show();
 }
 

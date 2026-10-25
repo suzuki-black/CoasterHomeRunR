@@ -3,7 +3,7 @@
  * エンディング・ゲームオーバー・隠しコンフィグ・SCREEN 3 の作り直し(vdp_init)。常駐部の置き場を空けるため、地形モジュールや
  * 音のモジュールと同じくページ2のモジュールにした(2026-10-23)。起動時に 1 回読み込み、常駐部の中継(sys.s の vdp_init・
  * ending_show・gameover_show・config_show)がページ2をこのセグメントにして呼び、元のセグメントに戻す。
- * ページ2で動くので、ステージのデータ(ゲームモジュール)は読めない(エンディングの文は play が g_end_txt へ写す)。
+ * ページ2で動くので、ステージのデータ(ゲームモジュール)は読めない(エンドロールの曲の番号は play が g_end_bgm へ写す)。
  * タイトルの絵の読み込み(title_show)はページ2を使うので常駐部のまま。初期値つきの変数は置けない。
  */
 #include "game.h"
@@ -12,7 +12,7 @@
 #include "pcm.h"
 
 extern const u8 pal_fixed[], pal_title[];
-extern u8 g_end_txt[], g_end_bgm;
+extern u8 g_end_bgm;
 extern Config g_cfg;
 void scm_vdp_init(void);
 
@@ -56,8 +56,63 @@ void scm_vdp_init(void)
     vdp_wreg(1, 0xEB);             /* 表示オン、垂直帰線割り込み */
 }
 
-/* エンディング(仕様書 5.2): SCREEN 1 に切り替え、BIOS のフォント(ひらがな)で最後のステージの ending の文を出す。
- * 約 8 秒後(1 秒過ぎたら A でも)タイトルへ。戻るときに SCREEN 3 を作り直す */
+/* エンディング(エンドロール。2026-10-25 ユーザーの指定で英語にし、クレジットを流す): SCREEN 1 に切り替え、BIOS のフォントで
+ * 結びの文とスタッフのクレジットを下から上へ流す(VDP の縦スクロール R#23 で 1 ドットずつ。名前表は 1800h-1BFFh の 32 行を
+ * 輪にして使い、画面に入る直前の行に次の文を書く)。流し終えたら PUSH SPACE KEY を点滅させて待ち、スペースでタイトルへ。
+ * 流れている間にスペースを押すと最後まで飛ばす。曲はエンディングの曲をくり返す */
+#define ROLL_STEP 4                          /* 1 ドット流すティック数(1 秒に 15 ドット。2 だと速すぎた) */
+static const char * const roll[] = {
+    "The young man brought the",
+    "village treasure back home.",
+    "",
+    "And the village went back",
+    "to its peaceful days.",
+    "", "", "",
+    "COASTER HOME RUN",
+    "",
+    "- STAFF -",
+    "",
+    "ORIGINAL CONCEPT / DIRECTION",
+    "suzuki-black",
+    "",
+    "PROGRAM / GRAPHICS",
+    "Claude Code (Anthropic Claude)",
+    "",
+    "MUSIC / SOUND EFFECTS",
+    "Claude Code (Anthropic Claude)",
+    "",
+    "VOICES",
+    "Flite (Carnegie Mellon Univ.)",
+    "",
+    "TITLE ILLUSTRATION",
+    "Microsoft Copilot",
+    "x Claude Code",
+    "", "", "",
+    "THANK YOU FOR PLAYING!",
+    "",
+    "\x01",                                  /* スコア */
+    "",
+    "(C) 2026 suzuki-black",
+    "", "",
+    "PUSH SPACE KEY",
+};
+#define ROLL_N (sizeof(roll) / sizeof(roll[0]))
+static char roll_score[13];
+
+/* 輪の行 k(0〜)に、文の k - 24 行目(範囲の外は空白)を中央にそろえて書く。blank なら空白だけ */
+static void roll_row(u16 k, u8 blank)
+{
+    u8 row[32], i, n;
+    const char *t = "";
+    i16 li = (i16)k - 24;
+    if (!blank && li >= 0 && li < (i16)ROLL_N) t = (roll[li][0] == 1) ? roll_score : roll[li];
+    for (i = 0; i < 32; i++) row[i] = ' ';
+    for (n = 0; t[n]; n++) ;
+    for (i = 0; i < n; i++) row[(32 - n) / 2 + i] = (u8)t[i];
+    vdp_set_write(0x1800 + (u16)(k & 31) * 32);
+    vdp_out(row, 32);
+}
+
 void scm_ending(void)
 {
     static const u8 regs[] = {
@@ -67,12 +122,12 @@ void scm_ending(void)
         3, 0x80,        /* カラーテーブル 2000h */
         4, 0x00,        /* パターンジェネレータ 0000h */
         7, 0x01,        /* 背景 = 黒 */
+        23, 0x00,       /* 縦スクロール */
     };
-    const u8 *p = g_end_txt;
-    u16 t;
-    u8 i, v, prev = 0xFF, in;
+    const u16 y_end = (u16)(ROLL_N - 1 + 4) * 8;   /* PUSH SPACE KEY が画面の 20 行目に来たら止める */
+    u16 y = 0, t = 0;
+    u8 i, k = 0, prev = 0xFF, in, d[5];
     u8 row[32];
-    char num[6];
     u16 sc = g_score;
 
     while (g_flip_req) wait_tick();
@@ -86,32 +141,40 @@ void scm_ending(void)
     vdp_set_write(0x2000);
     vdp_out(row, 32);
     vdp_set_write(0x1800);
-    vdp_fill(0x20, 768);
-    /* 文: (行, 桁, 文字…, 0) の並び。クリアすれば必ずこの文(グッドエンディング。仕様書 5.2) */
-    while (p && *p != 0xFF) {
-        u8 r = *p++, c = *p++;
-        const u8 *q = p;
-        while (*p) p++;
-        vdp_set_write(0x1800 + (u16)r * 32 + c);
-        vdp_out(q, (u16)(p - q));
-        p++;
-    }
-    /* スコア(内部は 1/10 なので末尾に 0) */
-    for (i = 0; i < 5; i++) { num[4 - i] = (char)('0' + sc % 10); sc /= 10; }
-    for (i = 0; i < 4 && num[i] == '0'; i++) num[i] = ' ';   /* 先頭の 0 は空白に */
-    vdp_set_write(0x1800 + 19 * 32 + 10);
-    vdp_out((const u8 *)"SCORE ", 6);
-    vdp_out((const u8 *)num, 5);
-    vdp_out((const u8 *)"0", 1);
+    vdp_fill(0x20, 1024);
+    vdp_set_write(0x1400);                             /* スプライトを出さない(形の表 1800h が名前の表と重なり、流す文字が形として出た) */
+    vdp_fill(0xD0, 1);
+    /* 「SCORE 224600」(内部は 1/10 なので末尾に 0) */
+    do { d[k++] = (u8)('0' + sc % 10); sc /= 10; } while (sc);
+    for (i = 0; i < 6; i++) roll_score[i] = "SCORE "[i];
+    while (k) roll_score[i++] = (char)d[--k];
+    if (g_score) roll_score[i++] = '0';
+    roll_score[i] = 0;
     vdp_wreg(1, 0xE2);                                 /* 表示オン、垂直帰線割り込み */
     if (g_end_bgm) bgm_play(g_end_bgm);
-    for (t = 0; t < 570; t++) {                        /* 約 9.5 秒: エンディングの曲が 1 周鳴り終わるまで(1 周 約 9.6 秒) */
+    for (;;) {
         wait_tick();
+        t++;
         in = input_raw();
-        if (t > 60 && (in & IN_A) && !(prev & IN_A)) break;
+        if ((in & IN_A) && !(prev & IN_A)) {
+            if (y >= y_end) break;                     /* 流し終えていればタイトルへ */
+            y = y_end;                                 /* 流れている間なら最後まで飛ばす */
+            for (i = 0; i < 25; i++) roll_row((y >> 3) + i, 0);
+            vdp_wreg(23, (u8)y);
+        }
         prev = in;
+        if (y < y_end) {
+            if (!(t % ROLL_STEP)) {
+                if (!(y & 7)) roll_row((y >> 3) + 24, 0);   /* 画面の下に入る直前の行に次の文を書く */
+                y++;
+                vdp_wreg(23, (u8)y);
+            }
+        } else if (!(t & 31)) {
+            roll_row(ROLL_N - 1 + 24, !(t & 32));      /* PUSH SPACE KEY の点滅 */
+        }
     }
     bgm_stop();
+    vdp_wreg(23, 0);
     scm_vdp_init();
 }
 

@@ -35,6 +35,7 @@ set ::tn 0
 set ::seen {}
 set ::boss_seen 0
 set ::fire 0
+set ::end_n 0
 proc tap {row mask} { keymatrixdown $row $mask; after time 0.12 [list keymatrixup $row $mask] }
 
 proc bot {} {
@@ -82,6 +83,8 @@ proc bot {} {
         if {$b && !$::boss_seen} { set ::boss_seen 1; incr ::bosses; after time 3.0 [list shot boss$::bosses] }
         if {!$b} { set ::boss_seen 0 }
     } elseif {$::fire} { keymatrixup 8 0x01; set ::fire 0 }
+    # エンドロール(scene 3): スペースを押すまでタイトルへ戻らないので、約 4 秒ごとに押す(1 回目は最後まで飛ばし、2 回目でタイトルへ)
+    if {$sc == 3 && [incr ::end_n] % 40 == 0} { tap 8 0x01 }
     if {$sc == 0 && [lsearch $::seen 3] >= 0 || $sc == 0 && [lsearch $::seen 2] >= 0} { finish; return }
     after time 0.1 [list bot]
 }

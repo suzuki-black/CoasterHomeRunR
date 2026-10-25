@@ -2,7 +2,7 @@
  *
  * 流れ: 坑道を抜けると大きな地底湖(A LAKE?!)→ レールが湖で途切れ、なぜかトロッコごと筏に乗って渡る(ON A RAFT?!)
  *       → 岩棚の弓兵(前)と、水に浮いた木箱の救急箱 → 後ろからコウモリ人 → 湖の主(後ろから追ってくる大ガエル人)
- *       → 弓兵・コウモリ人 → 向こう岸でまたレールに戻り(LAND HO!)、出口へ
+ *       → 弓兵・コウモリ人 → 大ナマズ人(前の水面に出る大ボス)→ 向こう岸でまたレールに戻り(LAND HO!)、出口へ
  * すべて位置で進める(EV_AT。約 16m ごとに敵が来るように並べる)。
  * ステージデータは定数だけで書き、読み込み先(0xB400)に合わせて単独でリンクする(stage1_cave.c と同じ)。
  */
@@ -43,13 +43,14 @@ static const u8 lake_pal[14] = {
     0x41, 2,  0x12, 1,  0x32, 2,  0x44, 4,  0x14, 2,  0x25, 4,  0x55, 5,
 };
 
-enum { T_NONE, T_LAKE, T_RAFT, T_WARNING, T_LAND, T_EXIT };
+enum { T_NONE, T_LAKE, T_RAFT, T_WARNING, T_LAND, T_EXIT, T_CATFISH };
 static const Caption lake_captions[] = {
     { "A LAKE?!",       C_WHITE,  2 },
     { "ON A RAFT?!",    C_YELLOW, 1 },
     { "WARNING!",       C_RED,    2 },
     { "LAND HO!",       C_YELLOW, 2 },
     { "SUNLIGHT!",      C_WHITE,  1 },
+    { "GIANT CATFISH!", C_RED,    1 },
 };
 
 
@@ -114,12 +115,15 @@ static const Event lake_events[] = {
     { AT(236, EV_SPAWN),    ET_E04, 26, -36 },
     { AT(252, EV_SPAWN),    ET_E04, 24, -36 },
     { AT(252, EV_SPAWN),    ET_CRATE, 20, -10 },
-    { AT(266, EV_DIR),      DIR_BACK, 0, 0 },
-    { AT(266, EV_SPAWN),    ET_E02, -14, 6 },
-    { AT(266, EV_SPAWN),    ET_E02, -16, -6 },
-    { AT(280, EV_DIR),      DIR_FRONT, 0, 0 },
-    { AT(280, EV_SPAWN),    ET_E04, 24, 36 },
-    { AT(280, EV_SPAWN),    ET_E04, 26, -36 },
+    /* ---- 大ナマズ人: 湖の終わり近く、前の水面に出る大ボス(撃破までスクリプトは止まる)。湖の主は途中の中ボス
+     * (湖の主のあと雑魚ばかりが 180m 続いて、終わりにボスがいないように感じられた。2026-10-25 ユーザーの指定) ---- */
+    { AT(256, EV_DIR),      DIR_FRONT, 0, 0 },
+    { AT(258, EV_TEXT),     T_WARNING, 0, 0 },
+    { AT(258, EV_VOICE),    VOICE_WARNING, 0, 0 },
+    { AT(258, EV_SPEED),    12, 0, 0 },
+    { AT(262, EV_TEXT),     T_CATFISH, 0, 0 },
+    { AT(262, EV_BOSS),     ET_B08, 24, 0 },
+    { AT(262, EV_SPEED),    0, 0, 0 },
     /* ---- 向こう岸 → 出口 ---- */
     { AT(296, EV_DIR),      DIR_NONE, 0, 0 },
     { AT(296, EV_TEXT),     T_LAND, 0, 0 },

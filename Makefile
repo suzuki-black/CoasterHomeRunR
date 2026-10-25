@@ -162,6 +162,13 @@ $(BUILD)/game1.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models_
 $(BUILD)/%_s1.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -DGAME_S1 -c -o $@ $<
 
+# ステージ 2(地底湖)のモジュールは、地底湖に出ない敵の絵を外し、大ナマズ人の絵を入れた models.c をリンクする(GAME_S2)
+$(BUILD)/game2.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models_s2.rel $(BUILD)/stage2.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
+	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
+
+$(BUILD)/%_s2.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
+	$(CC) $(CFLAGS) -DGAME_S2 -c -o $@ $<
+
 $(BUILD)/stage1.rel: $(STG)/stage1_cave.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 

@@ -27,6 +27,7 @@ enum { ET_NONE, ET_E01, ET_E02, ET_E03, ET_E04, ET_E05, ET_B01, ET_TREASURE, ET_
        ET_E06,       /* 半魚人: 海から跳び上がって橋に乗り、歩いて寄ってくる(後ろなら追いかける) */
        ET_B07,       /* 大ダコ人(ステージ 4 のボス。後ろから追ってきて墨を吐き、橋の両脇に足を伸ばしてくる) */
        ET_TENT,      /* 大ダコ人の足(後ろの海から伸びて橋をつかみ、叩いてくる) */
+       ET_B08,       /* 大ナマズ人(地底湖の大ボス。前の水面に出る。絵は GAME_S2 を付けた models.c にだけ入る) */
        ET_COUNT };
 #define IS_SHOT(t) ((t) == ET_ROCK || (t) == ET_ARROW || (t) == ET_MAGIC)
 
@@ -78,7 +79,7 @@ typedef struct {
     const char *name;         /* ステージの始めに出す名前(2 行目は title2) */
     const char *title2;
     /* 最後のステージだけ: エンディング(SCREEN 1、BIOS のフォント)の文と BGM */
-    const u8 *ending;         /* (行, 桁, 文字コード…, 0) の並び、0xFF で終わり。クリアすれば必ずこの文 */
+    const u8 *ending;         /* (使っていない。エンドロールの文は scene.c。2026-10-25 に英語のエンドロールにした) */
     u8  end_bgm;              /* エンディングの曲の番号(0 = 無し) */
     /* 分岐(無ければ 0): track は分岐点まで、branch[0/1] = 左 / 右(同じ長さで同じ合流点に戻る形にする)、tail = 合流後。
      * 分岐点より前で L・R の獣人のどちらかを撃つとそちらへ。撃たなければ branch_def の側 */

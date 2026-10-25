@@ -8,6 +8,7 @@
 #define MODEL(a) { a, sizeof(a) / sizeof(a[0]) }
 /* 面のモジュールの置き場が足りないので、その面に出ない敵の絵は入れない(U_ の印。入れないものは { 0, 0 })。
  * ステージ 1(GAME_S1)と海の鉄橋(GAME_SEA)のモジュールで使う。Makefile の game1.ihx・game4.ihx */
+#if !defined(GAME_S2)
 static const MRect m_e01[] = {          /* 猿人(斧)・茶。橙の腹と鼻づら、黒い腰巻き、赤い目、斧の刃の光(部位 3 = 飾り) */
     { -4,  0, -1,  8, C_BROWN, 2 }, {  1,  0,  4,  8, C_BROWN, 2 },
     { -5,  8,  5, 17, C_BROWN, 0 }, { -3, 17,  3, 23, C_BROWN, 1 },
@@ -19,6 +20,11 @@ static const MRect m_e01[] = {          /* 猿人(斧)・茶。橙の腹と鼻�
     { -2, 20, -1, 22, C_RED, 3 },   {  1, 20,  2, 22, C_RED, 3 },
     {  9, 16, 10, 21, C_WHITE, 3 },
 };
+#define U_e01 MODEL(m_e01)
+#else
+#define U_e01 { 0, 0 }
+#endif
+
 static const MRect m_e02a[] = {         /* コウモリ人・紫(翼上げ)。赤い目と白い牙、翼の紫の骨と爪、黒い腹 */
     { -3,  0,  3,  8, C_PURPLE, 0 }, { -2,  8,  2, 12, C_PURPLE, 1 },
     { -2, 12, -1, 14, C_PURPLE, 1 }, {  1, 12,  2, 14, C_PURPLE, 1 },
@@ -37,7 +43,7 @@ static const MRect m_e02b[] = {         /* コウモリ人・紫(翼下げ) */
     { -2,  2,  2,  6, C_BLACK, 3 },
     { -2, 10, -1, 11, C_RED, 3 },    {  1, 10,  2, 11, C_RED, 3 },    { -1,  8,  1,  9, C_WHITE, 3 },
 };
-#if !defined(GAME_SEA)
+#if !defined(GAME_SEA) && !defined(GAME_S2)
 static const MRect m_b01[] = {          /* 大猿人の親方・茶+黒 */
     { -9,  0, -3, 14, C_BROWN, 2 },  {  3,  0,  9, 14, C_BROWN, 2 },
     { -11, 14, 11, 34, C_BROWN, 0 }, { -11, 22, 11, 25, C_BLACK, 0 },
@@ -52,7 +58,7 @@ static const MRect m_b01[] = {          /* 大猿人の親方・茶+黒 */
 #else
 #define U_b01 { 0, 0 }
 #endif
-#if !defined(GAME_SEA)
+#if !defined(GAME_SEA) && !defined(GAME_S2)
 static const MRect m_treasure[] = {     /* 宝箱・黄(台座つき) */
     { -7, 0, 7, 6, C_BLACK, 0 },
     { -6, 6, 6, 12, C_YELLOW, 0 }, { -6, 12, 6, 15, C_BROWN, 0 },
@@ -62,7 +68,7 @@ static const MRect m_treasure[] = {     /* 宝箱・黄(台座つき) */
 #else
 #define U_treasure { 0, 0 }
 #endif
-#if !defined(GAME_SEA)
+#if !defined(GAME_SEA) && !defined(GAME_S2)
 static const MRect m_boss1[] = {        /* 洞窟の主(巨大な岩熊人)・茶+黒、赤い目 */
     { -12,  0, -4, 14, C_BROWN, 2 },  {  4,  0, 12, 14, C_BROWN, 2 },
     { -15, 14, 15, 38, C_BROWN, 0 },  {  -9, 18,  9, 32, C_ORANGE, 0 },
@@ -79,7 +85,7 @@ static const MRect m_boss1[] = {        /* 洞窟の主(巨大な岩熊人)・�
 #else
 #define U_boss1 { 0, 0 }
 #endif
-#if !defined(GAME_SEA)
+#if !defined(GAME_SEA) && !defined(GAME_S2)
 static const MRect m_rock[] = {         /* 投げた岩 */
     { -3, 0, 3, 5, C_BLACK, 0 }, { -2, 1, 2, 4, C_BROWN, 0 },
 };
@@ -95,7 +101,7 @@ static const MRect m_misbox[] = {       /* 誘導弾の箱(撃つと誘導弾が
     { -5, 0, 5, 8, C_CYAN, 0 }, { -1, 1, 1, 7, C_YELLOW, 0 }, { -2, 6, 2, 7, C_YELLOW, 0 },
     { -2, 8, 2, 9, C_BLACK, 0 },
 };
-#if !defined(GAME_S1) && !defined(GAME_SEA)
+#if !defined(GAME_S1) && !defined(GAME_SEA) && !defined(GAME_S2)
 static const MRect m_e03[] = {          /* キリン人(槍)・黄。首が長く、槍のリーチが長い。茶の斑点、黒いひづめ、赤い目、槍の穂の光 */
     { -4,  0, -1, 12, C_YELLOW, 2 }, {  1,  0,  4, 12, C_YELLOW, 2 },
     { -5, 12,  5, 24, C_YELLOW, 0 },
@@ -127,7 +133,7 @@ static const MRect m_e04[] = {          /* 弓兵(猿人系)・橙。高台か�
 #else
 #define U_e04 { 0, 0 }
 #endif
-#if !defined(GAME_S1) && !defined(GAME_SEA)
+#if !defined(GAME_S1) && !defined(GAME_SEA) && !defined(GAME_S2)
 static const MRect m_e05[] = {          /* 魔法使い(コウモリ人系)・水色。杖から魔法弾。紫の衣の縁と帯、黄色い目、杖の玉の光 */
     { -5,  0,  5, 12, C_CYAN, 0 },   { -4, 12,  4, 16, C_CYAN, 0 },
     { -2, 16,  2, 20, C_CYAN, 1 },   { -2, 20, -1, 22, C_CYAN, 1 }, { 1, 20, 2, 22, C_CYAN, 1 },
@@ -184,7 +190,7 @@ static const MRect m_boss2[] = {        /* 湖の主(大ガエル人)・水色+�
 #else
 #define U_boss2 { 0, 0 }
 #endif
-#if !defined(GAME_S1) && !defined(GAME_SEA)
+#if !defined(GAME_S1) && !defined(GAME_SEA) && !defined(GAME_S2)
 static const MRect m_b02[] = {          /* 森の番人(巨大コウモリ人)・紫+黒、赤い目 */
     { -6,  0,  6, 18, C_PURPLE, 0 },  { -5, 18,  5, 26, C_PURPLE, 1 },
     { -5, 26, -3, 31, C_PURPLE, 1 },  {  3, 26,  5, 31, C_PURPLE, 1 },
@@ -201,7 +207,7 @@ static const MRect m_b02[] = {          /* 森の番人(巨大コウモリ人)�
 #else
 #define U_b02 { 0, 0 }
 #endif
-#if !defined(GAME_S1) && !defined(GAME_SEA)
+#if !defined(GAME_S1) && !defined(GAME_SEA) && !defined(GAME_S2)
 static const MRect m_b03[] = {          /* 祭りの山車: 車輪、木の台、赤と白の幕、提灯、屋根、上で太鼓を叩く猿人 */
     { -16,  0, -10,  6, C_BLACK, 2 }, { 10,  0, 16,  6, C_BLACK, 2 },
     { -18,  6, 18, 12, C_BROWN, 0 },  { -15, 12, 15, 26, C_RED, 0 },   { -15, 18, 15, 20, C_WHITE, 0 },
@@ -217,7 +223,7 @@ static const MRect m_b03[] = {          /* 祭りの山車: 車輪、木の台�
 #else
 #define U_b03 { 0, 0 }
 #endif
-#if !defined(GAME_S1) && !defined(GAME_SEA)
+#if !defined(GAME_S1) && !defined(GAME_SEA) && !defined(GAME_S2)
 static const MRect m_b04[] = {          /* 亜人の王(キリン人系)・黄+紫+白。王冠、槍、魔法の玉 */
     { -5,  0, -2, 14, C_YELLOW, 2 },  {  2,  0,  5, 14, C_YELLOW, 2 },
     { -8, 12,  8, 30, C_PURPLE, 0 },  { -8, 12,  8, 14, C_WHITE, 0 },
@@ -236,7 +242,7 @@ static const MRect m_b04[] = {          /* 亜人の王(キリン人系)・黄+�
 #else
 #define U_b04 { 0, 0 }
 #endif
-#if !defined(GAME_SEA)
+#if !defined(GAME_SEA) && !defined(GAME_S2)
 static const MRect m_sign[] = {         /* 分岐の合図の獣人(茶の猿人、お腹が白。文字 L / R は game.c が上に描く) */
     { -5,  0, -2, 10, C_BROWN, 2 },   {  2,  0,  5, 10, C_BROWN, 2 },
     { -8, 10,  8, 26, C_BROWN, 0 },   { -6, 12,  6, 24, C_WHITE, 0 },
@@ -283,8 +289,30 @@ static const MRect m_tentl[] = {
     { -3, 34,  3, 42, C_RED, 0 },    {  1, 40, 10, 45, C_RED, 0 },    {  8, 33, 13, 42, C_RED, 0 },    {  9, 36, 12, 38, C_WHITE, 0 },
 };
 #endif
+#ifdef GAME_S2
+/* 大ナマズ人(地底湖の大ボス。前の水面に出る)・茶の大きな頭、左右に長い黄色いひげ(白だと白い縁取りと混ざった)、赤い口、黄色い目、黒い斑点、窃盗団の赤い鉢巻き、
+ * まわりの水しぶき。地底湖のモジュール(GAME_S2)だけに入れる */
+static const MRect m_b08[] = {
+    { -24,  0,  24,  3, C_CYAN, 2 },                                      /* 水しぶき */
+    { -26,  4, -18, 12, C_BROWN, 2 },  { 18,  4,  26, 12, C_BROWN, 2 },   /* 胸びれ */
+    { -18,  4,  18, 30, C_BROWN, 0 },  { -14, 30,  14, 37, C_BROWN, 1 },  /* 頭 */
+    { -14, 10,  14, 16, C_RED, 0 },                                       /* 口 */
+    { -40, 17, -18, 19, C_YELLOW, 0 },  { 18, 17,  40, 19, C_YELLOW, 0 },   /* 上のひげ */
+    { -42, 12, -40, 19, C_YELLOW, 0 },  { 40, 12,  42, 19, C_YELLOW, 0 },
+    { -34, 11, -18, 13, C_YELLOW, 0 },  { 18, 11,  34, 13, C_YELLOW, 0 },   /* 下のひげ */
+    { -12, 24,  -8, 28, C_YELLOW, 1 }, {  8, 24,  12, 28, C_YELLOW, 1 },  /* 目 */
+    { -11, 25,  -9, 27, C_BLACK, 3 },  {  9, 25,  11, 27, C_BLACK, 3 },   /* 瞳 */
+    { -14, 16,  14, 17, C_BLACK, 3 },  { -12,  5,  12,  9, C_ORANGE, 3 }, /* 唇、腹 */
+    { -10, 20,  -6, 23, C_BLACK, 3 },  {  6, 19,  10, 22, C_BLACK, 3 },  {  4, 32,  8, 35, C_BLACK, 3 },   /* 斑点 */
+    { -14, 35,  14, 37, C_RED, 3 },                                       /* 鉢巻き */
+    { -20,  3, -14,  5, C_WHITE, 3 },  { 12,  3,  18,  5, C_WHITE, 3 },   /* しぶきの泡 */
+};
+#define U_b08 MODEL(m_b08)
+#else
+#define U_b08 { 0, 0 }
+#endif
 const Model models[] = {
-    { 0, 0 }, MODEL(m_e01), MODEL(m_e02a), U_e03, U_e04, U_e05,
+    { 0, 0 }, U_e01, MODEL(m_e02a), U_e03, U_e04, U_e05,
     U_b01, U_treasure, MODEL(m_medkit), U_boss1, U_rock,
     U_arrow, MODEL(m_magic), U_crate, U_boss2, U_b02,
     U_b03, U_b04, U_sign, U_sign, MODEL(m_misbox),
@@ -293,6 +321,7 @@ const Model models[] = {
 #else
     { 0, 0 }, { 0, 0 }, { 0, 0 },
 #endif
+    U_b08,
 };
 const Model model_e02b = MODEL(m_e02b);
 #ifdef GAME_SEA
