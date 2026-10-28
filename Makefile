@@ -169,6 +169,26 @@ $(BUILD)/game2.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models_
 $(BUILD)/%_s2.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -DGAME_S2 -c -o $@ $<
 
+# ステージ 3・5・6 のモジュールも、その面に出ない敵の絵を外した models.c をリンクする(GAME_S3・S5・S6。周回区間を 3 つにして
+# 台本が長くなったので)。出る種類は tools/check_models.py で台本と突き合わせる
+$(BUILD)/game3.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models_s3.rel $(BUILD)/stage3.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
+	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
+
+$(BUILD)/game5.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models_s5.rel $(BUILD)/stage5.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
+	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
+
+$(BUILD)/game6.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models_s6.rel $(BUILD)/stage6.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
+	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
+
+$(BUILD)/%_s3.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
+	$(CC) $(CFLAGS) -DGAME_S3 -c -o $@ $<
+
+$(BUILD)/%_s5.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
+	$(CC) $(CFLAGS) -DGAME_S5 -c -o $@ $<
+
+$(BUILD)/%_s6.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
+	$(CC) $(CFLAGS) -DGAME_S6 -c -o $@ $<
+
 $(BUILD)/stage1.rel: $(STG)/stage1_cave.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
@@ -200,7 +220,9 @@ $(BUILD)/title.bin $(BUILD)/title.h &: data/title_art.webp $(TOOLS)/gen_title.py
 GAMES = $(foreach n,1 2 3 4 5 6,$(BUILD)/game$(n).ihx)
 ENVS  = $(foreach n,1 2 3 4 5 6,$(BUILD)/env$(n).ihx)
 
-$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(ENVS) $(GAMES) $(BUILD)/sndmod.ihx $(BUILD)/songs.bin src/sound/voicemod.bin $(BUILD)/title.bin $(BUILD)/scenemod.ihx $(TOOLS)/mkrom.py
+$(ROM): $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(ENVS) $(GAMES) $(BUILD)/sndmod.ihx $(BUILD)/songs.bin src/sound/voicemod.bin $(BUILD)/title.bin $(BUILD)/scenemod.ihx $(TOOLS)/mkrom.py $(TOOLS)/check_models.py $(TOOLS)/check_stages.py
+	$(PYTHON) $(TOOLS)/check_models.py
+	$(PYTHON) $(TOOLS)/check_stages.py
 	$(PYTHON) $(TOOLS)/mkrom.py $(BUILD)/boot.ihx $(BUILD)/engine.ihx $(BUILD)/engine.noi $@ \
 	  $(foreach n,1 2 3 4 5 6,$(BUILD)/env$(n).ihx $(BUILD)/env$(n).noi) \
 	  $(foreach n,1 2 3 4 5 6,$(BUILD)/game$(n).ihx $(BUILD)/game$(n).noi) $(BUILD)/sndmod.ihx $(BUILD)/sndmod.noi $(BUILD)/songs.bin src/sound/voicemod.bin $(BUILD)/title.bin \

@@ -29,6 +29,7 @@ u8  ring_front[ENV_NR + 1];
 u8  ring_ok[ENV_NR + 1];
 u8  g_env_zones[ENV_ZONES_MAX];
 u16 g_env_seed;
+u8  g_env_loops[ENV_LOOPS_MAX];
 /* いまページ2に出しているマッパーのセグメント。割り込みはサウンドの後にこれを戻すので、割り込みを入れる前から
  * 正しい値(起動時のページ2 = セグメント 1)でなければならない(0 だとページ2がページ3と同じ RAM になり、壊れる) */
 u8  g_seg2 = SEG_GAME;

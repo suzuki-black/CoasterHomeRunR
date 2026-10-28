@@ -90,7 +90,7 @@ not_turbo_r:
 	di
 	halt
 msg:
-	.ascii	"TROLLEY HOME RUN"
+	.ascii	"COASTER HOME RUN"
 	.db	13, 10
 	.ascii	"MSX turbo R required."
 	.db	0

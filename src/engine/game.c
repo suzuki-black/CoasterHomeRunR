@@ -16,7 +16,7 @@
 #define M(x)    ((u16)((x) * 64))               /* m → s 単位 */
 #define MPS(x)  ((i16)((x) * 546))              /* m/秒 → v 単位(30fps) */
 #define F88(x)  ((i16)((x) * 256))
-/* 高さの基準はレール上の点(以前のトロッコの目の高さ)。床はその 1.3m 下 */
+/* 高さの基準はレール上の点(以前の乗り物の目の高さ)。床はその 1.3m 下 */
 #define FLOOR_Y F88(-1.3)                       /* レール上の点から見た床 */
 #define FLY_Y   F88(-0.3)                       /* コウモリ人の飛ぶ高さ */
 #define EYE_DROP F88(0.7)                       /* 一人乗りのコースターは座席が低い(F1 のような視点)。目はレール上の点より 0.7m 下(床から 0.6m) */
@@ -105,7 +105,7 @@ Enemy en[MAX_EN];                /* テスト(openMSX)が build/game*.noi から
 static u8 draw_order[MAX_EN];
 
 static u8  cam_sub;
-static u8  hold;                 /* 1 = トロッコ停止(発進前) */
+static u8  hold;                 /* 1 = コースター停止(発進前) */
 static u16 look;                 /* 視線の相対ヨー(0 前 / 0x8000 後ろ) */
 static u8  turning;              /* 振り向きの残りフレーム */
 static u8  aim_hold;
@@ -122,8 +122,8 @@ static u8  hitstop;              /* 敵を倒した瞬間に止める残りフ�
 static const Event *sc_ev;
 static u8  sc_end;
 static u8  ctrl;                 /* 1 = 操作できる(オープニングの演出中は 0) */
-static u8  spd_over;             /* 0 以外: トロッコの速度(m/秒 × 4)をスクリプトで指定 */
-static u8  cap_id, cap_time;     /* 字幕の番号と残りフレーム */
+static u8  spd_over;             /* 0 以外: コースターの速度(m/秒 × 4)をスクリプトで指定 */
+static u8  cap_id, cap_time;     /* 字幕の番号(0xFF = AREA CLEAR!)と残りフレーム */
 static u8  warn_prev, warn_time; /* 警告の出始めと繰り返しで警告音を鳴らす */
 static i8  pitch_cur;            /* カメラのピッチ(坂に合わせて少しずつ追う) */
 static u16 fps_t0;               /* 計測用: 1 秒(60 ティック)の区切り */
@@ -131,6 +131,7 @@ static u8  fps_n, fps_show;      /* その間の表示の切替回数と、表�
 static const Stage *stage;
 
 static u8  branch_open;          /* 1 = まだ選べる(分岐点の手前) */
+#define LAP_FAST 40              /* 周回区間を一掃した後、周回を抜けた後のまっすぐな区間までの速さ(m/秒 × 4) */
 
 /* ---------------------------------------------------------------------------
  * 敵
@@ -349,7 +350,7 @@ static void update_ce(void)
             ce.v = (i16)cam_v;
             attack(f, d);
         } else {
-            /* トロッコより少し速く走って必ず追いつく(置いていかれたまま残って、やさしい進行を止めないように) */
+            /* コースターより少し速く走って必ず追いつく(置いていかれたまま残って、やさしい進行を止めないように) */
             ce.v = (i16)cam_v + MPS(1.2);
             ce.flash = 0;
             ce.timer = 0;
@@ -531,7 +532,7 @@ static void kill_enemy(Enemy *e)
  * 射撃(ヒットスキャン。照準ブロックに重なる矩形のうち最も手前)
  * --------------------------------------------------------------------------- */
 /* 照準ブロックに重なる矩形のうち最も手前の、撃てる敵の番号(いなければ 0xFF)。*hi = その矩形の hits の番号。
- * トロッコの縁に隠れた所は撃てない。照準の色(hud)と射撃(fire)で同じ判定を使う */
+ * コースターの縁に隠れた所は撃てない。照準の色(hud)と射撃(fire)で同じ判定を使う */
 u8 aim_scan(u8 bx, u8 by);   /* aimhit.s: 照準ブロックに重なる最も手前の矩形の hits の番号(無ければ 0xFF) */
 /* 照準のブロックの下の矩形(aim_scan の結果、0xFF = 無い)。当たり判定の表と乗り物の絵は描くときにしか変わらないので、
  * 描いてから次に描くまでは、同じブロックなら使い回す(照準の色・ロック・射撃で 1 フレームに 2〜3 回呼ぶ)。render で as_bx = 0xFF */
@@ -721,15 +722,26 @@ static i8 ev_side(const Event *ev)
 }
 
 /* いま残っている敵の向き(1 前 / -1 後ろ / 0 いない) */
-static i8 foe_side(void)
+/* いま残っている敵の向き(1 前 / -1 後ろ / 0 いない)。want(1 / -1)の側に 1 体でもいれば want を返す。
+ * want を渡すのは警告の向きを決めるときで、そのときは後ろへ回った立っている敵・歩く敵(横を通り過ぎて 3m で消える)を
+ * 数えない(岩棚の弓兵が横を通る間「後ろから敵」と出て、振り向いても見えなかった。2026-10-28 ユーザーの指摘) */
+static i8 foe_side_w(i8 want)
 {
     u8 i;
+    i8 r = 0;
     for (i = 0; i < MAX_EN; i++) {
         Enemy *e = &en[i];
-        if (IS_FOE(e->type) && e->state != ST_DEAD) return ((i16)(e->s - cam_s) < 0) ? -1 : 1;
+        if (IS_FOE(e->type) && e->state != ST_DEAD) {
+            i8 sd = ((i16)(e->s - cam_s) < 0) ? -1 : 1;
+            u8 mv = edef[e->type].mv;
+            if (want && sd < 0 && mv != MV_HOVER && mv != MV_KEEP && e->state != ST_CHASE) continue;
+            r = sd;
+            if (r == want) break;
+        }
     }
-    return 0;
+    return r;
 }
+#define foe_side() foe_side_w(0)
 
 static void script_update(void)
 {
@@ -748,6 +760,13 @@ static void script_update(void)
             if ((cam_s >> 6) < ev->tick) break;
         } else if (ev->tick > sc_tick) {
             break;
+        }
+        if (EV_CMD(ev->cmd) == EV_WAIT) {
+            /* 周回区間の波: 敵が全滅するまで待ち、さらに a フレーム置いてから次の波へ */
+            static u8 wait_t;
+            if (foe_side()) break;
+            if (wait_t < ev->a) { wait_t++; break; }
+            wait_t = 0;
         }
         if (g_cfg.easy == 1 || (g_cfg.easy == 0 && stage->gentle)) {
             /* やさしい進行: 反対側に敵が残っていれば、全滅するまで待つ */
@@ -857,7 +876,7 @@ static void player_update(void)
 
 static void trolley_update(void)
 {
-    u16 target = hold ? 0 : (u16)(spd_over ? spd_over : rail_spd[cam_s >> 7]) * 137;
+    u16 target = hold ? 0 : (u16)(g_lap_fast ? LAP_FAST : spd_over ? spd_over : rail_spd[cam_s >> 7]) * 137;
     u16 t;
     if (cam_v < target) {
         cam_v += 48;
@@ -868,6 +887,12 @@ static void trolley_update(void)
     t = (u16)cam_sub + (cam_v & 0xFF);
     cam_sub = (u8)t;
     cam_s += (cam_v >> 8) + (t >> 8);
+    /* 周回区間(常駐部の loop_update): 敵が残っていれば始まりへ戻る(敵も同じだけ戻す)。一掃したら AREA CLEAR! */
+    {
+        u16 d = loop_update(foe_side(), sc_end ? 0 : sc_ev);
+        if (d) { u8 i; for (i = 0; i < MAX_EN; i++) en[i].s -= d; }
+        if (g_lap_fast == 1) { g_lap_fast = 2; cap_id = 0xFF; cap_time = 40; }   /* 一掃した: AREA CLEAR! */
+    }
     if (cam_s >= rail_s_max()) { cam_s = rail_s_max(); cam_v = 0; }
     /* 分岐点の 2m 手前まで来たら、選ばれている側(撃たなければ規定の側)で確定する */
     if (branch_open && cam_s + M(2) >= rail_fork_m() * 64) branch_pick(route);
@@ -876,6 +901,7 @@ static void trolley_update(void)
 /* ---------------------------------------------------------------------------
  * 描画
  * --------------------------------------------------------------------------- */
+#ifndef GAME_SEA      /* 海の面(ステージ 4)には分岐が無いので、選ばれていない側の線路を描く処理は入れない(モジュールの置き場) */
 /* 選ばれていない側の線路(分岐点から 24m): レール 2 本と枕木を、地形の上に描く(g_alt は常駐部の fx.c。描く処理は常駐部に入らないのでここ) */
 /* 変換と投影を済ませた点(隣の区間・同じ区間の四角形どうしで使い回す)。in = 0 なら手前に無い(投影していない) */
 typedef struct { V3 v; i16 s[2]; u8 in; } AltP;
@@ -953,6 +979,7 @@ void alt_draw(void)
         bok = 1;
     }
 }
+#endif
 
 /* 敵モデルを描く(本体は geom.s の draw_model) */
 extern const MRect *g_dm_rects;
@@ -1054,9 +1081,13 @@ static void set_sprite(u8 n, i16 x, i16 y, u8 pat, u8 color)
 static void draw_hud(void)
 {
     u8 warn = 0;
+    i8 ws = (attack_dir == DIR_BACK) ? -1 : (attack_dir == DIR_FRONT) ? 1 : 0;
     hud_life(life);
-    if (attack_dir == DIR_BACK && !facing) warn = 1;
-    if (attack_dir == DIR_FRONT && facing) warn = 2;
+    /* 警告は、台本の向きにまだ敵がいればその向き、いなければ残っている敵の向き、敵がいなければ出さない
+     * (台本の向きのままだと、一掃した後や、その向きの敵を倒した後も「後ろから敵」と出続けた。2026-10-27 ユーザーの指摘) */
+    if (ws) ws = foe_side_w(ws);
+    if (ws < 0 && !facing) warn = 1;
+    if (ws > 0 && facing) warn = 2;
     /* 警告音: 出始めに鳴らし、続いている間は約 2 秒ごとに鳴らす */
     if (warn && (warn != warn_prev || !warn_time)) { se_play(SE_ALARM); warn_time = 40; }
     /* 警告が出始めたら英語の声も(2 秒ごとのくり返しの警告音では鳴らさない) */
@@ -1073,7 +1104,7 @@ static void draw_hud(void)
     }
     if (++blink >= 16) blink = 0;       /* 約 15 ティック点灯 / 15 ティック消灯 */
     if (cap_id) {
-        const Caption *c = &stage->captions[cap_id - 1];
+        const Caption *c = (cap_id == 0xFF) ? &g_area_cap : &stage->captions[cap_id - 1];
         text_center(c->scale == 2 ? 14 : 18, c->text, c->color, c->scale);
         if (!--cap_time) cap_id = 0;
     }
@@ -1141,7 +1172,9 @@ static void render(void)
     render_set_camera(p.x, p.y - EYE_DROP, p.z, yaw + look, (i8)fmul(pitch_cur, COS((u8)(look >> 8))));
     env_draw(cam_s, look >> 8);
     g_perf_env = timer_read() - t0;
+#ifndef GAME_SEA
     alt_draw();
+#endif
     draw_enemies();
     /* コースターの車両。耐久が減るほど壊れた絵になる。振り向き中は横へ滑らせて一度画面外へ出し、反対側から戻す。
      * 見る向きが 90 度を越えたら(画面外に出ている間に)後ろを向いたときの絵に替える */
@@ -1228,8 +1261,10 @@ static void clear_tally(void)
         text_center(10, "STAGE CLEAR", C_YELLOW, 1);
         if (phase >= 1) {                /* 残りのボーナス(表示の単位。末尾の 0 は文字で) */
             text_draw(12, 18, "BONUS", C_WHITE, 1);
-            num_draw(34, 18, bonus, 5, C_WHITE);
-            if (bonus) text_draw(54, 18, "0", C_WHITE, 1);
+            /* ボーナスは最大 6 × TALLY_BONUS = 3000 なので 4 桁。末尾の 0 まで黒い板(8〜55)に収める
+             * (5 桁ぶん取っていたら、末尾の 0 が板の右端から 1 ドットはみ出した。2026-10-25 ユーザーの指摘) */
+            num_draw(34, 18, bonus, 4, C_WHITE);
+            if (bonus) text_draw(50, 18, "0", C_WHITE, 1);
         }
         if (phase >= 2) text_draw(12, 24, "LIFE +2", C_WHITE, 1);
         if (phase >= 3) text_draw(12, 30, "MISSILE +5", C_WHITE, 1);
@@ -1262,6 +1297,13 @@ u8 game_run(const Stage *st, u8 first)
             z += 2;
         } while (z[-2] != 0xFF && i < ENV_ZONES_MAX - 1);
         g_env_seed = st->seed;
+        z = st->loops;
+        i = 0;
+        if (z) while ((g_env_loops[i] = z[i])) i++;
+        else g_env_loops[0] = 0;
+        g_loop_p = g_env_loops;
+        g_lap_fast = 0;
+        g_fast_end = 0;
     }
     env_build();
     set_stage_palette(st->palette);

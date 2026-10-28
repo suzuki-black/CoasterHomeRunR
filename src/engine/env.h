@@ -12,7 +12,7 @@
 /* 地形の種類(ステージの zones で区間ごとに指定する) */
 enum { K_CAVE,     /* 炭鉱の坑道(ステージ 1 のパレット) */
        K_EXIT,     /* 洞窟の出口(屋外のパレットで描く坑道) */
-       K_LAKE,     /* 地底湖(大きな空洞の水面。トロッコごと筏に乗って渡る) */
+       K_LAKE,     /* 地底湖(大きな空洞の水面。コースターごと筏に乗って渡る) */
        K_FOREST,   /* 森 */
        K_TOWN,     /* 町(両側に家並み) */
        K_HOME,     /* 村の入り口(通りの突き当たりに村の門) */
@@ -51,6 +51,10 @@ void env_draw(u16 s, u16 look);
 void env_build(void);
 extern u8  g_env_zones[ENV_ZONES_MAX];   /* 先頭 = レールの色、以降 (このリングまで, 種類) の組。0xFF まで */
 extern u16 g_env_seed;
+/* 周回区間(Stage.loops の写し)。地形モジュールは終わりの前後 LOOP_K 本のリングを始まりの前後と同じにする */
+#define ENV_LOOPS_MAX 9
+#define LOOP_K 6
+extern u8  g_env_loops[ENV_LOOPS_MAX];
 extern u8  g_seg2;
 
 /* 地形モジュールの中の本体(ページ2 = セグメント 5 のときだけ呼べる。常駐部の env_build / env_draw 経由で呼ぶ) */

@@ -1,7 +1,8 @@
 /* stage6_home.c — ステージ 6: 村の入り口(仕様書 5 章 #7)とエンディング(5.2)
  *
- * 流れ: 村へ続く通り → 雑魚 → 亜人の王(窃盗団の頭)B04(撃破までスクリプトは止まる)
- *       → 村の門の前まで走ってゆっくり止まる(HOME AT LAST!)。門の前で村人が出迎える
+ * 流れ: 村へ続く通り → 周回 A(雑魚)→ 田んぼ(敵は出さない)→ 周回 B(雑魚)→ 水車(敵は出さない)
+ *       → 周回 C(亜人の王(窃盗団の頭)B04)→ 村の門の前まで走ってゆっくり止まる(HOME AT LAST!)。門の前で村人が出迎える
+ * 周回区間では、敵(ボスも)が残っている間は同じコースを回り続ける(見せ場に敵を持ち込まないように)。周回区間の外は位置で(EV_AT)、中は撃破で(WAVE と EV_WAIT)進める。
  *       → エンドロール(SCREEN 1、英語の結びの文とスタッフのクレジット。scene.c)
  * 村の門はレールの終わりのリングに正面を向けて置かれる(env.c の K_HOME)。
  * エンドロールの曲もこのステージのデータで決める(文とクレジットは場面のモジュール scene.c)。
@@ -15,18 +16,31 @@
 #define S(sec) ((u16)((sec) * 60))
 
 static const RailSeg home_rail[] = {
-    {  16,       0,   0, 16 },
+    {  16,       0,   0, 16 },   /*   0〜 16m */
     {  12,  0x2000,   0, 14 },
-    {  24,       0,   0, 12 },
-    {  70,       0,   0,  8 },   /* 〜122m。村の門は 120m のリング */
+    {  24,       0,   0, 14 },   /*  28〜 52m 周回 A の手前 */
+    LOOP_TURN(14),               /*  52〜164m 周回 A: 雑魚 */
+    {  24,       0,   0, 14 },   /* 164〜188m 周回を抜ける */
+    {  12,       0,   0, 12 },   /* 188〜200m 見せ場: 田んぼ */
+    {  24,       0,   0, 14 },   /* 200〜224m 周回 B の手前 */
+    LOOP_TURN(14),               /* 224〜336m 周回 B: 雑魚 */
+    {  24,       0,   0, 14 },   /* 336〜360m 周回を抜ける */
+    {  20,       0,   0, 14 },   /* 360〜380m 見せ場: 水車 */
+    {  24,       0,   0, 14 },   /* 380〜404m 周回 C の手前 */
+    LOOP_TURN(12),               /* 404〜516m 周回 C: 亜人の王 */
+    {  24,       0,   0, 12 },   /* 516〜540m 周回を抜ける */
+    {  36,       0,   0,  8 },   /* 〜576m。村の門は最後のリング */
     {   0,       0,   0,  0 },
 };
+/* 周回区間: (始まりのリング, 長さのリング数)。リング = 4m */
+static const u8 home_loops[] = { 52 / 4, 112 / 4,  224 / 4, 112 / 4,  404 / 4, 112 / 4,  0 };
 
-/* 地形: (このリングまで, 種類)。リング = 4m。村へ続く道(柵と畑と茅葺きの農家)、田んぼ(28〜60m)、水車(60〜80m)、
- * また村へ続く道、突き当たり(120m)に村の門。遊ぶと 36m で亜人の王が出て 50m 前後で倒す(田んぼで戦う。2026-10-18 計測) */
+/* 地形: (このリングまで, 種類)。リング = 4m。村へ続く道(柵と畑と茅葺きの農家)、田んぼ(188〜200m)、水車(360〜380m)、
+ * また村へ続く道、突き当たり(572m)に村の門。
+ * 敵の出ない区間は約 10 秒まで: 見せ場は周回の間に 1 つずつ置く(2026-10-25 ユーザーの指摘) */
 static const u8 home_zones[] = {
     10,
-    7, K_HOME, 15, K_PADDY, 20, K_MILL, 0xFF, K_HOME,
+    47, K_HOME, 50, K_PADDY, 90, K_HOME, 95, K_MILL, 0xFF, K_HOME,
 };
 
 /* 9: 木・柱 10: 遠くの山・レール 11: 土の道 12: 畑・あぜ・苗の緑 13: 茅葺きの藁 14: 村の門の札と村人の顔(桃色) 15: 空。
@@ -35,12 +49,13 @@ static const u8 home_pal[14] = {
     0x31, 2,  0x12, 1,  0x43, 3,  0x31, 5,  0x62, 5,  0x74, 5,  0x26, 4,
 };
 
-enum { T_NONE, T_SEE, T_WARNING, T_KING, T_HOME };
+enum { T_NONE, T_SEE, T_WARNING, T_KING, T_HOME, T_CLEAR };
 static const Caption home_captions[] = {
     { "ALMOST THERE!",    C_YELLOW, 1 },
     { "WARNING!",         C_RED,    2 },
     { "THE KING!",        C_RED,    2 },
     { "HOME AT LAST!",    C_YELLOW, 1 },
+    { "STAGE CLEAR!",   C_YELLOW, 1 },
 };
 
 
@@ -50,26 +65,66 @@ static const Event home_events[] = {
     { S(0),    EV_DIR,   DIR_NONE,    0,   0 },
     { S(0),    EV_BGM,   SONG_STAGE6, 0,   0 },
     { S(1),    EV_TEXT,  T_SEE,       0,   0 },
-    { S(2),     EV_DIR,  DIR_FRONT,   0,   0 },
-    { S(2),     EV_SPAWN, ET_E01,      22, -10 },
-    { S(2.5),   EV_SPAWN, ET_E01,      24,  10 },
-    { S(4),    EV_DIR,   DIR_FRONT,   0,   0 },
-    { S(4),    EV_SPAWN, ET_E01,      22,  10 },
-    { S(4),    EV_SPAWN, ET_E03,      24, -10 },
-    { S(6),    EV_SPAWN, ET_E05,      20,   8 },
-    { S(6),    EV_SPAWN, ET_MISBOX,   18, -10 },   /* 誘導弾の箱(亜人の王の前) */
-    { S(7),    EV_SPAWN, ET_MEDKIT,   16,   0 },
-    /* ---- 亜人の王 ---- */
-    { S(9),    EV_TEXT,  T_WARNING,   0,   0 },
-    { S(9),    EV_VOICE, VOICE_WARNING, 0, 0 },
-    { S(9),    EV_SPEED, 4,           0,   0 },
-    { S(10),   EV_BOSS,  ET_B04,      16,  0 },
-    /* ---- 村の門の前まで走ってゆっくり止まる ---- */
-    { S(10.1), EV_DIR,   DIR_NONE,    0,   0 },
-    { S(10.1), EV_SPEED, 16,          0,   0 },
-    { AT(107, EV_TEXT),  T_HOME,      0,   0 },
-    { AT(107, EV_SPEED), 2,           0,   0 },
-    { AT(111, EV_END),   0,           0,   0 },
+    /* ---- 周回 A(52〜164m。敵が残っていれば何周でも) ---- */
+    { AT(30, EV_DIR),    DIR_FRONT,   0,   0 },
+    { AT(30, EV_SPAWN),  ET_E01,      22, -10 },
+    { AT(34, EV_SPAWN),  ET_E01,      24,  10 },
+    { AT(44, EV_SPAWN),  ET_E01,      22,  10 },
+    { AT(44, EV_SPAWN),  ET_E03,      24, -10 },
+    { AT(52, EV_WAIT),       15, 0, 0 },
+    { WAVE(EV_SPAWN),        ET_E05,      20,   8 },
+    { WAVE(EV_SPAWN),        ET_E03,      22,  10 },
+    { WAVE(EV_SPAWN),        ET_E02,     -14,   6 },
+    { WAVE(EV_WAIT),         15, 0, 0 },
+    { WAVE(EV_SPAWN),        ET_E01,     -10,  -8 },
+    { WAVE(EV_SPAWN),        ET_E05,     -12,   6 },
+    { WAVE(EV_SPAWN),        ET_E01,      22,  10 },
+    { WAVE(EV_WAIT),         15, 0, 0 },
+    { WAVE(EV_SPAWN),        ET_E03,      24, -10 },
+    { WAVE(EV_SPAWN),        ET_MEDKIT,   16,   0 },
+    { WAVE(EV_SPAWN),        ET_E05,      20,  -8 },
+    /* ---- 周回を抜けた: 田んぼ(敵は出さない) ---- */
+    { AT(166, EV_DIR), DIR_NONE, 0, 0 },
+    /* ---- 周回 B(224〜336m): 前後から雑魚 ---- */
+    { AT(202, EV_DIR), DIR_FRONT, 0, 0 },
+    { AT(202, EV_SPAWN), ET_E01, 22, -10 },
+    { AT(202, EV_SPAWN), ET_E01, 24, 10 },
+    { AT(212, EV_SPAWN), ET_E03, 24, -10 },
+    { AT(222, EV_SPAWN), ET_E05, 20, 8 },
+    { AT(224, EV_WAIT),      15, 0, 0 },
+    { WAVE(EV_SPAWN),        ET_E01, 22, 10 },
+    { WAVE(EV_SPAWN),        ET_E03, 22, -10 },
+    { WAVE(EV_SPAWN),        ET_E02, -14, 6 },
+    { WAVE(EV_WAIT),         15, 0, 0 },
+    { WAVE(EV_SPAWN),        ET_E01, -10, -8 },
+    { WAVE(EV_SPAWN),        ET_E05, -12, 6 },
+    { WAVE(EV_SPAWN),        ET_E01, 22, 10 },
+    { WAVE(EV_WAIT),         15, 0, 0 },
+    { WAVE(EV_SPAWN),        ET_E03, 24, -10 },
+    { WAVE(EV_SPAWN),        ET_MEDKIT, 16, 0 },
+    { WAVE(EV_SPAWN),        ET_E05, 20, -8 },
+    { WAVE(EV_SPAWN),        ET_E01, 22, -10 },
+    /* ---- 周回を抜けた: 水車(敵は出さない) ---- */
+    { AT(338, EV_DIR), DIR_NONE, 0, 0 },
+    /* ---- 周回 C(404〜516m): 雑魚 → 亜人の王 ---- */
+    { AT(382, EV_DIR), DIR_FRONT, 0, 0 },
+    { AT(382, EV_SPAWN), ET_E01, 22, 10 },
+    { AT(388, EV_SPAWN), ET_MISBOX, 18, -10 },
+    { AT(392, EV_SPAWN), ET_E03, 24, -10 },
+    { AT(404, EV_WAIT),      15, 0, 0 },
+    { WAVE(EV_TEXT),         T_WARNING, 0, 0 },
+    { WAVE(EV_VOICE),        VOICE_WARNING, 0, 0 },
+    { WAVE(EV_SPEED),        4, 0, 0 },
+    { WAVE(EV_WAIT),         50, 0, 0 },
+    { WAVE(EV_BOSS),         ET_B04, 16, 0 },
+    { WAVE(EV_SPEED),        0, 0, 0 },
+    { WAVE(EV_TEXT),         T_CLEAR, 0, 0 },   /* 最後のボスを倒した: 面のクリア */
+    /* ---- 周回を抜けた: 村の門の前まで走ってゆっくり止まる ---- */
+    { AT(518, EV_DIR), DIR_NONE, 0, 0 },
+    { AT(518, EV_SPEED), 16, 0, 0 },
+    { AT(561, EV_TEXT), T_HOME, 0, 0 },
+    { AT(561, EV_SPEED), 2, 0, 0 },
+    { AT(565, EV_END), 0, 0, 0 },
 };
 
 const Stage stage_data = {
@@ -81,4 +136,8 @@ const Stage stage_data = {
     home_zones, 0x4D9E,
     "STAGE 6", "THE VILLAGE",
     0, SONG_ENDING,              /* エンドロールの文とクレジットは場面のモジュール(scene.c)。曲だけここで決める */
+    { 0, 0 }, 0, 0,
+    0,          /* やさしい進行はしない */
+    0, 0,
+    home_loops,
 };
