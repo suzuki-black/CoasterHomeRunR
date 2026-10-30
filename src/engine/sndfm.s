@@ -9,7 +9,7 @@
 ; 割り込みは Z80 転送の間(CPU が Z80)にも入るので、R800 専用の命令は使わない。
 
 	.module	sndfm
-	.globl	_fm_write, _g_drm
+	.globl	_fm_write, _g_drm, _g_hha
 
 SONG_TAB = 0x8C00		; 曲の表(tools/gen_music.py の BASE。ドライバのコードはその手前まで。tools/mkrom.py が確かめる)
 FMC_P	= 0			; チャンネル: 今読んでいる所(0 = 止まっている)
@@ -425,6 +425,8 @@ rhy_tick:
 	jr	nz, 42$
 	ld	a, #0x36		; 音量
 	call	rv
+	ld	a, (hl)			; ハイハットとスネアの音量(上位 4 ビットがハイハットの減衰)。PSG のノイズの強さに使う(sndtick.c)
+	ld	(_g_hha), a
 	ld	a, #0x37
 	call	rv
 	ld	a, #0x38

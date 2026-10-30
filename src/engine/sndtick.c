@@ -62,6 +62,7 @@ void fm_play(u8 song);
 void fm_stop(void);
 extern const u8 *g_psg_top;              /* 曲の PSG のパート(無ければ 0)。fm_play が見出しから読む */
 u8 g_drm;                                /* このティックに FM のリズムが打った音(bit3 スネア、bit1 シンバル、bit0 ハイハット) */
+u8 g_hha;                                /* 曲のリズムの音量 0x37 の値(上位 4 ビット = ハイハットの減衰。sndfm.s が書く) */
 
 static const u8 *se_ptr;
 static u8 se_cur;
@@ -200,7 +201,11 @@ void sndm_tick(void)
         if (d & 0x10) kk_t = 5;                                                        /* バスドラム */
         if ((d & 0x08) && dr_vol <= 13) { dr_vol = 13; dr_dec = 3; dr_np = 6; }        /* スネア */
         else if ((d & 0x02) && dr_vol <= 11) { dr_vol = 11; dr_dec = 1; dr_np = 2; }   /* シンバル */
-        else if ((d & 0x01) && dr_vol <= 8) { dr_vol = 8; dr_dec = 4; dr_np = 1; }     /* ハイハット */
+        else if (d & 0x01) {                                                           /* ハイハット */
+            /* ハイハットの音量を上げた曲(減衰 4 以下 = V11 以上)だけ、ノイズも強く少し長く(旋律に埋もれて聞こえなかった。2026-10-29) */
+            u8 hv = (g_hha < 0x50) ? 12 : 8;
+            if (dr_vol <= hv) { dr_vol = hv; dr_dec = (hv == 12) ? 3 : 4; dr_np = 1; }
+        }
     }
     if (dr_vol || kk_t) {
         u8 v = dr_vol;
