@@ -244,7 +244,7 @@ static const MRect m_b04[] = {          /* 亜人の王(キリン人系)・黄+�
 #else
 #define U_b04 { 0, 0 }
 #endif
-#if !defined(GAME_SEA) && !defined(GAME_S2) && !defined(GAME_S3) && !defined(GAME_S5) && !defined(GAME_S6)
+#if !defined(GAME_SEA) && !defined(GAME_S2) && !defined(GAME_S6)   /* 分岐は奇数の面(1・3・5) */
 static const MRect m_sign[] = {         /* 分岐の合図の獣人(茶の猿人、お腹が白。文字 L / R は game.c が上に描く) */
     { -5,  0, -2, 10, C_BROWN, 2 },   {  2,  0,  5, 10, C_BROWN, 2 },
     { -8, 10,  8, 26, C_BROWN, 0 },   { -6, 12,  6, 24, C_WHITE, 0 },
