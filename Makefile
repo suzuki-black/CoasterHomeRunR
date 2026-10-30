@@ -84,7 +84,7 @@ $(BUILD):
 $(BUILD)/gen_data.c: $(TOOLS)/gen_data.py | $(BUILD)
 	$(PYTHON) $< $@
 
-# FM 音源の曲(src/sound/songs.mml)→ 音のモジュールの曲の部分(0x8C00-)と曲の番号(songs.h)
+# FM 音源の曲(src/sound/songs.mml)→ 音のモジュールの曲の部分(0x8A40-)と曲の番号(songs.h)
 $(BUILD)/songs.bin $(BUILD)/songs.h: src/sound/songs.mml $(TOOLS)/gen_music.py | $(BUILD)
 	$(PYTHON) $(TOOLS)/gen_music.py src/sound/songs.mml $(BUILD)/songs.bin $(BUILD)/songs.h
 
@@ -137,7 +137,7 @@ $(BUILD)/env_s%.rel: $(ENG)/env.c $(HDRS) Makefile | $(BUILD)
 $(BUILD)/scenemod.ihx: $(BUILD)/modhead_scene.rel $(BUILD)/scene.rel $(BUILD)/ressyms.rel
 	$(CC) $(MODFLAGS) --code-loc 0x800C -o $@ $^
 
-# 音のモジュール(マッパーのセグメント 8 に置く。効果音・ドラムのノイズ・PSG のパート・FM の曲のドライバ。曲のデータは 0x8C00- に
+# 音のモジュール(マッパーのセグメント 8 に置く。効果音・ドラムのノイズ・PSG のパート・FM の曲のドライバ。曲のデータは 0x8A40- に
 # tools/mkrom.py が合わせる)。割り込み(Z80 転送の間も)から動くので、C は Z80_SAFE_C で確かめる
 $(BUILD)/sndmod.ihx: $(BUILD)/modhead_snd.rel $(BUILD)/sndtick.rel $(BUILD)/sndfm.rel $(BUILD)/ressyms.rel
 	$(CC) $(MODFLAGS) --code-loc 0x8009 -o $@ $^
@@ -177,7 +177,8 @@ $(BUILD)/game3.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models_
 $(BUILD)/game5.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models_s5.rel $(BUILD)/stage5.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
 	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
 
-$(BUILD)/game6.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models_s6.rel $(BUILD)/stage6.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
+# 6 面だけ、最後のボスの登場の演出(game.c の talk_update)を入れた game.c をリンクする
+$(BUILD)/game6.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game_s6.rel $(BUILD)/models_s6.rel $(BUILD)/stage6.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
 	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
 
 $(BUILD)/%_s3.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)

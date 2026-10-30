@@ -38,7 +38,7 @@ def GAME_BANK(n): return 4 + 2 * n
 P0D_BASE, P0D_LIMIT = 0x1A00, 0x2E00   # ページ0の表とコード(0x0200-0x19FF は辺キャッシュ、0x2E00-0x3FFF は地形の断面の表)
 P0D_STAGE = 0x1800                      # 読み込みは 0xB400-0xCBFF 経由なので 6KB まで
 ENV_CODE_LIMIT = 0xB600                 # 地形モジュールのコード(0xB600-0xBBFF は地形の色・飾り・種類の表)
-SONG_BASE = 0x8C00                      # 音のモジュールの曲の表(tools/gen_music.py の BASE、sndfm.s の SONG_TAB)
+SONG_BASE = 0x8A40                      # 音のモジュールの曲の表(tools/gen_music.py の BASE、sndfm.s の SONG_TAB)
 
 
 def read_ihx(path):

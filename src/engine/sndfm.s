@@ -11,7 +11,7 @@
 	.module	sndfm
 	.globl	_fm_write, _g_drm, _g_hha
 
-SONG_TAB = 0x8C00		; 曲の表(tools/gen_music.py の BASE。ドライバのコードはその手前まで。tools/mkrom.py が確かめる)
+SONG_TAB = 0x8A40		; 曲の表(tools/gen_music.py の BASE。ドライバのコードはその手前まで。tools/mkrom.py が確かめる)
 FMC_P	= 0			; チャンネル: 今読んでいる所(0 = 止まっている)
 FMC_TOP	= 2			; 頭
 FMC_LOOP = 4			; ループで戻る所(0 = 頭)

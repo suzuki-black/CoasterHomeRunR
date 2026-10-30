@@ -1,7 +1,7 @@
 /* stage6_home.c — ステージ 6: 村の入り口(仕様書 5 章 #7)とエンディング(5.2)
  *
  * 流れ: 村へ続く通り → 周回 A(雑魚)→ 田んぼ(敵は出さない)→ 周回 B(雑魚)→ 水車(敵は出さない)
- *       → 周回 C(亜人の王(窃盗団の頭)B04)→ 村の門の前まで走ってゆっくり止まる(HOME AT LAST!)。門の前で村人が出迎える
+ *       → 周回 C(重い曲の中で亜人の王(窃盗団の頭)B04 が現れ、台詞の後に激しい曲で戦う)→ 村の門の前まで走ってゆっくり止まる(HOME AT LAST!)。門の前で村人が出迎える
  * 周回区間では、敵(ボスも)が残っている間は同じコースを回り続ける(見せ場に敵を持ち込まないように)。周回区間の外は位置で(EV_AT)、中は撃破で(WAVE と EV_WAIT)進める。
  *       → エンドロール(SCREEN 1、英語の結びの文とスタッフのクレジット。scene.c)
  * 村の門はレールの終わりのリングに正面を向けて置かれる(env.c の K_HOME)。
@@ -49,13 +49,14 @@ static const u8 home_pal[14] = {
     0x31, 2,  0x12, 1,  0x43, 3,  0x31, 5,  0x62, 5,  0x74, 5,  0x26, 4,
 };
 
-enum { T_NONE, T_SEE, T_WARNING, T_KING, T_HOME, T_CLEAR };
+enum { T_NONE, T_SEE, T_WARNING, T_KING, T_HOME, T_CLEAR, T_FURTHER };
 static const Caption home_captions[] = {
     { "ALMOST THERE!",    C_YELLOW, 1 },
     { "WARNING!",         C_RED,    2 },
     { "THE KING!",        C_RED,    2 },
     { "HOME AT LAST!",    C_YELLOW, 1 },
     { "STAGE CLEAR!",   C_YELLOW, 1 },
+    { "NO FURTHER!",     C_RED,    1 },
 };
 
 
@@ -112,12 +113,16 @@ static const Event home_events[] = {
     { AT(388, EV_SPAWN), ET_MISBOX, 18, -10 },
     { AT(392, EV_SPAWN), ET_E03, 24, -10 },
     { AT(404, EV_WAIT),      15, 0, 0 },
+    { WAVE(EV_BGM),          SONG_KING1, 0, 0 },   /* 重くゆっくり高まる曲。ボスが現れて台詞を言うまで(game.c の talk_update) */
     { WAVE(EV_TEXT),         T_WARNING, 0, 0 },
     { WAVE(EV_VOICE),        VOICE_WARNING, 0, 0 },
     { WAVE(EV_SPEED),        4, 0, 0 },
-    { WAVE(EV_WAIT),         50, 0, 0 },
+    { WAVE(EV_WAIT),         220, 0, 0 },
+    { WAVE(EV_TURN),         0, 0, 0 },
+    { WAVE(EV_TALK),         VOICE_KING, SONG_KING2, T_FURTHER },
     { WAVE(EV_BOSS),         ET_B04, 16, 0 },
     { WAVE(EV_SPEED),        0, 0, 0 },
+    { WAVE(EV_BGM),          SONG_STAGE6, 0, 0 },   /* 倒したら 6 面の曲へ戻す(クリアの曲は加算で鳴る) */
     { WAVE(EV_TEXT),         T_CLEAR, 0, 0 },   /* 最後のボスを倒した: 面のクリア */
     /* ---- 周回を抜けた: 村の門の前まで走ってゆっくり止まる ---- */
     { AT(518, EV_DIR), DIR_NONE, 0, 0 },

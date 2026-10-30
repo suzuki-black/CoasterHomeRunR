@@ -124,6 +124,11 @@ static u8  sc_end;
 static u8  ctrl;                 /* 1 = 操作できる(オープニングの演出中は 0) */
 static u8  spd_over;             /* 0 以外: コースターの速度(m/秒 × 4)をスクリプトで指定 */
 static u8  cap_id, cap_time;     /* 字幕の番号(0xFF = AREA CLEAR!)と残りフレーム */
+#ifdef GAME_S6
+static u8  talk_on;                /* 最後のボスの登場の演出。0 = 無し / 1 = 現れたところ / 2 = 台詞(talk_update) */
+static u16 talk_t;
+static const Event *talk_ev;
+#endif
 static u8  warn_prev, warn_time; /* 警告の出始めと繰り返しで警告音を鳴らす */
 static i8  pitch_cur;            /* カメラのピッチ(坂に合わせて少しずつ追う) */
 static u16 fps_t0;               /* 計測用: 1 秒(60 ティック)の区切り */
@@ -399,6 +404,9 @@ static void update_ce(void)
         }
         break;
     case ST_ATTACK:
+#ifdef GAME_S6
+        if (talk_on) { ce.v = (i16)cam_v + ((keep - d) << f->gain); break; }   /* 台詞の間は攻撃しない */
+#endif
         if (f->mv == MV_WALK) {
             ce.v = (i16)cam_v;                        /* 張り付いて殴る。2 回殴ったら置いていかれる */
             attack(f, d);
@@ -743,9 +751,34 @@ static i8 foe_side_w(i8 want)
 }
 #define foe_side() foe_side_w(0)
 
+#ifdef GAME_S6
+/* 最後のボスの登場: 現れる → 曲を止めて静かな中で台詞 → 台詞が終わったら激しい曲に替えて戦いを始める。
+ * 長さはティックで数える(フレームレートで台詞の間が変わらないように)。この間は操作できず、ボスも攻撃しない */
+#define TALK_SAY 150
+#define TALK_END 300
+
+static void talk_update(void)
+{
+    u16 t = g_tick - talk_t;
+    if (talk_on == 1 && t >= TALK_SAY) {
+        talk_on = 2;
+        bgm_play(0);
+        pcm_say(talk_ev->a);
+        cap_id = talk_ev->c; cap_time = 40;
+    } else if (talk_on == 2 && t >= TALK_END) {
+        talk_on = 0;
+        ctrl = 1;
+        bgm_play(talk_ev->b);
+    }
+}
+#endif
+
 static void script_update(void)
 {
     static u8 held;
+#ifdef GAME_S6
+    if (talk_on) talk_update();
+#endif
     if (boss_alive) return;              /* ボス戦中は進行を止める */
     if (!held) sc_tick += 2;             /* 反対側の敵を待たせている間は時刻も止める */
     held = 0;
@@ -803,6 +836,9 @@ static void script_update(void)
             shake = (u8)ev->b;
             break;
         case EV_VOICE: if (say(ev->a)) voice_t = g_tick; break;
+#ifdef GAME_S6
+        case EV_TALK: talk_ev = ev; talk_t = g_tick; talk_on = 1; ctrl = 0; break;
+#endif
         case EV_PAL:
             set_stage_palette(ev->a ? stage->palette2 : stage->palette);
             break;
@@ -1326,6 +1362,9 @@ u8 game_run(const Stage *st, u8 first)
     if (first) { life = g_cfg.life; g_score = 0; mis_left = MIS_START; }   /* 誘導弾もライフと同じく持ち越す */
     attack_dir = DIR_NONE;
     boss_alive = 0;
+#ifdef GAME_S6
+    talk_on = 0;
+#endif
     blink = 0;
     shake = 0;
     hitstop = 0;

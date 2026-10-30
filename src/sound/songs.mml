@@ -187,7 +187,7 @@ A o5 l16 d e f g a g f e d e f g a b- a g | o5 l16 b- a g f e f g a b- o6 c d c 
 A o5 l8 e f g e c+ e a g | o5 d4 o4 a4 o5 d4 r4 |
 B @0 v11 q8 o4 f1 | f1 | e1 | f1 | f1 | f1 | g2 e2 | f1 |
 B f1 | g2 e2 | f2 a2 | g2 e2 | f1 | g1 | e1 | f1 |
-C @0 v9 q5 o4 l16 [a]16 | [a]16 | [a]16 | [a]16 | [a]16 | [a]16 | [b-]8 [a]8 | [a]16 |
+C @0 v9 q5 o4 l16 [a]32 | [a]16 | [a]16 | [a]16 | [a]16 | [b-]8 [a]8 | [a]16 |
 C [a]16 | [b-]8 [a]8 | [a]16 | [b-]8 [a]8 | [a]16 | [b-]8 [g]8 | [a]16 | [a]16 |
 D @0 v8 q5 o4 l16 [f]16 | [f]16 | [e]16 | [f]16 | [f]16 | [f]16 | [g]8 [e]8 | [f]16 |
 D [f]16 | [g]8 [e]8 | [f]16 | [g]8 [e]8 | [f]16 | [g]8 [e]8 | [e]16 | [f]16 |
@@ -294,6 +294,44 @@ R V15,15,12,11,15
 R [ bch16 h16 sh16 h16 bh16 bh16 sh16 h16 bh16 h16 sh16 h16 bh16 bh16 sh16 sh16
 R  [ bh16 h16 sh16 h16 bh16 bh16 sh16 h16 bh16 h16 sh16 h16 bh16 bh16 sh16 sh16 ]2
 R    bh16 h16 sh16 h16 bh16 bh16 sh16 h16 t16 t16 s16 s16 t16 t16 bs16 s16 ]4
+@song KING1 loop
+# 最後のボスの前半(6 面)。ニ短調、t66。低い和音がゆっくり積み上がり、ティンパニが近づいてくる。最後の 2 小節を、
+#   ボスが現れて台詞を言うまで繰り返す(和音を 16 分で刻んで張りつめる)。ここだけ曲調をコミカルにせず、いかにも最後のボスの重さに(2026-10-30 ユーザーの指定)
+@tempo 66
+@voice 22 21 0A 0E F1 F2 11 14   # オリジナル音色 0: 低く太い合唱とオルガンの間の音
+A @0 @v0 q8 v10 o4 d1 | v11 e-1 | v12 d1 | v13 f2 e-2 | v14 d1 | v15 g2 f2 | L v15 q7 o4 e2 c+2 | d2 c+2 |
+B @0 q8 v10 o3 a1 | v11 b-1 | v12 a1 | v13 b-1 | v14 a1 | v15 b-1 | L v15 q4 o3 l16 [a]32 |
+C @0 q8 v9 o3 f1 | v10 g1 | v11 f1 | v12 f1 | v13 f1 | v14 g1 | L v14 q4 o3 l8 [e]8 [g]4 [e]4 |
+D @14 q8 v11 o3 r1 | r1 | r1 | d1 | d1 | e-1 | L v14 q4 o3 l16 [c+]32 |
+E @13 q8 v15 o1 d1 | e-1 | d1 | b-2 e-2 | d1 | g2 b-2 | L a1 | a1 |
+R V14,10,15,13,0
+R b2 r2 | b2 r2 | b2 t4 t4 | b2 t4 t4 | bt4 t4 bt4 t4 | bt4 t4 bt4 t8 t8 | L
+R bct8 t16 t16 [t8 t16 t16]3 | [b16 t16 t16 t16]4
+
+@song KING2 loop
+# 最後のボスの戦い(6 面)。ニ短調、t168。歪んだリードが勇ましく跳ね、後半は高い音で悲しげに歌う。
+#   刻みは 6 面の曲と同じ 16 分(いちばん盛り上げる所)。KING1 の台詞の直後から
+@tempo 168
+@voice 21 21 0E 1F F2 F1 13 14   # オリジナル音色 0: 波形を半波に歪ませた鋭いリード(6 面と同じ)
+A @0 @v0 v13 q7 L
+A o5 d4. a8 a4 g4 | f4 e4 d2 | c4. g8 g4 f4 | e4 d4 c+2 |
+A d4. a8 a4 b-4 | o6 c4 d4 o5 a2 | b-4 a4 g4 f4 | e2 a2 |
+A q8 o6 d2. c8 o5 b-8 | a2 f2 | g2. f8 e8 | f4 e4 d2 |
+A b-2 o6 c2 | d2 e-2 | d4 c+4 o5 b-4 g4 | a1 |
+F K+3 @0 @v0 v12 q7 L
+F o5 d4. a8 a4 g4 | f4 e4 d2 | c4. g8 g4 f4 | e4 d4 c+2 |
+F d4. a8 a4 b-4 | o6 c4 d4 o5 a2 | b-4 a4 g4 f4 | e2 a2 |
+F q8 o6 d2. c8 o5 b-8 | a2 f2 | g2. f8 e8 | f4 e4 d2 |
+F b-2 o6 c2 | d2 e-2 | d4 c+4 o5 b-4 g4 | a1 |
+B @14 v11 q8 L o4 a1 | a1 | g1 | a1 | a1 | a1 | b-2 g2 | a1 | b-1 | a1 | b-1 | a1 | g1 | b-1 | a1 | a1 |
+C @14 v10 q8 L o4 f1 | f1 | e1 | g1 | f1 | f1 | f2 d2 | c+1 | f1 | f1 | d1 | d1 | d1 | g1 | e1 | c+1 |
+E @13 v14 q6 L o2 l8 [d > d <]4 | [d > d <]4 | [c > c <]4 | [a > a <]4 | [d > d <]4 | [f > f <]4 | [b- > b- <]2 [g > g <]2 | [a > a <]4 |
+E [b- > b- <]4 | [f > f <]4 | [g > g <]4 | [d > d <]4 | [g > g <]4 | [e- > e- <]4 | [a > a <]2 [g > g <]2 | [a > a <]4 |
+R V15,15,13,12,15 L
+R [ bch16 h16 sh16 h16 bh16 bh16 sh16 h16 bh16 h16 sh16 h16 bh16 bh16 sh16 sh16
+R  [ bh16 h16 sh16 h16 bh16 bh16 sh16 h16 bh16 h16 sh16 h16 bh16 bh16 sh16 sh16 ]2
+R    bh16 h16 sh16 h16 bh16 bh16 sh16 h16 t16 t16 s16 s16 t16 t16 bs16 s16 ]4
+
 @song CLEAR once
 # ステージクリア: ほっとするような曲調。ヘ長調、t96。フルートの旋律にビブラフォンの分散和音、ホルンの長い和音
 #   場面の音の個性(2026-10-18): 戦いが終わってほっとする、トレモロのかかった柔らかいエレピ(どの面にも無い音)。

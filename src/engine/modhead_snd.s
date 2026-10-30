@@ -1,5 +1,5 @@
 ; modhead_snd.s — 音のモジュールの先頭(ページ2 = マッパーのセグメント 8、0x8000)
-;   sndtick.c・sndfm.s を 0x8000 に合わせてリンクし、曲のデータ(tools/gen_music.py)を 0x8C00 から後ろに置く(tools/mkrom.py)。
+;   sndtick.c・sndfm.s を 0x8000 に合わせてリンクし、曲のデータ(tools/gen_music.py)を 0x8A40 から後ろに置く(tools/mkrom.py)。
 ;   起動時に 1 回セグメント 8 へ読み込む。割り込み(sys.s)はページ2をセグメント 8 にしてから 0x8000 を呼び、
 ;   常駐部の bgm_play / bgm_stop(sys.s)はページ2を切り替えて 0x8003 / 0x8006 を呼ぶ。
 	.module	modhead_snd
