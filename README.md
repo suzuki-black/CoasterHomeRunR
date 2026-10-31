@@ -37,6 +37,7 @@ and from behind.
 - [Features](#features)
 - [Controls](#controls)
 - [Requirements](#requirements)
+- [Download](#download)
 - [Building](#building)
 - [Running](#running)
 - [Testing](#testing)
@@ -133,6 +134,11 @@ and from behind.
   FS-A1ST, with the ROM loaded from an ESERAMair (a Wi-Fi RAM cartridge), including the voices, the last boss's entrance
   and both routes of the stage 3 and stage 5 branches. Development and automated tests use openMSX. The FS-A1GT has not
   been tried on real hardware.
+
+### Download
+The ROM is on the [Releases page](https://github.com/suzuki-black/CoasterHomeRunR/releases/latest). The zip holds
+`CoasterHomeRun [ASCII8].rom`; the `[ASCII8]` in the file name tells WebMSX the mapper type, so keep it when using
+WebMSX. To run it on a real turboR you need a way to load an ASCII8 MegaROM image, such as a RAM cartridge.
 
 ### Building
 Requires [SDCC](https://sdcc.sourceforge.net/) 4.6 (`sdcc` / `sdasz80`; C is compiled for the R800 with `-mr800`) and
@@ -265,6 +271,7 @@ This game is fiction. The beast-men, the places and the events are imaginary.
 - [特徴](#特徴)
 - [操作](#操作)
 - [動作環境](#動作環境)
+- [ダウンロード](#ダウンロード)
 - [ビルド](#ビルド)
 - [実行](#実行)
 - [テスト](#テスト)
@@ -350,6 +357,11 @@ This game is fiction. The beast-men, the places and the events are imaginary.
 - **実機で動作を確認しています。** 実機の FS-A1ST に ESERAMair（Wi-Fi 付きの RAM カートリッジ）から ROM を載せ、タイトルから
   全 6 面を通してエンディングまで遊びました。声、最後のボスの登場、3 面と 5 面の分岐の左右も確かめています。開発と自動テストは
   openMSX で行っています。FS-A1GT の実機では試していません。
+
+### ダウンロード
+ROM は [Releases のページ](https://github.com/suzuki-black/CoasterHomeRunR/releases/latest)にあります。zip の中身は
+`CoasterHomeRun [ASCII8].rom` です。ファイル名の `[ASCII8]` で WebMSX にマッパーの種類を伝えるので、WebMSX で使うときは
+名前を変えないでください。実機の turbo R で動かすには、RAM カートリッジなど、ASCII8 のメガROM イメージを読み込める手段が必要です。
 
 ### ビルド
 [SDCC](https://sdcc.sourceforge.net/) 4.6（`sdcc` / `sdasz80`。C は R800 向けに `-mr800` でコンパイル）と、Python 3（Pillow）が必要です。
