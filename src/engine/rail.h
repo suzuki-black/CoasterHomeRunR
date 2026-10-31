@@ -20,7 +20,7 @@ typedef struct { i16 x, y, z; u16 yaw; } RailPt;
 #define RAIL_STEP 2
 #define RAIL_MAX 400                                /* 800m */
 #define rail     ((RailPt *)0xE100)                 /* 8 × 400 = 3200 B */
-#define rail_spd ((u8 *)(0xE100 + 8 * RAIL_MAX))     /* 400 B → 0xEE90 まで */
+#define rail_spd ((u8 *)(0xE100 + 8 * RAIL_MAX))     /* 400 B → 0xEF0F まで */
 #define RAIL_PT(m) (&rail[(m) >> 1])                /* レール上の位置 m[m](偶数)の点 */
 extern u16    rail_len;        /* 長さ[m] */
 
