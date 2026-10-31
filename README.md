@@ -25,6 +25,8 @@ and from behind.
   <br><sub>Stage 5 · the festival street / ステージ5 祭りの町　　Stage 6 · paddies and the water wheel / ステージ6 田んぼと水車</sub>
 </p>
 
+**Download the ROM / ROM のダウンロード:** [Releases](https://github.com/suzuki-black/CoasterHomeRunR/releases/latest)
+
 **Language:** [🇬🇧 English](#english) · [🇯🇵 日本語](#japanese)
 
 ---
