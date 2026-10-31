@@ -219,6 +219,7 @@ docs/                 design and development notes
 ### Documentation
 - **[Specification / 仕様書](docs/TrolleyHomeRun_Spec.md)** — the game design, stages, memory and ROM maps, TODO.
 - **[Development log / 検証記録](docs/検証記録.md)** — every measurement and change, with the reasons.
+- **[The Z80 transfer story](docs/Z80_transfer_story_en.md)** — how the author and two Claudes arrived at sending with the Z80.
 - **[SDCC and the R800 / SDCCとR800の調査](docs/SDCCとR800の調査.md)** — building C for the R800.
 - **Performance studies** — [処理の重さの整理](docs/処理の重さの整理.md) and the replies to reviews
   ([意見](docs/処理の重さ_意見への回答.md) · [レビュー](docs/処理の重さ_レビューへの回答.md) · [再反論](docs/処理の重さ_再反論への回答.md)).
@@ -438,6 +439,7 @@ docs/                 設計・開発ノート
 ### ドキュメント
 - **[仕様書](docs/TrolleyHomeRun_Spec.md)** — ゲームの設計、全ステージ、メモリと ROM の配置、TODO。
 - **[検証記録](docs/検証記録.md)** — 計測と変更のすべてと、その理由。
+- **[Z80 転送のやりとり](docs/Z80転送のやりとり.md)** — 作者と 2 つの Claude が、Z80 で送る実装にたどり着くまでの記録。
 - **[SDCCとR800の調査](docs/SDCCとR800の調査.md)** — C を R800 向けにビルドする調査。
 - **処理の重さの検討** — [処理の重さの整理](docs/処理の重さの整理.md) と、いただいた意見への回答
   （[意見](docs/処理の重さ_意見への回答.md)・[レビュー](docs/処理の重さ_レビューへの回答.md)・[再反論](docs/処理の重さ_再反論への回答.md)）。
