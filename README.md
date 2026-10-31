@@ -143,7 +143,7 @@ make
 ```
 
 This produces `build/TrolleyHomeRun.rom` (a 4 Mbit (512 KB) ASCII8 MegaROM) and a copy named
-`build/TrolleyHomeRun [ASCII8].rom` for WebMSX. A full build takes about 4 minutes, because the register allocator is
+`build/TrolleyHomeRun [ASCII8].rom` for WebMSX. A full build takes about 8 minutes, because the register allocator is
 set to search hard (`--max-allocs-per-node 100000`).
 
 `make fpsrom` builds a measurement ROM that shows the frame rate and, on the title, the CPU state
@@ -359,7 +359,7 @@ make
 ```
 
 `build/TrolleyHomeRun.rom`（4メガビット（512KB）の ASCII8 メガROM）と、WebMSX 用の名前のコピー `build/TrolleyHomeRun [ASCII8].rom`
-ができます。レジスタの割り当てを念入りにしているので（`--max-allocs-per-node 100000`）、全体のビルドには約 4 分かかります。
+ができます。レジスタの割り当てを念入りにしているので（`--max-allocs-per-node 100000`）、全体のビルドには約 8 分かかります。
 
 `make fpsrom` で計測用 ROM を作ります。ゲーム中に fps を、タイトルに CPU の状態（`CPU:R800 DRAM` / `R800 ROM` / `Z80`）を出します。
 
