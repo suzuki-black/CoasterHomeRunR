@@ -104,6 +104,8 @@ and from behind.
   starts.
 - **Easy progression in stages 1 and 2.** While enemies remain on one side, none come from the other. From stage 3 on they
   come from both sides at once.
+- **Continue.** When durability runs out you can carry on from the same spot, three times per game: durability is full, missiles
+  are topped up to three, and the score goes back to 0.
 - **Reading the screen.** Enemies and enemy shots have a white outline, first-aid kits a yellow one. Points appear in white
   where the enemy was; durability changes appear above the car as a yellow "+2" or a red "-1".
 - **Hit feel.** Hit-stop, enemies blown up and away, debris, screen shake when you are hit, and a chain of explosions
@@ -124,7 +126,7 @@ and from behind.
 | Fire / confirm | Space | Button A |
 | Turn front / back | M or B | Button B |
 | Fire a homing missile | Hold Space, press M or B | Hold A, press B |
-| Hidden settings menu | On the title screen: ↑↑↓↓←→←→ B A (B and A are the B and A keys) — damage per hit, no damage, starting stage, starting durability, one-shot kills, route, easy progression, fps display, transfer method | |
+| Hidden settings menu | On the title screen: ↑↑↓↓←→←→ B A (B and A are the B and A keys) — damage per hit, no damage, starting stage, starting durability, one-shot kills, route, easy progression, fps display, transfer method, number of continues (0–99) | |
 
 ### Requirements
 - **MSX turboR only** (FS-A1ST / FS-A1GT). The cartridge checks for the turboR at boot and stops with
@@ -332,6 +334,7 @@ This game is fiction. The beast-men, the places and the events are imaginary.
 - **最後のボスの登場。** 重くゆっくりした曲が高まり、亜人の王が現れると曲が止まり、静かな中で台詞を言います。歌舞伎の見得の
   ようなものなので、言い終えるまでは攻撃できません。言い終えると戦いの曲が始まります。
 - **やさしい進行（ステージ 1・2）。** 片側の敵が残っている間は、反対側から敵が来ません。3 面からは前後から容赦なく来ます。
+- **コンティニュー。** 耐久が尽きても、1 ゲームに 3 回まで、その場から続けられます。耐久は満タン、誘導弾は 3 発まで補い、スコアは 0 に戻ります。
 - **見分けのルール。** 敵と敵弾は白の縁取り、救急箱は黄の縁取り。得点は白い数字が敵の位置に、耐久の増減は黄の「+2」・赤の「-1」が
   車両の上に出ます。
 - **手応え。** ヒットストップ、吹き飛ぶ敵、破片、被弾の画面の揺れ。ボスを倒すと効果音に合わせて爆発が続きます。
@@ -349,7 +352,7 @@ This game is fiction. The beast-men, the places and the events are imaginary.
 | 射撃・決定 | スペース | A ボタン |
 | 前後の切り替え | M または B | B ボタン |
 | 誘導弾を撃つ | スペースを押したまま M または B | A を押したまま B |
-| 隠しコンフィグ | タイトルで ↑↑↓↓←→←→ B A（B・A はキーボードの B キー・A キー）。被弾で減る耐久・無敵・開始ステージ・始めの耐久・1 発で倒せる・分岐の固定・やさしい進行・fps 表示・転送のしかた | |
+| 隠しコンフィグ | タイトルで ↑↑↓↓←→←→ B A（B・A はキーボードの B キー・A キー）。被弾で減る耐久・無敵・開始ステージ・始めの耐久・1 発で倒せる・分岐の固定・やさしい進行・fps 表示・転送のしかた・コンティニューの回数（0〜99） | |
 
 ### 動作環境
 - **MSX turbo R 専用**（FS-A1ST / FS-A1GT）。起動時に turbo R かを確かめ、それより前の機種では

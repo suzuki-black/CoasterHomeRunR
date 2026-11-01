@@ -209,13 +209,47 @@ void scm_gameover(void)
     }
 }
 
+/* 耐久が 0 になったとき、止まった画面に CONTINUE? を重ねる。続けるなら耐久を満タンに、誘導弾を始めの数まで戻し、スコアを 0 にして 1 を返す。
+ * 撃ち続けていた指で選ばないように、0.75 秒は入力を受けない */
+u8 scm_continue(void)
+{
+    char s[13];
+    u8 i, in, edge, prev = 0xFF;
+    u16 t0 = g_tick;
+    if (!g_cont_left) return 0;
+    for (i = 0; i < 10; i++) s[i] = "CONTINUE? "[i];
+    if (g_cont_left >= 10) s[i++] = (char)('0' + g_cont_left / 10);
+    s[i++] = (char)('0' + g_cont_left % 10);
+    s[i] = 0;
+    g_color = C_BLACK; g_rx = 6; g_ry = 12; g_rw = 52; g_rh = 18;
+    rect_fill();
+    g_spr_attr[0] = 209;                 /* 照準を文字に重ねない */
+    g_spr_attr[4] = 209;
+    text_center(14, s, C_YELLOW, 1);
+    text_center(23, "A YES  B NO", C_WHITE, 1);
+    for (;;) {
+        present();
+        in = input_raw();
+        edge = in & ~prev;
+        prev = in;
+        if ((u16)(g_tick - t0) < 45) continue;
+        if (edge & (IN_A | IN_KEY_A)) break;
+        if (edge & IN_B) return 0;
+    }
+    g_cont_left--;
+    life = 8;
+    if (mis_left < MIS_START) mis_left = MIS_START;
+    g_score = 0;
+    return 1;
+}
+
 /* 項目: 名前、最小、最大、値の名前(0 = 数字で出す) */
-enum { CF_DAMAGE, CF_GOD, CF_STAGE, CF_LIFE, CF_ONESHOT, CF_ROUTE, CF_EASY, CF_FPS, CF_XFER, CF_COUNT };
+enum { CF_DAMAGE, CF_GOD, CF_STAGE, CF_LIFE, CF_ONESHOT, CF_ROUTE, CF_EASY, CF_FPS, CF_XFER, CF_CONT, CF_COUNT };
 static const char * const cf_name[CF_COUNT] = {
-    "DAMAGE", "NO DAMAGE", "STAGE", "LIFE", "ONE SHOT", "ROUTE", "EASY", "FPS", "XFER",
+    "DAMAGE", "NO DAMAGE", "STAGE", "LIFE", "ONE SHOT", "ROUTE", "EASY", "FPS", "XFER", "CONTINUE",
 };
-static const u8 cf_min[CF_COUNT] = { 1, 0, 1, 1, 0, 0, 0, 0, 0 };
-static const u8 cf_max[CF_COUNT] = { 8, 1, STAGE_COUNT, 8, 1, 2, 2, 1, 1 };
+static const u8 cf_min[CF_COUNT] = { 1, 0, 1, 1, 0, 0, 0, 0, 0, 0 };
+static const u8 cf_max[CF_COUNT] = { 8, 1, STAGE_COUNT, 8, 1, 2, 2, 1, 1, 99 };
 static const char * const v_onoff[] = { "OFF", "ON" };
 static const char * const v_route[] = { "FREE", "LEFT", "RIGHT" };
 static const char * const v_easy[]  = { "STAGE", "ON", "OFF" };
@@ -228,13 +262,14 @@ static u8 *cf_val(u8 i)
 
 void scm_config(void)
 {
-    u8 sel = 0, i, prev = 0xFF, in, edge;
+    u8 sel = 0, i, prev = 0xFF, in, edge, top;
     u8 *v;
     for (;;) {
         buf_fill(C_BLACK);
-        for (i = 0; i < CF_COUNT; i++) {
+        top = (sel > 8) ? sel - 8 : 0;                   /* 画面に入るのは 9 項目。下の項目を選ぶと 1 行ずつ送る */
+        for (i = top; i < top + 9; i++) {
             /* 9 項目 × 5 行で画面いっぱい(行の間が空かないので、選んでいない項目は白と水色を交互に) */
-            u8 y = 2 + i * 5, c = (i == sel) ? C_YELLOW : (i & 1) ? C_CYAN : C_WHITE;
+            u8 y = 2 + (i - top) * 5, c = (i == sel) ? C_YELLOW : (i & 1) ? C_CYAN : C_WHITE;
             const char *s = 0;
             v = cf_val(i);
             text_draw(2, (i8)y, cf_name[i], c, 1);
@@ -243,7 +278,7 @@ void scm_config(void)
             else if (i == CF_EASY) s = v_easy[*v];
             else if (i == CF_XFER) s = v_xfer[*v];
             if (s) text_draw(42, (i8)y, s, c, 1);
-            else num_draw(42, (i8)y, *v, 1, c);
+            else num_draw(42, (i8)y, *v, (i == CF_CONT) ? 2 : 1, c);
         }
         present();
         in = input_raw();

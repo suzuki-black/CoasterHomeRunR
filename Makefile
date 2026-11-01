@@ -135,7 +135,7 @@ $(BUILD)/env_s%.rel: $(ENG)/env.c $(HDRS) Makefile | $(BUILD)
 
 # 場面のモジュール(マッパーのセグメント 10 に置く。エンディング・ゲームオーバー・隠しコンフィグ・SCREEN 3 の作り直し)
 $(BUILD)/scenemod.ihx: $(BUILD)/modhead_scene.rel $(BUILD)/scene.rel $(BUILD)/ressyms.rel
-	$(CC) $(MODFLAGS) --code-loc 0x800C -o $@ $^
+	$(CC) $(MODFLAGS) --code-loc 0x800F -o $@ $^
 
 # 音のモジュール(マッパーのセグメント 8 に置く。効果音・ドラムのノイズ・PSG のパート・FM の曲のドライバ。曲のデータは 0x8A40- に
 # tools/mkrom.py が合わせる)。割り込み(Z80 転送の間も)から動くので、C は Z80_SAFE_C で確かめる

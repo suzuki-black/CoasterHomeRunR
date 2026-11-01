@@ -472,7 +472,6 @@ static void branch_pick(u8 dir)
 
 /* 誘導弾(アフターバーナー II にならう)の状態。中身は fire の後ろ */
 #define LOCK_MAX  4             /* 同時にロックできる数 */
-#define MIS_START 3             /* ステージの始めの弾数 */
 #define MIS_MAX   5             /* 持てる弾数 */
 #define MIS_T     8             /* 撃ってから当たるまでのフレーム数 */
 #define MIS_BOSS  5             /* ボスに与える傷(ふつうの弾の数) */
@@ -1393,7 +1392,7 @@ u8 game_run(const Stage *st, u8 first)
         if (g_dbg_fire) { g_dbg_fire = 0; pcm_say(VOICE_FIRE); }   /* (調べ用)「FIRE」を鳴らす */
         render();
         present();
-        if (!life) { over = 1; break; }
+        if (!life && !continue_ask()) { over = 1; break; }
         /* 台本の終わり: 敵(敵弾も)が残っていればいなくなるまで待つ(最大 150 フレーム ≒ 6 秒。放っておかれた敵で止まらないように)。
          * 残った敵がいても強制的にクリアにしていた(2026-10-25 ユーザーの指摘) */
         if (sc_end && !boss_alive && (foe_side() == 0 || ++end_wait >= 150)) break;

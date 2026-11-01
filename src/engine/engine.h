@@ -59,6 +59,7 @@ void rom_load(u8 bank);             /* 同じく写すが、0xBC00- を 0 で埋
 void vdp_init(void);                /* SCREEN 3 を作り直す(場面のモジュール scene.c。sys.s の中継) */
 void ending_show(void);             /* エンドロール(scene.c。曲は g_end_bgm) */
 void gameover_show(void);           /* ゲームオーバー(scene.c) */
+u8   continue_ask(void);            /* 耐久が 0 になったときの CONTINUE?(scene.c)。続けるなら 1 */
 void config_show(void);             /* 隠しコンフィグ(scene.c) */
 void title_show(void);              /* タイトルの絵(SCREEN 11)を出す(main.c) */
 void title_blink(u8 on);            /* タイトルの PUSH SPACE KEY を出す・消す(表示するページを替える) */

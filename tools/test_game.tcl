@@ -105,6 +105,13 @@ proc step_turn2 {} {
 }
 proc watch_over {} {
     set sc [peek8 [sym _g_scene]]
+    if {$sc == 1 && [peek8 [sym _life]] == 0 && ![info exists ::no_cont]} {
+        # CONTINUE? には NO(M キー)で答える(受け付けるのは 0.75 秒たってから)
+        set ::no_cont 1
+        after time 1.0 {keymatrixdown 4 0x04}
+        after time 1.3 {keymatrixup 4 0x04}
+        after time 1.6 {unset ::no_cont}
+    }
     if {$sc == 2 && ![info exists ::over_shot]} { set ::over_shot 1; shot 08_gameover }
     if {$sc == 0 && [info exists ::over_shot] && ![info exists ::back_title]} {
         set ::back_title 1

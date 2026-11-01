@@ -19,6 +19,7 @@ void cfg_defaults(void)
     g_cfg.damage = 1;
     g_cfg.stage = 1;
     g_cfg.life = 8;
+    g_cfg.cont = 3;
 #ifdef DEBUG_FPS
     g_cfg.fps = 1;
 #endif

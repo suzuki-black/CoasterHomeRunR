@@ -54,6 +54,15 @@ void flash_palette(void)
     pal_state = 1;
 }
 
+/* 耐久が 0 になったときの CONTINUE?。ステージのパレットはゲームのモジュールの定数なので、被弾フラッシュの色は、
+ * ページ2がゲームのモジュールのうちに戻しておく(場面のモジュールの中の present で戻すと、別のデータを色として読む) */
+u8 scm_continue_call(void);
+u8 continue_ask(void)
+{
+    if (pal_state) { vdp_set_palette(9, stage_pal); pal_state = 0; }
+    return scm_continue_call();
+}
+
 /* 1 フレームを表示に回す。
  *   前回の切替(垂直帰線)が済むのを待つ → 裏ページへ転送 → 切替を予約
  * 切替は ISR が 2 ティック間隔に揃える(30fps が上限) */
@@ -157,6 +166,7 @@ static void play(void)
 {
     u8 n, n0 = g_cfg.stage - 1;         /* 隠しコンフィグのステージセレクト */
     const Stage *st = 0;
+    g_cont_left = g_cfg.cont;
     for (n = n0; n < STAGE_COUNT; n++) {
         st = stage_load(n + 1);
         g_stage = n + 1;

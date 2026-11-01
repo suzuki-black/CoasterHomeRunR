@@ -135,6 +135,8 @@ u8 game_run(const Stage *st, u8 first);
 extern u16 g_score;          /* スコア / 10 */
 extern u8  life;
 extern u8  mis_left;
+extern u8  g_cont_left;       /* コンティニューの残り回数 */
+#define MIS_START 3            /* 誘導弾の始めの弾数(コンティニューはこの数まで補う) */
 extern u8  g_stage;
 
 /* ゲームの状態のうち、常駐部(描画・テスト・メイン)からも見るもの。実体は shared.c(常駐) */
@@ -168,6 +170,7 @@ typedef struct {
     u8 easy;        /* やさしい進行: 0 = ステージの指定どおり、1 = 常に、2 = しない */
     u8 fps;         /* 1 = 左上に fps とティック数 */
     u8 xfer;        /* 転送: 0 = AUTO(ファームウェアに CHGCPU があれば Z80 で送る)、1 = 常に R800 */
+    u8 cont;        /* コンティニューの回数(0〜99) */
 } Config;
 extern Config g_cfg;
 void cfg_defaults(void);
