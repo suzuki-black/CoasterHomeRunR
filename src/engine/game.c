@@ -106,7 +106,7 @@ static u8 draw_order[MAX_EN];
 
 static u8  cam_sub;
 static u8  hold;                 /* 1 = コースター停止(発進前) */
-static u16 look;                 /* 視線の相対ヨー(0 前 / 0x8000 後ろ) */
+u16 look;                        /* 視線の相対ヨー(0 前 / 0x8000 後ろ)。tools/view_dump.tcl が build/game*.noi から番地を引いて書く */
 static u8  turning;              /* 振り向きの残りフレーム */
 static u8  aim_hold;
 static u8  in_prev;
@@ -366,8 +366,8 @@ static void update_ce(void)
             ce.state = ST_APPROACH;
             ce.v = -MPS(2.5);
             ce.lat_t = ce.side ? F88(-0.35) : F88(0.35);
-        } else if (f->mv == MV_STAND && iabs(d) > (i16)M(6) && iabs(d) < (i16)M(24)) {
-            attack(f, d);                         /* 立ったまま撃つ(弓兵) */
+        } else if (f->mv == MV_STAND && d > (i16)M(6) && d < (i16)M(24)) {
+            attack(f, d);                         /* 立ったまま撃つ(弓兵)。通り過ぎた後ろからは撃たない(警告が出ないので) */
         }
         break;
     case ST_APPROACH:
@@ -434,7 +434,8 @@ static void update_ce(void)
     }
     move_enemy();
 
-    /* カメラの後方へ抜けた敵を消す(追跡型・張り付く敵・ボス・演出中の宝箱を除く) */
+    /* カメラの後方へ抜けた敵を消す(追跡型・張り付く敵・ボス・演出中の宝箱を除く)。振り向くと見えるので、景色が見える 20m まで残す。
+     * 3m で消すと、後ろを見ているときに目の前で消えた(2026-11-01 ユーザーの指摘)。敵弾は 3m のまま */
 #ifdef GAME_SEA
     if (ce.state == ST_CHASE || ce.state == ST_LEAP) {
 #else
@@ -442,7 +443,7 @@ static void update_ce(void)
 #endif
         if (d < -(i16)M(24)) ce.type = ET_NONE;
     } else if (f->mv != MV_HOVER && f->mv != MV_KEEP && ce.type != ET_TREASURE) {
-        if (d < -(i16)M(3)) ce.type = ET_NONE;
+        if (d < (f->mv == MV_SHOT ? -(i16)M(3) : -(i16)M(20))) ce.type = ET_NONE;
     }
     if (d > (i16)M(60) || d < -(i16)M(40)) ce.type = ET_NONE;
 }
@@ -647,8 +648,10 @@ static void mis_rect(i8 x, i8 y, u8 w, u8 h, u8 color)
 static void mis_hit(u8 id)
 {
     Enemy *e = &en[id];
-    g_pop_hx = (u8)((box_x0[id] + box_x1[id]) >> 1);
-    g_pop_hy = (box_y0[id] > 6) ? box_y0[id] - 6 : 0;
+    if (box_x0[id] != 0xFF) {                /* 画面に映っていないときは前の位置のまま */
+        g_pop_hx = (u8)((box_x0[id] + box_x1[id]) >> 1);
+        g_pop_hy = (box_y0[id] > 6) ? box_y0[id] - 6 : 0;
+    }
     if (BOSS_T(e->type)) e->hp = (e->hp > MIS_BOSS) ? e->hp - MIS_BOSS : 0;
     else e->hp = 0;
     if (!e->hp) kill_enemy(e);
@@ -680,10 +683,11 @@ static void mis_draw(void)
             }
             i++;
         }
-        /* 誘導弾: 毎フレーム、残りのフレーム数で割った分だけ敵の今の位置へ寄せる(MIS_T フレームでちょうど当たる) */
+        /* 誘導弾: 毎フレーム、残りのフレーム数で割った分だけ敵の今の位置へ寄せる(MIS_T フレームでちょうど当たる)。
+         * 振り向いて敵が画面から外れても、弾は飛び続けて当たる(撃った弾が無駄にならないように) */
         for (i = 0; i < fly_n; ) {
             u8 id = fly_id[i];
-            if (en[id].type == ET_NONE || en[id].state == ST_DEAD || box_x0[id] == 0xFF) {
+            if (en[id].type == ET_NONE || en[id].state == ST_DEAD) {
                 u8 j;
                 for (j = i + 1; j < fly_n; j++) {
                     fly_id[j - 1] = fly_id[j]; fly_t[j - 1] = fly_t[j]; fly_x[j - 1] = fly_x[j]; fly_y[j - 1] = fly_y[j];
@@ -692,11 +696,13 @@ static void mis_draw(void)
                 continue;
             }
             {
-                u8 k = MIS_T - fly_t[i];
-                i16 tx = (box_x0[id] + box_x1[id]) >> 1, ty = (box_y0[id] + box_y1[id]) >> 1;
-                fly_x[i] = (u8)(fly_x[i] + (tx - fly_x[i]) / k);
-                fly_y[i] = (u8)(fly_y[i] + (ty - fly_y[i]) / k);
-                mis_rect((i8)fly_x[i] - 1, (i8)fly_y[i] - 1, 2, 2, C_YELLOW);
+                if (box_x0[id] != 0xFF) {
+                    u8 k = MIS_T - fly_t[i];
+                    i16 tx = (box_x0[id] + box_x1[id]) >> 1, ty = (box_y0[id] + box_y1[id]) >> 1;
+                    fly_x[i] = (u8)(fly_x[i] + (tx - fly_x[i]) / k);
+                    fly_y[i] = (u8)(fly_y[i] + (ty - fly_y[i]) / k);
+                    mis_rect((i8)fly_x[i] - 1, (i8)fly_y[i] - 1, 2, 2, C_YELLOW);
+                }
                 if (++fly_t[i] >= MIS_T) {
                     u8 j;
                     mis_hit(id);
@@ -730,8 +736,8 @@ static i8 ev_side(const Event *ev)
 
 /* いま残っている敵の向き(1 前 / -1 後ろ / 0 いない) */
 /* いま残っている敵の向き(1 前 / -1 後ろ / 0 いない)。want(1 / -1)の側に 1 体でもいれば want を返す。
- * want を渡すのは警告の向きを決めるときで、そのときは後ろへ回った立っている敵・歩く敵(横を通り過ぎて 3m で消える)を
- * 数えない(岩棚の弓兵が横を通る間「後ろから敵」と出て、振り向いても見えなかった。2026-10-28 ユーザーの指摘) */
+ * 後ろへ回った立っている敵・歩く敵(横を通り過ぎて、追ってこない)は数えない: 警告の向きにも、周回を続ける理由にも、
+ * 波を待つ理由にもならない(岩棚の弓兵が横を通る間「後ろから敵」と出ていた。2026-10-28 ユーザーの指摘) */
 static i8 foe_side_w(i8 want)
 {
     u8 i;
@@ -741,7 +747,7 @@ static i8 foe_side_w(i8 want)
         if (IS_FOE(e->type) && e->state != ST_DEAD) {
             i8 sd = ((i16)(e->s - cam_s) < 0) ? -1 : 1;
             u8 mv = edef[e->type].mv;
-            if (want && sd < 0 && mv != MV_HOVER && mv != MV_KEEP && e->state != ST_CHASE) continue;
+            if (sd < 0 && mv != MV_HOVER && mv != MV_KEEP && e->state != ST_CHASE) continue;
             r = sd;
             if (r == want) break;
         }

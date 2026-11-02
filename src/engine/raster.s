@@ -1826,8 +1826,9 @@ _hex_fast::
 	ret
 
 ; ---------------------------------------------------------------------------
-; リング面の飾り(env.c)の点と長方形。点 = リングの中心 + (u, v) * q(ring_c[idx] = 中心の x, y と q)
-;   void rpt_a(u8 i, u8 idx)   A = i、L = idx。scr[i] = (cx + g_pu * q >> 14, cy - g_pv * q >> 14)(PSCALE。±15000 に飽和)
+; リング面の飾り(env.c)の点と長方形。点 = リングの中心 + (u, v) * q(ring_c[idx] = 中心の x, y と q)。
+; 後ろを見ているときは u の向きが逆(g_u_neg = 1)なので、u = 右 の飾りは画面の左に出る
+;   void rpt_a(u8 i, u8 idx)   A = i、L = idx。scr[i] = (cx ± g_pu * q >> 14, cy - g_pv * q >> 14)(PSCALE。±15000 に飽和)
 ;   void rquad_a(u8 idx)       A = idx。u0..u1 × v0..v1(g_qu0, g_qu1, g_qv0, g_qv1)を g_color で塗る
 ; リング面の形は画面上でそのまま縮小されるだけなので、四角形は必ず軸に沿った長方形になる。
 ; rquad_a は多角形の塗り(raster)を通さず、raster と同じ丸め(列 = (x + 8) >> 4、行 = (y + 7) >> 4、
@@ -1847,7 +1848,22 @@ rp_cy:		.ds	2
 rp_q:		.ds	2
 _g_rp_last::	.ds	1	; rp_ring が覚えているリング(0xFF = なし)
 rp_i:		.ds	1
+_g_u_neg::	.ds	1	; 1 = リング面を裏から見ている(u の向きが画面の左右と逆)
 	.area	_CODE
+
+; void rp_setdir(u8 u_neg)   A = g_u_neg。x を出す 3 か所(rp_xop1〜3)の命令を書き換える
+;   前向き = 19 00(add hl, de / nop)、後ろ向き = ED 52(sbc hl, de)。常駐部は RAM で動くので書き換えられる
+;   (点ごとに向きを確かめると、前向きでも 1 フレーム 0.23 ms かかっていた)。envm_draw が飾りを描く前に呼ぶ
+_rp_setdir::
+	ld	hl, #0x0019
+	or	a, a
+	jr	z, 1$
+	ld	hl, #0x52ED
+1$:
+	ld	(rp_xop1), hl
+	ld	(rp_xop2), hl
+	ld	(rp_xop3), hl
+	ret
 
 ; L = idx → rp_cx, rp_cy、BC = q。同じリングが続く(飾りは同じリングの点・長方形を続けて描く)ときは表を読まない。
 ;   ring_make(geom.s)がリングを作り直すたびに g_rp_last を 0xFF(覚えていない)にする
@@ -1891,7 +1907,10 @@ _rpt_a::
 	ld	hl, (_g_pu)
 	PSCALE				; BC は保たれる
 	ld	hl, (rp_cx)
+	or	a, a			; sbc のときのためにキャリーを消す
+rp_xop1:				; rp_setdir が書き換える(add hl, de / nop か sbc hl, de)
 	add	hl, de
+	nop
 	push	hl			; x
 	ld	hl, (_g_pv)
 	PSCALE
@@ -1953,12 +1972,18 @@ _rquad_a::
 	ld	hl, (_g_qu0)
 	PSCALE
 	ld	hl, (rp_cx)
+	or	a, a			; sbc のときのためにキャリーを消す
+rp_xop2:				; rp_setdir が書き換える(add hl, de / nop か sbc hl, de)
 	add	hl, de
+	nop
 	push	hl			; x0
 	ld	hl, (_g_qu1)
 	PSCALE
 	ld	hl, (rp_cx)
+	or	a, a			; sbc のときのためにキャリーを消す
+rp_xop3:				; rp_setdir が書き換える(add hl, de / nop か sbc hl, de)
 	add	hl, de
+	nop
 	push	hl			; x1
 	ld	hl, (_g_qv0)
 	PSCALE

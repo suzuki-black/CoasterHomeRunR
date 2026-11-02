@@ -632,12 +632,15 @@ static u8 vring_make(u16 sv)
 /* ---------------------------------------------------------------------------
  * リング面の 2D の形: 中心 + (u, v) * q(raster.s の rpt_a / rquad_a)
  *   RPT: scr[i] にリング idx の面の点 (u, v)。RQUAD: u0..u1 × v0..v1 の四角形を color で塗る
+ *   飾りの u は「レールの進む向きの右」が正。後ろを見ているときは画面の左右と逆になる(g_u_neg)
  *   (リング面の形は画面上でそのまま縮小されるので軸に沿った長方形になり、多角形の塗りを通さずに長方形で塗る)
  *   引数はスタックでなく変数で渡す(C の関数呼び出しの準備が重いため)
  * --------------------------------------------------------------------------- */
 extern i16 g_pu, g_pv, g_qu0, g_qu1, g_qv0, g_qv1;
+extern u8 g_u_neg;               /* 1 = 視線が 90 度を越えて、リング面を裏から見ている(u の右が画面の左) */
 void rpt_a(u8 i, u8 idx);
 void rquad_a(u8 idx);
+void rp_setdir(u8 u_neg);
 #define RPT(i, idx, u, v)  do { g_pu = (u); g_pv = (v); rpt_a((i), (idx)); } while (0)
 #define RQUAD(idx, u0, u1, v0, v1, color) \
     do { g_qu0 = (u0); g_qu1 = (u1); g_qv0 = (v0); g_qv1 = (v1); g_color = (color); rquad_a(idx); } while (0)
@@ -661,6 +664,7 @@ static void ties_mid(u8 a, u8 b)
         x0 = scr[0] + fmul(scr[4] - scr[0], f);
         x1 = scr[2] + fmul(scr[6] - scr[2], f);
         y = scr[1] + fmul(scr[5] - scr[1], f);
+        if (g_u_neg) { i16 t = x0; x0 = x1; x1 = t; }
         x0 = (x0 + 8) >> 4; x1 = (x1 + 8) >> 4; y = (y + 8) >> 4;
         if (y < 0 || y >= GAME_ROWS) continue;
         if (x0 < 0) x0 = 0;
@@ -965,6 +969,126 @@ static void park_castle(u8 idx)
     }
 }
 
+#endif
+
+/* ---------------------------------------------------------------------------
+ * 真横の面(ボスを倒した後の見せ場の大きな飾り: 1 面のお城、3 面の祠と鳥居、6 面の農家)
+ *   リング面の絵は、真横(振り向きの途中)からは端から見ることになって見えない。そこで、レールに平行な面(横位置 lat)に
+ *   同じ形を描く。面の上の点は (du = レールの進む向きの位置、v = 高さ)。
+ *   面の上の縦の線(du が同じ点)は、カメラから同じ奥行きにある(見せ場は平らで、カメラが傾かない)。そこで du ごとに
+ *   線の足元を 1 回だけ投影し、それをリング idx の中心と q に置いて、高さ v は RPT(u = 0)で求める(リング面と同じ速い計算)。
+ *   リング idx の中心は sp_end で戻す。敵がいない見せ場だけで描くので、前と後ろを向いているときの重さは変わらない
+ * --------------------------------------------------------------------------- */
+#if HAS_PARK || HAS_FOREST || HAS_HOME
+static u8 sd_r, sd_l;             /* 振り向きの途中で右 / 左を向いている(envm_draw が決める) */
+static V3 sp_o, sp_a;             /* 面の (du = 0, v = 0) のカメラ空間の位置と、レールの進む向きの 1m */
+static i16 sp_keep[3];
+extern i16 p_q;                   /* 直前の投影の 2^23 / z(raster.s の project2) */
+extern u8 g_rp_last;              /* rpt_a が覚えているリング(0xFF = なし。raster.s) */
+
+static void sp_begin(u8 idx, i16 lat)
+{
+    u16 s = (u16)ring_meter((i8)idx - NB) * 64;
+    sp_keep[0] = ring_c[idx][0]; sp_keep[1] = ring_c[idx][1]; sp_keep[2] = ring_c[idx][2];
+    rail_cam(s, lat, 0, &sp_o);
+    rail_cam(s + 64, lat, 0, &sp_a);
+    sp_a.x -= sp_o.x; sp_a.y -= sp_o.y; sp_a.z -= sp_o.z;
+}
+
+static void sp_end(u8 idx)
+{
+    ring_c[idx][0] = sp_keep[0]; ring_c[idx][1] = sp_keep[1]; ring_c[idx][2] = sp_keep[2];
+    g_rp_last = 0xFF;
+}
+
+/* 縦の線 du の足元を投影して、リング idx の中心と q に置く。手前(0.5m)より近ければ 0 */
+static u8 sp_col(u8 idx, i16 du)
+{
+    V3 p;
+    p.z = sp_o.z + fmul(du, sp_a.z);
+    if (p.z < NEAR_Z) return 0;
+    p.x = sp_o.x + fmul(du, sp_a.x);
+    p.y = sp_o.y + fmul(du, sp_a.y);
+    project2(&p, ring_c[idx]);
+    ring_c[idx][2] = p_q;
+    g_rp_last = 0xFF;
+    return 1;
+}
+
+static void sp_quad(u8 idx, i16 du0, i16 du1, i16 v0, i16 v1, u8 color)
+{
+    if (!sp_col(idx, du0)) return;
+    RPT(0, idx, 0, v0); RPT(3, idx, 0, v1);
+    if (!sp_col(idx, du1)) return;
+    RPT(1, idx, 0, v0); RPT(2, idx, 0, v1);
+    raster(4, color);
+}
+#endif
+
+#if HAS_HOME || HAS_BRIDGE
+static u8 sp_post;                /* 1 = 最後の周回区間を抜けた(ボスを倒した後。envm_draw が決める) */
+#endif
+
+#if HAS_FOREST
+/* 真横の祠と鳥居(3 面)。祠は左(手前の面 u = -460、奥行き 0.9m)、鳥居の柱は左右(u = ±320)。
+ * 鳥居の貫と笠木は、1.3m 横の柱の真横からは見上げる角度が画面の上の端を越えるので描かない */
+static void shrine_side(u8 idx)
+{
+    if (sd_l) {
+        sp_begin(idx, -460);
+        sp_quad(idx, -120, 120, FLOOR_V, -250, C_ROCK0);   /* 石の台 */
+        sp_quad(idx, -90, 90, -250, -20, C_WOOD);           /* 木の祠 */
+        sp_quad(idx, -150, 150, -20, 140, C_DIRT0);         /* 苔の屋根 */
+        sp_end(idx);
+        sp_begin(idx, -320);
+    } else {
+        sp_begin(idx, 320);
+    }
+    sp_quad(idx, -30, 30, FLOOR_V, 620, C_RED);             /* 鳥居の柱 */
+    sp_end(idx);
+}
+#endif
+
+#if HAS_HOME
+/* 真横の農家(6 面。ボスを倒した後の村の道だけ)。手前の面(右の家 u = 1200、左の家 u = -1200)に、壁・角の柱・屋根の斜面。
+ * 奥行きは正面の幅と同じ 2.7m */
+static void house_side(u8 idx, i8 sgn)
+{
+    sp_begin(idx, sgn > 0 ? 1200 : -1200);
+    sp_quad(idx, -350, 350, -80, 250, C_WHITE);
+    sp_quad(idx, -350, -300, -80, 250, C_WOOD);
+    sp_quad(idx, 300, 350, -80, 250, C_WOOD);
+    sp_quad(idx, -500, 500, 250, 650, C_DIRT0);
+    sp_end(idx);
+}
+#endif
+
+#if HAS_PARK
+/* 真横(振り向きの途中で右を向いている)のお城。レール側の面(u = 1900)に、u - 3000 をレールの進む向きにとって描く */
+#define CS_UC  3000
+static void castle_side(u8 idx)
+{
+    static const i16 tw[3][3] = { { 2200, 1100, 300 }, { 2950, 1700, 380 }, { 3800, 1100, 300 } };   /* park_castle と同じ */
+    u8 k;
+    sp_begin(idx, 1900);
+    sp_quad(idx, 1900 - CS_UC, 4100 - CS_UC, -700, 500, C_WHITE);
+    for (k = 0; k < 3; k++) {
+        i16 c = tw[k][0] - CS_UC, top = tw[k][1], w = tw[k][2];
+        sp_quad(idx, c - w, c + w, 300, top, C_WHITE);
+        sp_quad(idx, c - 60, c + 60, top - 500, top - 250, C_ROCK0);   /* 窓 */
+        if (sp_col(idx, c - w - 80)) {
+            RPT(0, idx, 0, top);
+            if (sp_col(idx, c + w + 80)) {
+                RPT(1, idx, 0, top);
+                if (sp_col(idx, c)) { RPT(2, idx, 0, top + 700); raster(3, C_DIRT0); }
+            }
+        }
+    }
+    /* 旗(高さ 9.4m より上)と花火(12m 前後)は、お城まで 7.4m の真横からは見上げる角度が画面の上の端(約 36 度)を
+     * 越えるので描かない */
+    sp_end(idx);
+}
+
 /* 遊園地の外の屋台の並ぶ道: 左右の屋台(縞の日よけ。14m より近いときは台も)と、3 リングおきに通りをまたぐ提灯の綱。
  * 長方形 1 つでも約 0.2ms かかる。品物・柱まで毎リング描くと 1 フレーム平均 52ms になった(屋台の無い丘は 42ms) */
 static void park_stalls(u8 idx, u8 no)
@@ -993,7 +1117,30 @@ static void deco_draw(u8 idx)
 {
     u8 d, no;
     const u8 *lp;
-    if (!ring_ok[idx] || !ring_c[idx][2]) return;
+    if (!ring_ok[idx]) return;
+    if (!ring_c[idx][2]) {
+#if HAS_PARK || HAS_FOREST || HAS_HOME
+        /* リングの中心が手前に無い(真横か後ろ)。真横の面の飾りはリング面と関係なく描ける
+         * (どれも周回区間の外のリングなので、番号の付け替えは要らない) */
+        if (sd_r | sd_l) {
+            no = ring_no[idx];
+            d = DECO[no];
+#if HAS_PARK
+            if (sd_r && KIND[no] == K_CASTLE && (d & D_TIMBER)) castle_side(idx);
+#endif
+#if HAS_FOREST
+            if (KIND[no] == K_SHRINE) shrine_side(idx);
+#endif
+#if HAS_HOME
+            if (sp_post && KIND[no] == K_HOME) {
+                if (sd_l && (d & D_LAMP_L)) house_side(idx, -1);
+                if (sd_r && (d & D_LAMP_R)) house_side(idx, 1);
+            }
+#endif
+        }
+#endif
+        return;
+    }
     no = ring_no[idx];
     /* 周回区間の終わりの前後のリングは、始まりの前後のリングの番号で描く(番号で決まる飾り(no % 10 など)も同じ所に出す) */
     for (lp = g_env_loops; lp[0]; lp += 2)
@@ -1160,6 +1307,7 @@ static void deco_draw(u8 idx)
         break;
     case K_SHRINE:
         /* 左の苔むした祠(石の台、木の祠、苔の屋根、紙垂)と、線路をまたぐ赤い鳥居 */
+        if (sd_r | sd_l) { shrine_side(idx); break; }
         RQUAD(idx, -700, -460, FLOOR_V, -250, C_ROCK0);
         RQUAD(idx, -670, -490, -250, -20, C_WOOD);
         RQUAD(idx, -620, -540, -230, -60, C_ROCK0);
@@ -1199,6 +1347,7 @@ static void deco_draw(u8 idx)
             if (no % 10 == 8 && (u16)ring_c[idx][2] < 2400) park_wheel(idx, -3000, 560);
         } else if (d & D_TIMBER) {
             if (KIND[no] == K_LOOP) park_loop(idx);
+            else if (sd_r) castle_side(idx);
             else park_castle(idx);
         }
         if (d & D_LAMP_R) RQUAD(idx, 580, 620, FLOOR_V - 60, FLOOR_V + 120, C_WOOD);
@@ -1278,8 +1427,8 @@ static void deco_draw(u8 idx)
         RQUAD(idx, 540, 580, -170, 20, C_WOOD);
         RQUAD(idx, -760, -540, -60, -30, C_WOOD);
         RQUAD(idx, 540, 760, -60, -30, C_WOOD);
-        if (d & D_LAMP_L) farm_house(idx, -1);
-        if (d & D_LAMP_R) farm_house(idx, 1);
+        if (d & D_LAMP_L) { if (sp_post && sd_l) house_side(idx, -1); else farm_house(idx, -1); }
+        if (d & D_LAMP_R) { if (sp_post && sd_r) house_side(idx, 1); else farm_house(idx, 1); }
         if (d & D_TIMBER) home_draw(idx);
         break;
     case K_PADDY:
@@ -1542,17 +1691,8 @@ static void hex_draw(i8 r, u8 color)
 
 static u8 sky_row;                /* 地平線の行(sky_draw) */
 
-#if HAS_BRIDGE
-/* 鉄橋のまわりの海の白波。海面は目の 12m 下にあるものとして、白波の点(左右 ±15.5m、奥行き 6〜70m を回る)を投影し、
- * 1 行の短い線で描く。近くの枕木や横桁より遅く流れるので、海が橋のずっと下にあると分かる。back = 後ろを見ている */
-extern u16 wave_inv[256];        /* 8192 / (24 + i)(白波の奥行き(1/4m)の逆数。truss.s。初めて使うときに作る。割り算は 1 回 約 150µs) */
-extern u8 sw_m, sw_row;
-void sea_dots(void);
-/* 向こう岸の陸地(地平線の上の低い丘。横位置・幅・高さのブロック)。遠くの陸が見えると、海の広さと橋の高さが分かる
- * (Virtua Racing の Bay Bridge の地平線の岬にならう) */
-static const u8 coast[][3] = { { 0, 15, 1 }, { 3, 7, 2 }, { 41, 23, 1 }, { 49, 10, 2 }, { 53, 4, 3 } };
-
-/* 画面の長方形を、画面の中だけに切って塗る(灯台・港。はみ出す所は描かない) */
+#if HAS_BRIDGE || HAS_HOME || HAS_TOWN
+/* 画面の長方形を、画面の中だけに切って塗る(遠景・灯台・港。はみ出す所は描かない) */
 static void clip_rect(i16 x, i16 y, i16 w, i16 h, u8 c)
 {
     if (x < 0) { w += x; x = 0; }
@@ -1564,20 +1704,58 @@ static void clip_rect(i16 x, i16 y, i16 w, i16 h, u8 c)
     rect_fill();
 }
 
+/* 地平線の遠景は、ぐるりと一周する幅 PANO_W 列の帯に置く(焦点距離 32 ブロック × 2π)。視線の絶対ヨーで帯を回すので、
+ * 振り向くと反対側の景色が見え、線路が曲がれば遠景も流れる。PANO_YAW はこの面で帯の 0 列が画面の左端に来るヨー */
+#define PANO_W 201
+#if HAS_TOWN
+#define PANO_YAW 48               /* 運河を渡る向き */
+#elif HAS_HOME
+#define PANO_YAW 31               /* 村へ続く道の向き */
+#else
+#define PANO_YAW 0
+#endif
+static i16 pano_off;              /* 画面の左端の、帯の列(sky_draw) */
+/* 帯の列 x の画面の列(-64..136) */
+static i16 pano_col(u8 x)
+{
+    i16 c = (i16)x - pano_off;
+    if (c < 0) c += PANO_W;
+    return c >= PANO_W - 64 ? c - PANO_W : c;
+}
+#endif
+
+#if HAS_BRIDGE
+/* 鉄橋のまわりの海の白波。海面は目の 12m 下にあるものとして、白波の点(左右 ±15.5m、奥行き 6〜70m を回る)を投影し、
+ * 1 行の短い線で描く。近くの枕木や横桁より遅く流れるので、海が橋のずっと下にあると分かる。back = 後ろを見ている */
+extern u16 wave_inv[256];        /* 8192 / (24 + i)(白波の奥行き(1/4m)の逆数。truss.s。初めて使うときに作る。割り算は 1 回 約 150µs) */
+extern u8 sw_m, sw_row, sw_back;
+void sea_dots(void);
+/* 向こう岸の陸地(地平線の上の低い丘。横位置・幅・高さのブロック)。遠くの陸が見えると、海の広さと橋の高さが分かる
+ * (Virtua Racing の Bay Bridge の地平線の岬にならう) */
+static const u8 coast[][3] = { { 0, 15, 1 }, { 3, 7, 2 }, { 41, 23, 1 }, { 49, 10, 2 }, { 53, 4, 3 },
+                               { 104, 34, 1 }, { 112, 14, 2 }, { 118, 5, 3 }, { 150, 22, 1 }, { 156, 8, 2 } };
+
 /* 沖の小島の灯台(レールの 440m の所、左 22m)。白波と同じく、目の 12m 下の海面にあるものとして投影する。
  * 紅白の塔、明滅する灯り、灯りが点いている間は左右に振れる光の帯。70m 先まで見えるので、周回区間の継ぎ目
  * (stage4_bridge.c の最後の周回の終わり 368m)から 70m より離して置く(戻ったときに灯台が現れたり消えたりしないように)。
  * レール(420m まで)の先にあるので、最後の周回を抜けると遠くに見えてくる */
 #define LH_M (440 * 4)
-static void lighthouse(u16 m, u8 back)
+extern i16 p_q;                   /* 直前の投影の 2^23 / z(raster.s の project2) */
+static void lighthouse(u16 m)
 {
-    i16 dq = back ? (i16)m - LH_M : LH_M - (i16)m, inv, row, c, w, h, x;
+    /* 灯台の小島の足元(レールの 440m、左 22m、海面 = 目の 12m 下)を投影する。どの向きを見ていても同じ所に見える
+     * (前と後ろだけを見ていた頃は、レールの向きの距離から画面の位置を出していた。値は同じになる) */
+    V3 p;
+    i16 sc[2], inv, row, c, w, h, x;
     u8 on = (u8)(g_tick >> 4) & 1;
-    if (dq < 24 || dq > 24 + 255) return;
-    inv = (i16)wave_inv[dq - 24];
-    row = sky_row + ((48 * inv) >> 8);
-    c = (88 * inv) >> 8;
-    c = back ? 32 + c : 32 - c;
+    if ((u16)(m - (LH_M - 280)) > 560) return;                      /* レールの向きに 70m より遠い(投影しない) */
+    rail_cam(LH_M * 16, -22 * 256, -12 * 256, &p);
+    if (p.z < 6 * 256) return;                                       /* 6m より近い(後ろも) */
+    project2(&p, sc);
+    inv = (i16)(p_q >> 4);                                           /* 2048 / 奥行き[m](1m が inv / 64 ブロック) */
+    if (inv < 29) return;                                            /* 70m より遠い */
+    row = (sc[1] + 7) >> 4;
+    c = (sc[0] + 8) >> 4;
     w = (40 * inv) >> 8; if (w < 3) w = 3;
     clip_rect(c - (w >> 1), row - 1, w, 2, C_ROCK1);                 /* 小島 */
     w = (8 * inv) >> 8; if (w < 1) w = 1;
@@ -1595,16 +1773,17 @@ static void lighthouse(u16 m, u8 back)
 static void harbor(u16 m)
 {
     u8 i, k;
+    i16 c = pano_col(0);
     if (m < HB_M) return;
     k = (u8)((m - HB_M) >> 5);                        /* 8m ごとに 1 ずつ */
     if (k > 4) k = 4;
     for (i = 0; i < 3; i++) {
-        i16 x = 40 + i * (6 + k), h = 1 + (k >> 1);
+        i16 x = c + 40 + i * (6 + k), h = 1 + (k >> 1);
         clip_rect(x, sky_row - h, 5 + k, h, C_DIRT1);                 /* 倉庫の壁 */
         clip_rect(x, sky_row - h - 1, 5 + k, 1, C_DIRT0);             /* 屋根 */
     }
-    clip_rect(60, sky_row - 4 - k, 1, 4 + k, C_DIRT0);               /* クレーンの柱と腕 */
-    clip_rect(55, sky_row - 4 - k, 6, 1, C_DIRT0);
+    clip_rect(c + 60, sky_row - 4 - k, 1, 4 + k, C_DIRT0);           /* クレーンの柱と腕 */
+    clip_rect(c + 55, sky_row - 4 - k, 6, 1, C_DIRT0);
 }
 
 static void sea_waves(u16 s, u8 back)
@@ -1615,27 +1794,26 @@ static void sea_waves(u16 s, u8 back)
     if (sky_row >= 3 && sky_row + 2 < GAME_ROWS) {
         g_rh = 2;                                        /* 地平線の近くの明るい帯(遠くの海のもや。Out Run・Virtua Racing の海にならう) */
         buf_fill_rows(C_DIRT1, sky_row);
-        g_color = C_ROCK1;                               /* 向こう岸 */
-        for (i = 0; i < sizeof(coast) / 3; i++) {
-            g_rx = coast[i][0]; g_rw = coast[i][1]; g_rh = coast[i][2]; g_ry = sky_row - coast[i][2];
-            rect_fill();
-        }
+        for (i = 0; i < sizeof(coast) / 3; i++)          /* 向こう岸 */
+            clip_rect(pano_col(coast[i][0]), sky_row - coast[i][2], coast[i][1], coast[i][2], C_ROCK1);
     }
     /* 白波は海一面(線路の真下も)に 20 個(truss.s の sea_dots)。海は一色なので、白波が少ないと枕木の隙間の海も枕木と一緒に
      * 流れて見え、下の方にあると分からなかった(2026-10-16 ユーザーの指摘)。同じ画面の高さでは、海は枕木の約 1/20 の速さで流れる */
     sw_m = (u8)(back ? m : -m);
+    sw_back = back;
     sw_row = sky_row;
     sea_dots();
-    /* ずっと下の海に浮かぶ小舟 2 艘(長さ 6m の帆船。小さく見えるので、橋の高さが分かる。Night Striker の海の小舟にならう) */
+    /* ずっと下の海に浮かぶ小舟 2 艘(長さ 6m の帆船。小さく見えるので、橋の高さが分かる。Night Striker の海の小舟にならう)。
+     * 舟の位置は海の上で決まっているので、後ろを見ると奥行きも左右も反転する */
     for (i = 0; i < 2; i++) {
-        u8 zi = (u8)(i * 101 + 40 + (back ? m : -m));
+        u8 zi = (u8)(back ? m - (i * 101 + 40) : i * 101 + 40 - m);
         i16 inv = (i16)wave_inv[zi];
         i16 row = sky_row + ((48 * inv) >> 8);
         i16 col = ((40 + i * 24) * inv) >> 8;            /* 左右 10m・16m */
         i16 w = (24 * inv) >> 8;                         /* 6m */
         if (w < 2) w = 2;
         if (row >= sky_row + 8 || row < 2) continue;     /* 遠くにある間だけ(近いと白い点が散って見える) */
-        col = i ? 32 + col : 32 - col - w;
+        col = (i != back) ? 32 + col : 32 - col - w;
         if (col < 0 || col + w > 64) continue;
         g_color = C_ROCK0;                               /* 船体 */
         g_rx = (u8)col; g_ry = (u8)row; g_rw = (u8)w; g_rh = 1;
@@ -1645,19 +1823,37 @@ static void sea_waves(u16 s, u8 back)
         rect_fill();
     }
     if (sky_row >= 3 && sky_row + 2 < GAME_ROWS) {
-        lighthouse(m, back);
-        if (!back) harbor(m);
+        lighthouse(m);
+        harbor(m);
+    }
+}
+
+/* 振り向きの途中(ボスを倒した後だけ): 地平線のもや・向こう岸・灯台・港(白波と小舟は前と後ろだけ) */
+static void sea_side(u16 s)
+{
+    u8 i;
+    if (sky_row >= 3 && sky_row + 2 < GAME_ROWS) {
+        g_rh = 2;
+        buf_fill_rows(C_DIRT1, sky_row);
+        for (i = 0; i < sizeof(coast) / 3; i++)
+            clip_rect(pano_col(coast[i][0]), sky_row - coast[i][2], coast[i][1], coast[i][2], C_ROCK1);
+        lighthouse(s >> 4);
+        harbor(s >> 4);
     }
 }
 #endif
 
 #if HAS_HOME
-/* 村の遠くの山並み(地平線の上。横位置・幅・高さのブロック) */
-static const u8 mount[][3] = { { 0, 14, 2 }, { 4, 6, 4 }, { 10, 10, 3 }, { 24, 8, 2 }, { 38, 12, 3 }, { 44, 6, 5 }, { 52, 12, 2 }, { 58, 6, 3 } };
+/* 村の遠くの山並み(地平線の上。帯の列・幅・高さのブロック) */
+static const u8 mount[][3] = { { 0, 14, 2 }, { 4, 6, 4 }, { 10, 10, 3 }, { 24, 8, 2 }, { 38, 12, 3 }, { 44, 6, 5 }, { 52, 12, 2 }, { 58, 6, 3 },
+                               { 70, 12, 2 }, { 76, 5, 4 }, { 88, 9, 3 }, { 100, 14, 2 }, { 106, 6, 5 }, { 118, 10, 3 }, { 134, 8, 2 },
+                               { 140, 6, 4 }, { 150, 12, 3 }, { 166, 10, 2 }, { 172, 5, 4 }, { 184, 12, 3 }, { 190, 6, 2 } };
 #endif
 #if HAS_TOWN
-/* 運河の両岸の遠くの家並み(地平線の上。横位置・幅・高さのブロック。上の 1 行は屋根) */
-static const u8 bank_house[][3] = { { 0, 6, 3 }, { 6, 5, 4 }, { 11, 7, 3 }, { 18, 4, 2 }, { 42, 4, 2 }, { 46, 6, 4 }, { 52, 7, 3 }, { 59, 5, 4 } };
+/* 運河の両岸の遠くの家並み(地平線の上。帯の列・幅・高さのブロック。上の 1 行は屋根)。運河の上流と下流の方向だけ家が切れる */
+static const u8 bank_house[][3] = { { 0, 6, 3 }, { 6, 5, 4 }, { 11, 7, 3 }, { 18, 4, 2 }, { 42, 4, 2 }, { 46, 6, 4 }, { 52, 7, 3 }, { 59, 5, 4 },
+                                    { 64, 6, 3 }, { 70, 7, 4 }, { 77, 5, 2 }, { 82, 8, 3 }, { 90, 6, 4 }, { 96, 7, 3 }, { 103, 5, 4 }, { 108, 6, 2 }, { 114, 8, 3 },
+                                    { 143, 7, 3 }, { 150, 5, 4 }, { 155, 8, 2 }, { 163, 6, 3 }, { 169, 7, 4 }, { 176, 5, 2 }, { 181, 8, 3 }, { 189, 6, 4 }, { 195, 6, 3 } };
 #endif
 
 /* 地平線より下の地面の色。森(小川・倒木・祠も)は茂み、運河は水面、空き地・遊園地・村・田んぼは草(鉄橋では海)、ほかは道や岩 */
@@ -1678,6 +1874,9 @@ static void sky_draw(u8 far)
     else if (cam_psin < 0) yh = -1;
     row = (yh < 0) ? 0 : (yh >= 48 * 16) ? 48 : (u8)(yh >> 4);
     sky_row = row;
+#if HAS_BRIDGE || HAS_HOME || HAS_TOWN
+    pano_off = (i16)(((u16)(u8)(cam_yaw - PANO_YAW) * PANO_W) >> 8);
+#endif
     g_rh = row;
     buf_fill_rows(C_SKY, 0);
     g_rh = 48 - row;
@@ -1687,21 +1886,17 @@ static void sky_draw(u8 far)
         u8 i;
 #if HAS_HOME
         if (far == K_HOME || far == K_PADDY || far == K_MILL) {
-            g_color = C_ROCK0;
-            for (i = 0; i < sizeof(mount) / 3; i++) {
-                g_rx = mount[i][0]; g_rw = mount[i][1]; g_rh = mount[i][2]; g_ry = row - mount[i][2];
-                rect_fill();
-            }
+            for (i = 0; i < sizeof(mount) / 3; i++)
+                clip_rect(pano_col(mount[i][0]), row - mount[i][2], mount[i][1], mount[i][2], C_ROCK0);
         }
 #endif
 #if HAS_TOWN
         if (far == K_CANAL) {
             for (i = 0; i < sizeof(bank_house) / 3; i++) {
-                g_rx = bank_house[i][0]; g_rw = bank_house[i][1];
-                g_color = (i & 1) ? C_DIRT1 : C_ROCK2; g_rh = bank_house[i][2] - 1; g_ry = row - g_rh;
-                rect_fill();
-                g_color = C_DIRT0; g_rh = 1; g_ry = row - bank_house[i][2];
-                rect_fill();
+                i16 x = pano_col(bank_house[i][0]);
+                u8 w = bank_house[i][1], h = bank_house[i][2];
+                clip_rect(x, row - h + 1, w, h - 1, (i & 1) ? C_DIRT1 : C_ROCK2);
+                clip_rect(x, row - h, w, 1, C_DIRT0);
             }
         }
 #endif
@@ -1727,6 +1922,21 @@ void envm_draw(u16 s, u16 look16)
 
     ring_m0 = (s >> 6) - (s >> 6) % RSTEP;
     view_back = back && !fwd;
+    g_u_neg = (u8)(look + 64) >= 128;
+#if HAS_PARK || HAS_FOREST || HAS_HOME
+    sd_r = fwd && back && look < 128;      /* 振り向きの途中で右を向いている */
+    sd_l = fwd && back && look >= 128;
+#endif
+#if HAS_HOME || HAS_BRIDGE
+    {
+        /* 最後の周回区間を抜けたか(周回はボスを倒すまで続くので、抜けた所はボスを倒した後) */
+        const u8 *lp;
+        u16 e = 0;
+        for (lp = g_env_loops; lp[0]; lp += 2) e = (u16)(lp[0] + lp[1]) * (RSTEP * 64);
+        sp_post = s >= e;
+    }
+#endif
+    rp_setdir(g_u_neg);
     for (r = 0; r <= NR; r++) ring_ok[r] = 0;
     g_ring_s = &ring_s[0][0];
     eslot_clear();
@@ -1758,7 +1968,11 @@ void envm_draw(u16 s, u16 look16)
             }
             {
                 u8 no = ring_no[k];
-                if (DECO[no] & D_OPEN) { open = 1; far = KIND[no]; }
+                /* far は一番遠い屋外のリング: 前は番号の大きいほう、後ろだけを見ているときは番号の小さいほう */
+                if (DECO[no] & D_OPEN) {
+                    if (fwd || !open) far = KIND[no];
+                    open = 1;
+                }
                 if (KIND[no] == K_CANAL) canal = 1;
             }
         }
@@ -1767,6 +1981,7 @@ void envm_draw(u16 s, u16 look16)
             sky_draw(canal ? K_CANAL : far);   /* 運河が見えている間は、その先が町でも地平線の下を水面に */
 #if HAS_BRIDGE
             if (BRIDGEISH(far) && fwd != back) sea_waves(s, back);
+            else if (BRIDGEISH(far) && sp_post) sea_side(s);
 #endif
             capped = 0;
         } else {
