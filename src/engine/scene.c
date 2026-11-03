@@ -47,8 +47,8 @@ void scm_vdp_init(void)
     }
     vdp_set_write(0x1800);
     vdp_out(spr_patterns, SPR_PAT_BYTES);
-    for (i = 0; i < 16; i += 4) g_spr_attr[i] = 209;
-    g_spr_attr[16] = 208;
+    for (i = 0; i < 32; i += 4) g_spr_attr[i] = 209;
+    g_spr_attr[32] = 208;
     vdp_set_write(0x1400);
     vdp_out(g_spr_attr, sizeof(g_spr_attr));
     vdp_set_palette(0, pal_fixed);   /* 0-8 に続けて 9-15 も書かれるので、この後に上書きする */
@@ -131,7 +131,7 @@ void scm_ending(void)
     u16 sc = g_score;
 
     while (g_flip_req) wait_tick();
-    for (i = 0; i < 16; i += 4) g_spr_attr[i] = 209;
+    for (i = 0; i < 32; i += 4) g_spr_attr[i] = 209;
     for (i = 0; i < sizeof(regs); i += 2) vdp_wreg(regs[i], regs[i + 1]);
     bios_font(BUF);
     {   /* 太字: 各行を 1 ドット右へずらして重ねる(BIOS のそのままのフォントは細い。2026-10-25 ユーザーの指定) */
@@ -223,8 +223,7 @@ u8 scm_continue(void)
     s[i] = 0;
     g_color = C_BLACK; g_rx = 6; g_ry = 12; g_rw = 52; g_rh = 18;
     rect_fill();
-    g_spr_attr[0] = 209;                 /* 照準を文字に重ねない */
-    g_spr_attr[4] = 209;
+    for (i = 0; i < 32; i += 4) g_spr_attr[i] = 209;   /* 照準や空のスプライトを文字に重ねない */
     text_center(14, s, C_YELLOW, 1);
     text_center(23, "A YES  B NO", C_WHITE, 1);
     for (;;) {

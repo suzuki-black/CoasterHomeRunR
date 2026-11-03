@@ -36,6 +36,7 @@ MOD_ADDR = 0x8000		; モジュールの先頭(0x8000: 入口の jp、0x8003: ゲ
 MOD_BSS	= 0xBC00		; モジュールの変数(読み込んだら 0 で埋める)。〜0xBFFF
 ENVM_BUILD = MOD_ADDR		; 地形モジュールの入口(jp envm_build / jp envm_draw)
 ENVM_DRAW = MOD_ADDR + 3
+ENVM_SKY = MOD_ADDR + 6
 
 H_TIMI	= 0xFD9F
 ; ページ3 の固定番地(常駐ローダーからも使う)
@@ -79,10 +80,11 @@ skip:
 	or	a, b
 	out	(0xA8), a
 	.endm
-SPR_BYTES = 17			; スプライト 4 枚分 + 終端(Y=208)
 
 	.area	_DATA
 _g_tick::	.ds	2	; 60Hz ごとに +1
+_g_spr_n::	.ds	1	; 切り替えのときに送るスプライトの属性のバイト数(8 = 照準 2 枚、32 = 空の 6 枚も)。続けて終端(Y=208)を送る
+_g_sky_stage::	.ds	1	; 1 = この面は空のスプライトを出す(env.c の envm_build が決める)
 _g_flip_req::	.ds	1	; 1 = 次の垂直帰線で g_flip_page を表示する
 _g_flip_page::	.ds	1	; R#4 に書く値(0 または 1)
 flip_tick:	.ds	1	; 最後に切り替えたときの g_tick(下位)
@@ -131,8 +133,12 @@ htimi::
 	ld	a, #0x54
 	out	(0x99), a
 	ld	hl, #_g_spr_attr
-	ld	bc, #(SPR_BYTES << 8) | 0x98
+	ld	a, (_g_spr_n)
+	ld	b, a
+	ld	c, #0x98
 	otir
+	ld	a, #208			; 終端(使っていない後ろのスプライトは送らない)
+	out	(0x98), a
 	xor	a, a
 	ld	(_g_flip_req), a
 1$:
@@ -217,7 +223,7 @@ scm_jp:
 	jp	(hl)
 
 ; ---------------------------------------------------------------------------
-; void env_build(void) / void env_draw(u16 s, u16 look) — 地形モジュールを呼ぶ(ページ2を地形のセグメントにして呼び、戻す)
+; void env_build(void) / void env_draw(u16 s, u16 look) / void env_sky(u8 on) — 地形モジュールを呼ぶ(ページ2を地形のセグメントにして呼び、戻す)
 ;   引数はレジスタ(HL, DE)だけで渡すこと。スタックで渡す引数があると、ここで積む戻り番地の分ずれる
 ; ---------------------------------------------------------------------------
 _env_build::
@@ -226,6 +232,22 @@ _env_build::
 	out	(0xFE), a
 	call	ENVM_BUILD
 	jr	env_back
+_env_sky::
+	or	a, a
+	jr	z, 1$			; on = 0(全部隠す)はどの面でも
+	ld	a, (_g_sky_stage)
+	or	a, a
+	ret	z			; 空の無い面では、毎フレーム地形モジュールを呼ばない
+	ld	a, #1
+1$:
+	push	af
+	ld	a, #SEG_ENV
+	ld	(_g_seg2), a
+	out	(0xFE), a
+	pop	af
+	call	ENVM_SKY
+	jr	env_back
+
 _env_draw::
 	push	af
 	ld	a, #SEG_ENV

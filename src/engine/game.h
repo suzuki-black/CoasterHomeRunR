@@ -177,7 +177,8 @@ void cfg_defaults(void);
 void title(void);
 
 /* 表示(main.c) */
-extern u8 g_spr_attr[17];
+extern u8 g_spr_attr[33];
+extern u8 g_spr_n;            /* 割り込みが切り替えのときに送る属性のバイト数(8 = 照準だけ、32 = 空も。sys.s)。続けて終端 208 を送る */
 extern const u8 pal_fixed[];  /* 0-8 */
 void present(void);
 void set_stage_palette(const u8 *pal);

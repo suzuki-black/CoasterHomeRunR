@@ -53,7 +53,7 @@ P0FLAGS = --constseg PAGE0
 
 ASM_SRCS = $(ENG)/crt0.s $(ENG)/sys.s $(ENG)/vdp.s $(ENG)/gfx.s $(ENG)/math.s $(ENG)/raster.s $(ENG)/geom.s $(ENG)/pcm.s
 C_SRCS   = $(ENG)/main.c $(ENG)/render.c $(ENG)/rail.c $(ENG)/shared.c \
-           $(ENG)/hud.c $(ENG)/sound.c $(ENG)/trolley.c $(ENG)/menu.c $(ENG)/fx.c $(ENG)/vdpbench.c
+           $(ENG)/hud.c $(ENG)/sound.c $(ENG)/trolley.c $(ENG)/menu.c $(ENG)/fx.c $(ENG)/vdpbench.c $(ENG)/skydata.c
 # モジュールのリンク: 0x8000 に先頭(modhead)、変数は 0xBC00-0xBFFF。常駐部のシンボルは ressyms(engine.noi から生成)で渡す
 MODFLAGS = -mr800 --no-std-crt0 --data-loc 0xBC00 -Wl-j -Wl-m -Wl-u
 
@@ -94,6 +94,10 @@ $(BUILD)/gen_data.rel: $(BUILD)/gen_data.c $(HDRS) Makefile
 $(BUILD)/menu.rel: $(ENG)/menu.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) $(P0FLAGS) --codeseg PAGE0 -c -o $@ $<
 
+# ステージ 1 の空のスプライトの表(地形モジュールに入りきらないので、ページ0の表に置く)
+$(BUILD)/skydata.rel: $(ENG)/skydata.c $(HDRS) Makefile | $(BUILD)
+	$(CC) $(CFLAGS) $(P0FLAGS) -c -o $@ $<
+
 # ヘッダを変えたら全 C を作り直す(古い構造体レイアウトの混在を防ぐ)
 $(BUILD)/%.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -123,12 +127,15 @@ $(BUILD)/ressyms.rel: $(BUILD)/ressyms.s
 	$(AS) -l -o $@ $<
 
 # 地形モジュール(マッパーのセグメント 5 に、ステージの始めに読み込む)。ステージごとに、その面の地形の処理だけを入れる
-# (env.c を ENV_S1〜ENV_S6 でコンパイルする。鉄橋のトラスと海の asm(truss.s)はステージ 4 だけ)
+# (env.c を ENV_S1〜ENV_S6 でコンパイルする。遊園地の客の asm(sky.s)はステージ 1、鉄橋のトラスと海の asm(truss.s)はステージ 4 だけ)
 $(BUILD)/env%.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env_s%.rel $(BUILD)/ressyms.rel
-	$(CC) $(MODFLAGS) --code-loc 0x8006 -o $@ $^
+	$(CC) $(MODFLAGS) --code-loc 0x8009 -o $@ $^
+
+$(BUILD)/env1.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env_s1.rel $(BUILD)/sky.rel $(BUILD)/ressyms.rel
+	$(CC) $(MODFLAGS) --code-loc 0x8009 -o $@ $^
 
 $(BUILD)/env4.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env_s4.rel $(BUILD)/truss.rel $(BUILD)/ressyms.rel
-	$(CC) $(MODFLAGS) --code-loc 0x8006 -o $@ $^
+	$(CC) $(MODFLAGS) --code-loc 0x8009 -o $@ $^
 
 $(BUILD)/env_s%.rel: $(ENG)/env.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -DENV_S$* -c -o $@ $<

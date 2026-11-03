@@ -1160,6 +1160,7 @@ static void draw_hud(void)
         num_draw(7, 14, g_perf_ticks, 2, C_YELLOW);
     }
     mis_draw();
+    env_sky(1);                          /* 空はオープニングや演出の間も見せる(空の無い面では何もしない) */
     if (!ctrl) { g_spr_attr[0] = 209; g_spr_attr[4] = 209; return; }
     {
         u8 hi;
@@ -1405,8 +1406,7 @@ u8 game_run(const Stage *st, u8 first)
     }
 
     if (!over) clear_tally();
-    g_spr_attr[0] = 209;
-    g_spr_attr[4] = 209;
+    env_sky(0);
     bgm_stop();
     return !over;                        /* ゲームオーバーの画面は常駐部(main.c の gameover_run) */
 }

@@ -10,7 +10,7 @@
 #include "pcm.h"
 #include "title.h"
 
-u8 g_spr_attr[17];
+u8 g_spr_attr[33];
 u8 g_perf_ticks;
 u16 g_perf_render;
 u16 g_perf_xfer;
@@ -182,6 +182,7 @@ static void play(void)
 void main(void)
 {
     g_buf_hi = BUF_A_HI;
+    g_spr_n = 8;                     /* 切り替えのときに送るスプライトの属性(照準 2 枚。0 だと 256 バイト送ってしまう) */
     sys_install_loader();
     sys_install_isr();
     sys_page0_ram();

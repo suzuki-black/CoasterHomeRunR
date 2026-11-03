@@ -491,11 +491,22 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
 }
 
 /* g_env_zones: 先頭 = 屋外のレールの色、以降 (この番号のリングまで, 地形の種類) の組。0xFF まで */
+extern u8 g_spr_attr[33];
+extern u8 g_spr_n;               /* 割り込みが切り替えのときに送る属性のバイト数(sys.s) */
+#if HAS_PARK
+static void sky_load(void);
+#endif
+
 void envm_build(void)
 {
     u8 r, n, kind;
     i16 w = 256, h = 256;
     const u8 *zones = g_env_zones;
+#if HAS_PARK
+    sky_load();
+#endif
+    g_sky_stage = HAS_PARK;
+    g_spr_n = 8;
     rng = g_env_seed;
     rail_col = *zones++;
 #if HAS_TOWN
@@ -1690,6 +1701,10 @@ static void hex_draw(i8 r, u8 color)
 }
 
 static u8 sky_row;                /* 地平線の行(sky_draw) */
+#if HAS_PARK
+static u8 sky_seen;               /* このフレームに空を描いた */
+extern i16 sky_yh;                /* 地平線の高さ(ドット。sky_draw。sky.s) */
+#endif
 
 #if HAS_BRIDGE || HAS_HOME || HAS_TOWN
 /* 画面の長方形を、画面の中だけに切って塗る(遠景・灯台・港。はみ出す所は描かない) */
@@ -1865,6 +1880,71 @@ static u8 ground_col(u8 far)
     return C_ROCK1;
 }
 
+#if HAS_PARK
+/* オープニングの遊園地の客(地面にいる色とりどりの小さな四角)。地面の行ごとに、その行の遠さの区画に並ぶ人を描く。
+ * 区画はレールの位置に固定なので、コースターが進むと手前へ流れ、向きが変わると横へ流れる。操作の無い場面でしか描かない */
+#define CROWD_GROUND (-1633)             /* 高架のレールから地面まで(FLOOR_V - 1300) */
+/* 行ごとの人の並べ方は sky.s の crowd_rows: 行の地面までの距離(1/4m)zq = 目の高さ * 32 / 行、2m ごとの区画で並びと色を決め、
+ * 区画の半分は空け、2 人組にして組の間隔は 6m ぶんのブロック(遠くは詰める)。色は白・黄・赤・水色・橙・紫 */
+extern u16 cr_n, cr_fwd;
+extern u8 cr_side, cr_row0;
+void crowd_rows(void);
+static void park_crowd(u16 s)
+{
+    i16 eye = (cam_y - (rail[0].y + CROWD_GROUND)) >> 6;  /* 地面からの目の高さ(1/4m) */
+    if (eye < 4) return;
+    cr_n = (u16)eye * 32;
+    cr_fwd = s >> 4;                                      /* 進んだ距離(1/4m) */
+    cr_side = (u8)(cam_yaw + (cam_yaw >> 2));             /* 向きを横のブロック数に */
+    cr_row0 = sky_row;
+    crowd_rows();
+}
+
+/* 空のスプライト(夕日・雲・鳥)のパターン。16×16 の拡大。ステージの始めに VRAM の 1880h(パターン番号 16〜)へ送る */
+#define SKY_PAT_ADDR 0x1880
+enum { P_SUN = 16, P_CORE = 20, P_CLOUD_L = 24, P_CLOUD_R = 28, P_BIRD_A = 32, P_BIRD_B = 36 };
+/* パターンと空の物の表は、地形モジュールの置き場が足りないのでページ0の表に置く(skydata.c) */
+#define SKY_PAT_BYTES 192
+extern const u8 g_sky_patterns[SKY_PAT_BYTES];
+extern const u8 g_sky_def[6][7];
+
+static void sky_load(void)
+{
+    vdp_set_write(SKY_PAT_ADDR);
+    vdp_out(g_sky_patterns, SKY_PAT_BYTES);
+}
+
+/* 空の物の位置(向き、地平線からの高さ、パターン)。置き方は sky.s の sky_place */
+extern u8 sp_az[6], sp_pat[6];
+extern i16 sp_alt[6];
+void sky_place(void);
+#endif
+
+/* 空のスプライトを決める(空が見えない間は隠す)。on = 0 なら照準も含めて全部隠す */
+void envm_sky(u8 on)
+{
+    u8 n;
+#if HAS_PARK
+    u8 drift = (u8)(g_tick >> 7);
+    u8 fly = (u8)(g_tick >> 4);
+    u8 flap = (g_tick & 16) ? P_BIRD_A : P_BIRD_B;
+    i16 wob = (g_tick & 64) ? 2 : 0;
+    if (on && sky_seen) {
+        sp_az[0] = 0x44;                 sp_alt[0] = 8;        sp_pat[0] = P_SUN;
+        sp_az[1] = 0x44;                 sp_alt[1] = 8;        sp_pat[1] = P_CORE;
+        sp_az[2] = (u8)(0x18 + drift);   sp_alt[2] = 46;       sp_pat[2] = P_CLOUD_L;
+        sp_az[3] = (u8)(0x18 + drift + 10); sp_alt[3] = 46;    sp_pat[3] = P_CLOUD_R;
+        sp_az[4] = (u8)(0x60 - fly);     sp_alt[4] = 34 + wob; sp_pat[4] = flap;
+        sp_az[5] = (u8)(0x70 - fly);     sp_alt[5] = 42 - wob; sp_pat[5] = flap;
+        sky_place();
+        g_spr_n = 32;
+        return;
+    }
+#endif
+    for (n = on ? 8 : 0; n < 32; n += 4) g_spr_attr[n] = 209;
+    g_spr_n = 8;                         /* 照準の 2 枚だけを送る */
+}
+
 /* 空と地面(地平線の高さで 2 色に塗り分ける)。far = 一番遠くに見える地形 */
 static void sky_draw(u8 far)
 {
@@ -1876,6 +1956,10 @@ static void sky_draw(u8 far)
     sky_row = row;
 #if HAS_BRIDGE || HAS_HOME || HAS_TOWN
     pano_off = (i16)(((u16)(u8)(cam_yaw - PANO_YAW) * PANO_W) >> 8);
+#endif
+#if HAS_PARK
+    sky_yh = yh >> 2;
+    sky_seen = 1;
 #endif
     g_rh = row;
     buf_fill_rows(C_SKY, 0);
@@ -1937,6 +2021,9 @@ void envm_draw(u16 s, u16 look16)
     }
 #endif
     rp_setdir(g_u_neg);
+#if HAS_PARK
+    sky_seen = 0;
+#endif
     for (r = 0; r <= NR; r++) ring_ok[r] = 0;
     g_ring_s = &ring_s[0][0];
     eslot_clear();
@@ -1979,6 +2066,9 @@ void envm_draw(u16 s, u16 look16)
         if (open) {
             /* 屋外が見える: 空と地面を塗ってから描く(奥の開口部は塞がない) */
             sky_draw(canal ? K_CANAL : far);   /* 運河が見えている間は、その先が町でも地平線の下を水面に */
+#if HAS_PARK
+            if ((far == K_PARK || far == K_AIR) && fwd && !back) park_crowd(s);
+#endif
 #if HAS_BRIDGE
             if (BRIDGEISH(far) && fwd != back) sea_waves(s, back);
             else if (BRIDGEISH(far) && sp_post) sea_side(s);
