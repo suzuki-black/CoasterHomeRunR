@@ -65,6 +65,7 @@
 #ifndef HAS_BRIDGE
 #define HAS_BRIDGE 0
 #endif
+#define HAS_SKY (HAS_PARK || HAS_BRIDGE)   /* 空のスプライト(太陽・雲・鳥)を出す面 */
 
 #define RSTEP 4            /* リングの間隔[m] */
 #define NF    5            /* 前方の区間数(20m) */
@@ -493,7 +494,7 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
 /* g_env_zones: 先頭 = 屋外のレールの色、以降 (この番号のリングまで, 地形の種類) の組。0xFF まで */
 extern u8 g_spr_attr[33];
 extern u8 g_spr_n;               /* 割り込みが切り替えのときに送る属性のバイト数(sys.s) */
-#if HAS_PARK
+#if HAS_SKY
 static void sky_load(void);
 #endif
 
@@ -502,10 +503,10 @@ void envm_build(void)
     u8 r, n, kind;
     i16 w = 256, h = 256;
     const u8 *zones = g_env_zones;
-#if HAS_PARK
+#if HAS_SKY
     sky_load();
 #endif
-    g_sky_stage = HAS_PARK;
+    g_sky_stage = HAS_SKY;
     g_spr_n = 8;
     rng = g_env_seed;
     rail_col = *zones++;
@@ -1701,9 +1702,9 @@ static void hex_draw(i8 r, u8 color)
 }
 
 static u8 sky_row;                /* 地平線の行(sky_draw) */
-#if HAS_PARK
+#if HAS_SKY
 static u8 sky_seen;               /* このフレームに空を描いた */
-extern i16 sky_yh;                /* 地平線の高さ(ドット。sky_draw。sky.s) */
+extern i16 sky_yh;                /* 地平線の高さ(ドット。sky_draw。skyspr.s) */
 #endif
 
 #if HAS_BRIDGE || HAS_HOME || HAS_TOWN
@@ -1900,24 +1901,64 @@ static void park_crowd(u16 s)
     crowd_rows();
 }
 
-/* 空のスプライト(夕日・雲・鳥)のパターン。16×16 の拡大。ステージの始めに VRAM の 1880h(パターン番号 16〜)へ送る */
-#define SKY_PAT_ADDR 0x1880
-enum { P_SUN = 16, P_CORE = 20, P_CLOUD_L = 24, P_CLOUD_R = 28, P_BIRD_A = 32, P_BIRD_B = 36 };
-/* パターンと空の物の表は、地形モジュールの置き場が足りないのでページ0の表に置く(skydata.c) */
-#define SKY_PAT_BYTES 192
-extern const u8 g_sky_patterns[SKY_PAT_BYTES];
-extern const u8 g_sky_def[6][7];
+#endif
 
+#if HAS_SKY
+/* 空のスプライトのパターン(16×16 の拡大)。ステージの始めに VRAM の 1880h(パターン番号 16〜)へ送る。
+ * 時間帯ごとに別の物を描く(同じ物の色違いにしない) */
+#define SKY_PAT_ADDR 0x1880
+/* 空の物の位置(向き、地平線からの高さ、パターン)と、物の表・数・重なりの調べ方。置き方は skyspr.s の sky_place */
+extern u8 sp_az[6], sp_pat[6];
+extern i16 sp_alt[6];
+extern const u8 *sky_defp;
+extern u8 sky_cnt, sky_mask;
+void sky_place(void);
+static u8 sky_look;               /* 視線の相対ヨー(0 = 進む向き。envm_draw) */
+#endif
+#if HAS_PARK
+/* 1 面(夕暮れ): 夕日・夕日の芯・紫の雲 2・黒い鳥。パターンと物の表は、地形モジュールの置き場が足りないのでページ0の表に置く(skydata.c) */
+enum { P_SUN = 16, P_CORE = 20, P_CLOUD_L = 24, P_CLOUD_R = 28, P_BIRD_A = 32, P_BIRD_B = 36 };
+#define SKY_PAT_BYTES 192
+#define SKY_N 6
+extern const u8 g_sky_patterns[SKY_PAT_BYTES];
+extern const u8 g_sky_def[SKY_N][7];
+#define SKY_PATS g_sky_patterns
+#define SKY_DEF  g_sky_def
+#elif HAS_BRIDGE
+/* 4 面(真昼の海): 小さな太陽(右の上)、入道雲 2(左、水平線の上)、カモメ(上の段を横切る)。
+ * 骨組みは画面の真ん中にかかり、左右の端(それぞれ 64 ドット)は 8〜9 割のフレームで空が見えている(2026-11-03 に数えた)。
+ * そこで太陽と雲は進む向きに対して決まった向きに置く(まっすぐな鉄橋では画面の上で止まって見える)。
+ * 上の段(太陽・カモメ)と下の段(雲)に分け、照準 2 枚と合わせて横 1 列 4 枚に収める */
+enum { P_NOON = 16, P_THUN_L = 20, P_THUN_R = 24, P_GULL_A = 28, P_GULL_B = 32 };
+#define SKY_PAT_BYTES 160
+#define SKY_N 4
+static const u8 sky_pat4[SKY_PAT_BYTES] = {
+    0x00, 0x01, 0x01, 0x11, 0x08, 0x03, 0x07, 0x6F, 0x6F, 0x07, 0x03, 0x08, 0x11, 0x01, 0x01, 0x00, 0x00, 0x80, 0x80, 0x88, 0x10, 0xC0, 0xE0, 0xF6, 0xF6, 0xE0, 0xC0, 0x10, 0x88, 0x80, 0x80, 0x00,   /* 太陽 */
+    0x00, 0x00, 0x00, 0x01, 0x03, 0x0F, 0x1F, 0x0F, 0x3F, 0x7F, 0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0x00, 0x00, 0x30, 0xFC, 0xFD, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00,   /* 入道雲の左 */
+    0x00, 0x60, 0xF8, 0xFC, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x60, 0xF0, 0xF8, 0xF0, 0xFC, 0xFE, 0xFC, 0xFF, 0xFF, 0xFF, 0x00,   /* 入道雲の右 */
+    0x00, 0x00, 0x00, 0x00, 0x60, 0x38, 0x0E, 0x03, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x1C, 0x70, 0xC0, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,   /* カモメ(羽を上げる) */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xE0, 0x3C, 0x07, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x3C, 0xE0, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,   /* カモメ(羽を広げる) */
+};
+/* 番号、組、色、重なりを調べる範囲(ox, oy, w, h)。物ごとに組を分け、骨組みがかかった物だけ隠す。
+ * 偶数の組(太陽・カモメ)と奇数の組(雲の左右)を 1 フレームおきに調べる */
+static const u8 sky_def4[SKY_N][7] = {
+    { 2, 0, C_YELLOW, 2, 2, 26, 26 },    /* 太陽 */
+    { 3, 1, C_WHITE, 0, 2, 30, 26 },     /* 入道雲の左 */
+    { 4, 3, C_WHITE, 0, 2, 30, 26 },     /* 入道雲の右 */
+    { 5, 2, C_WHITE, 0, 8, 30, 11 },     /* カモメ */
+};
+#define SKY_PATS sky_pat4
+#define SKY_DEF  sky_def4
+#endif
+#if HAS_SKY
 static void sky_load(void)
 {
     vdp_set_write(SKY_PAT_ADDR);
-    vdp_out(g_sky_patterns, SKY_PAT_BYTES);
+    vdp_out(SKY_PATS, SKY_PAT_BYTES);
+    sky_defp = &SKY_DEF[0][0];
+    sky_cnt = SKY_N;
+    sky_mask = HAS_BRIDGE ? 1 : 3;
 }
-
-/* 空の物の位置(向き、地平線からの高さ、パターン)。置き方は sky.s の sky_place */
-extern u8 sp_az[6], sp_pat[6];
-extern i16 sp_alt[6];
-void sky_place(void);
 #endif
 
 /* 空のスプライトを決める(空が見えない間は隠す)。on = 0 なら照準も含めて全部隠す */
@@ -1940,6 +1981,23 @@ void envm_sky(u8 on)
         g_spr_n = 32;
         return;
     }
+#elif HAS_BRIDGE
+    /* 向きは進む向き(カメラのヨー - 視線の相対ヨー)からの差。画面の x = 112 + 差 * 3 */
+    u8 head = (u8)(cam_yaw - sky_look);
+    u8 fly = (u8)(g_tick >> 3) & 127;
+    if (on && sky_seen) {
+        /* 水平線は 92 ドット(カメラが傾かない鉄橋)。上の段(22〜53 ドット)に太陽とカモメ、
+         * 下の段(54〜85 ドット。左の向こう岸は 84 ドットから)に雲。y = 地平線 - 高さ - 32 */
+        sp_az[0] = (u8)(head + 32);      sp_alt[0] = 38;       sp_pat[0] = P_NOON;      /* 右の上(x 約 208) */
+        sp_az[1] = (u8)(head - 40);      sp_alt[1] = 6;        sp_pat[1] = P_THUN_L;    /* 左の端(x 約 -8)、向こう岸の上 */
+        sp_az[2] = (u8)(head - 30);      sp_alt[2] = 6;        sp_pat[2] = P_THUN_R;    /* 左の柱(64 ドット〜)にかからない所まで */
+        sp_az[3] = (u8)(head + 60 - fly);                                                /* 右から左へ横切る */
+        sp_alt[3] = (g_tick & 32) ? 40 : 38;
+        sp_pat[3] = (g_tick & 8) ? P_GULL_A : P_GULL_B;
+        sky_place();
+        g_spr_n = 24;
+        return;
+    }
 #endif
     for (n = on ? 8 : 0; n < 32; n += 4) g_spr_attr[n] = 209;
     g_spr_n = 8;                         /* 照準の 2 枚だけを送る */
@@ -1957,7 +2015,7 @@ static void sky_draw(u8 far)
 #if HAS_BRIDGE || HAS_HOME || HAS_TOWN
     pano_off = (i16)(((u16)(u8)(cam_yaw - PANO_YAW) * PANO_W) >> 8);
 #endif
-#if HAS_PARK
+#if HAS_SKY
     sky_yh = yh >> 2;
     sky_seen = 1;
 #endif
@@ -2021,8 +2079,9 @@ void envm_draw(u16 s, u16 look16)
     }
 #endif
     rp_setdir(g_u_neg);
-#if HAS_PARK
+#if HAS_SKY
     sky_seen = 0;
+    sky_look = look;
 #endif
     for (r = 0; r <= NR; r++) ring_ok[r] = 0;
     g_ring_s = &ring_s[0][0];

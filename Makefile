@@ -127,14 +127,15 @@ $(BUILD)/ressyms.rel: $(BUILD)/ressyms.s
 	$(AS) -l -o $@ $<
 
 # 地形モジュール(マッパーのセグメント 5 に、ステージの始めに読み込む)。ステージごとに、その面の地形の処理だけを入れる
-# (env.c を ENV_S1〜ENV_S6 でコンパイルする。遊園地の客の asm(sky.s)はステージ 1、鉄橋のトラスと海の asm(truss.s)はステージ 4 だけ)
+# (env.c を ENV_S1〜ENV_S6 でコンパイルする。遊園地の客の asm(sky.s)はステージ 1、鉄橋のトラスと海の asm(truss.s)はステージ 4 だけ。
+#  空のスプライトの置き方(skyspr.s)は空を出す面(1・4))
 $(BUILD)/env%.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env_s%.rel $(BUILD)/ressyms.rel
 	$(CC) $(MODFLAGS) --code-loc 0x8009 -o $@ $^
 
-$(BUILD)/env1.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env_s1.rel $(BUILD)/sky.rel $(BUILD)/ressyms.rel
+$(BUILD)/env1.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env_s1.rel $(BUILD)/sky.rel $(BUILD)/skyspr.rel $(BUILD)/ressyms.rel
 	$(CC) $(MODFLAGS) --code-loc 0x8009 -o $@ $^
 
-$(BUILD)/env4.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env_s4.rel $(BUILD)/truss.rel $(BUILD)/ressyms.rel
+$(BUILD)/env4.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env_s4.rel $(BUILD)/truss.rel $(BUILD)/skyspr.rel $(BUILD)/ressyms.rel
 	$(CC) $(MODFLAGS) --code-loc 0x8009 -o $@ $^
 
 $(BUILD)/env_s%.rel: $(ENG)/env.c $(HDRS) Makefile | $(BUILD)
