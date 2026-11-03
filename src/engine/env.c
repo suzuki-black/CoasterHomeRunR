@@ -127,6 +127,8 @@ void ring_make(u8 idx, const RailPt *p);
 static u16 ring_m0;
 static u8  ring_no[NR + 1];      /* リングの通し番号(断面・色・飾りの表を引く) */
 static i16 vprof[12];            /* 仮リングの断面(前後のリングから補間) */
+extern u16 g_lerp_f;
+void prof_lerp(const i16 *a, i16 *dst);   /* geom.s */
 static u8  vr_f;                 /* 仮リングの位置: 区間(リング ring_no[VR] からその次まで)の中の 0..255 */
 
 /* ---------------------------------------------------------------------------
@@ -611,15 +613,13 @@ static u8 vring_make(u16 sv)
 {
     V3 p;
     RailPt rp;
-    u8 k, no;
+    u8 no;
     i16 f;
-    const i16 *a, *b;
     if (sv > rail_s_max()) return 0;
     no = (u8)((sv >> 6) / RSTEP);
     f = (i16)(sv - (u16)no * RSTEP * 64) ;       /* 0..255(1/64m × 4m) */
-    a = &PROF[no * 12];
-    b = &PROF[(no + 1) * 12];
-    for (k = 0; k < 12; k++) vprof[k] = a[k] + (i16)(((i32)(b[k] - a[k]) * f) >> 8);
+    g_lerp_f = f;
+    prof_lerp(&PROF[no * 12], vprof);            /* vprof = a + (b - a) * f >> 8(a = このリング、b = 次のリングの断面) */
     vr_f = (u8)f;
     rail_at(sv, &p, &rp.yaw);
     rp.x = p.x; rp.y = p.y; rp.z = p.z;

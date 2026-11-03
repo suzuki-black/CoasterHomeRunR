@@ -25,8 +25,7 @@ xf_dx:	.ds	2
 xf_dz:	.ds	2
 rm_idx:	.ds	1
 rm_k:	.ds	1
-rm_dy:	.ds	2
-rm_dz:	.ds	2
+rm_sin:	.ds	2
 rm_fm:	.ds	1
 rm_v:	.ds	2
 rm_o:	.ds	2
@@ -96,6 +95,10 @@ c_cs_a:		.ds	2
 c_cs_s:		.ds	1
 c_sn_a:		.ds	2
 c_sn_s:		.ds	1
+c_ua_a:		.ds	2	; ring_make: ピッチがあるときの u の係数(y へ sin Δ * psin、z へ -sin Δ * pcos)
+c_ua_s:		.ds	1
+c_ub_a:		.ds	2
+c_ub_s:		.ds	1
 _g_xf_ok::	.ds	1	; 1 = xf_core のカメラの定数(c_cos・c_sin・c_pc・c_ps)を用意済み
 	.area	_CODE
 
@@ -317,6 +320,60 @@ _rail_at::
 	ret
 
 ; ---------------------------------------------------------------------------
+; void prof_lerp(const i16 *a, i16 *dst)   HL = a、DE = dst、(g_lerp_f) = f(0..255)
+;   仮リングの断面: dst[k] = a[k] + (b[k] - a[k]) * f >> 8(b = a + 12。次のリングの断面)を 12 個。
+;   C で 32 ビットの掛け算を使ったときと同じ値(>> 8 は負の方向へ切り捨て)。
+;   d * f は d を符号なしとして MULUW で掛け、d が負なら 8〜23 ビットの上位バイトから f を引けば符号付きの積の同じビットになる
+; ---------------------------------------------------------------------------
+	.area	_DATA
+_g_lerp_f::	.ds	2
+	.area	_CODE
+
+_prof_lerp::
+	ld	b, #12
+1$:
+	push	bc
+	ld	c, (hl)
+	inc	hl
+	ld	b, (hl)			; BC = a[k]
+	push	hl
+	push	de
+	ld	de, #23
+	add	hl, de
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)			; DE = b[k]
+	ex	de, hl
+	or	a, a
+	sbc	hl, bc			; HL = d
+	push	bc
+	ld	a, h			; d の符号
+	ld	bc, (_g_lerp_f)
+	MULUW_HL_BC			; DE:HL = d(符号なし) * f
+	ld	l, h
+	ld	h, e
+	bit	7, a
+	jr	z, 2$
+	ld	a, h
+	sub	a, c
+	ld	h, a
+2$:
+	pop	bc
+	add	hl, bc			; a[k] + (d * f >> 8)
+	pop	de
+	ex	de, hl
+	ld	(hl), e
+	inc	hl
+	ld	(hl), d
+	inc	hl
+	ex	de, hl			; DE = 次の出力先
+	pop	hl
+	inc	hl			; HL = a[k + 1]
+	pop	bc
+	djnz	1$
+	ret
+
+; ---------------------------------------------------------------------------
 ; void ring_make(u8 idx, const RailPt *p)   A = リング番号、DE = レール点 (x, y, z, yaw)
 ;   洞窟の断面(g_rm_prof: 6 頂点の (u, v)。u = 右、v = 上、8.8 m、レール=目の位置からの相対)を
 ;   カメラ空間で ring_v[idx] に、手前の頂点は投影して ring_s[idx] に置き、
@@ -360,11 +417,31 @@ _ring_make::
 	ld	c, (hl)
 	inc	hl
 	ld	b, (hl)			; BC = cos Δ、DE = sin Δ
+	ld	(rm_sin), de
 	ex	de, hl
 	push	bc
 	CPREP	c_sn
 	pop	hl
 	CPREP	c_cs
+	; ピッチがあれば、u の y・z への係数をリングごとに 1 回だけ求める(頂点ごとの掛け算を 6 回から 5 回に)。
+	;   dy' = v*pcos + u*(sin Δ*psin)、dz' = v*psin - u*(sin Δ*pcos)
+	ld	a, (_cam_pitch)
+	or	a, a
+	jp	z, 7$
+	ld	hl, (rm_sin)
+	FMC	c_ps
+	ex	de, hl
+	CPREP	c_ua
+	ld	hl, (rm_sin)
+	FMC	c_pc
+	xor	a, a
+	sub	a, e
+	ld	l, a
+	sbc	a, a
+	sub	a, d
+	ld	h, a
+	CPREP	c_ub
+7$:
 	; ring_c + idx*6
 	ld	a, (rm_idx)
 	ld	l, a
@@ -440,51 +517,50 @@ _ring_make::
 	add	hl, de
 	ld	0 (iy), l
 	ld	1 (iy), h
-	; 奥行きのずれ dz = -u*sin、上下のずれ dy = v
+	ld	a, (_cam_pitch)
+	or	a, a
+	jp	nz, 8$
+	; ピッチなし: y = gy + v、z = gz - u*sin
+	ld	l, 2 (ix)
+	ld	h, 3 (ix)
+	ld	de, (gy)
+	add	hl, de
+	ld	2 (iy), l
+	ld	3 (iy), h
 	ld	l, 0 (ix)
 	ld	h, 1 (ix)
 	FMC	c_sn
-	xor	a, a
-	sub	a, e
-	ld	e, a
-	sbc	a, a
-	sub	a, d
-	ld	d, a			; DE = dz
-	ld	c, 2 (ix)
-	ld	b, 3 (ix)		; BC = dy
-	ld	a, (_cam_pitch)
-	or	a, a
-	jp	z, 6$
-	; ピッチがあれば回す: dy' = dy*cos - dz*sin、dz' = dy*sin + dz*cos
-	ld	(rm_dz), de
-	ld	(rm_dy), bc
-	ld	h, b
-	ld	l, c
-	FMC	c_pc
-	push	de
-	ld	hl, (rm_dz)
-	FMC	c_ps
-	pop	hl
+	ld	hl, (gz)
 	or	a, a
 	sbc	hl, de
-	push	hl			; dy'
-	ld	hl, (rm_dy)
-	FMC	c_ps
+	jp	6$
+8$:
+	; ピッチあり: y = gy + u*ua + v*pcos、z = gz + u*ub + v*psin
+	ld	l, 0 (ix)
+	ld	h, 1 (ix)
+	FMC	c_ua
 	push	de
-	ld	hl, (rm_dz)
+	ld	l, 2 (ix)
+	ld	h, 3 (ix)
 	FMC	c_pc
 	pop	hl
 	add	hl, de
-	ex	de, hl			; DE = dz'
-	pop	bc			; BC = dy'
-6$:
-	; y = gy + dy、z = gz + dz
-	ld	hl, (gy)
-	add	hl, bc
+	ld	de, (gy)
+	add	hl, de
 	ld	2 (iy), l
 	ld	3 (iy), h
-	ld	hl, (gz)
+	ld	l, 0 (ix)
+	ld	h, 1 (ix)
+	FMC	c_ub
+	push	de
+	ld	l, 2 (ix)
+	ld	h, 3 (ix)
+	FMC	c_ps
+	pop	hl
 	add	hl, de
+	ld	de, (gz)
+	add	hl, de
+6$:
 	ld	4 (iy), l
 	ld	5 (iy), h
 	; z >= NEAR_Z なら投影
