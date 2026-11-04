@@ -49,6 +49,8 @@ enum { K_CAVE,     /* 炭鉱の坑道(ステージ 1 のパレット) */
 void env_draw(u16 s, u16 look);
 /* 空のスプライト(太陽・雲・鳥)を決める。画面の絵を描き終えてから呼ぶ(描いた物と重なるスプライトを隠す)。on = 0 ならスプライトを全部隠す */
 void env_sky(u8 on);
+/* 空のスプライトを隠し、この面の残りは出さない(g_sky_stage = 0 にして env_sky(0)。ステージクリアの集計で使う) */
+void env_sky_off(void);
 /* ステージ開始時(レール表を作った後)に、断面・色・飾りを乱数の種 g_env_seed と地形の区間 g_env_zones で作る */
 void env_build(void);
 extern u8  g_env_zones[ENV_ZONES_MAX];   /* 先頭 = レールの色、以降 (このリングまで, 種類) の組。0xFF まで */

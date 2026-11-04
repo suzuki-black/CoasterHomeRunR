@@ -1251,6 +1251,7 @@ static void clear_tally(void)
     attack_dir = DIR_NONE;
     cap_id = 0;
     lock_n = 0;
+    env_sky_off();                       /* 空のスプライトは集計の板の上に出てしまうので隠す(2026-11-03 ユーザーの指摘) */
     bgm_play(SONG_CLEAR);
     for (;;) {
         t = g_tick - t0;

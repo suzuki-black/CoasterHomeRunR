@@ -223,7 +223,7 @@ scm_jp:
 	jp	(hl)
 
 ; ---------------------------------------------------------------------------
-; void env_build(void) / void env_draw(u16 s, u16 look) / void env_sky(u8 on) — 地形モジュールを呼ぶ(ページ2を地形のセグメントにして呼び、戻す)
+; void env_build(void) / void env_draw(u16 s, u16 look) / void env_sky(u8 on) / void env_sky_off(void) — 地形モジュールを呼ぶ(ページ2を地形のセグメントにして呼び、戻す)
 ;   引数はレジスタ(HL, DE)だけで渡すこと。スタックで渡す引数があると、ここで積む戻り番地の分ずれる
 ; ---------------------------------------------------------------------------
 _env_build::
@@ -232,6 +232,10 @@ _env_build::
 	out	(0xFE), a
 	call	ENVM_BUILD
 	jr	env_back
+; void env_sky_off(void) — 空のスプライトを隠し、この面の残りは出さない(クリアの集計の板に重ならないように。次の面は envm_build が決め直す)
+_env_sky_off::
+	xor	a, a
+	ld	(_g_sky_stage), a	; A = 0 のまま env_sky(0) へ続ける
 _env_sky::
 	or	a, a
 	jr	z, 1$			; on = 0(全部隠す)はどの面でも
