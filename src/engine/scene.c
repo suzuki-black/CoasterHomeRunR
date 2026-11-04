@@ -59,26 +59,40 @@ void scm_vdp_init(void)
 /* エンディング(エンドロール。2026-10-25 ユーザーの指定で英語にし、クレジットを流す): SCREEN 1 に切り替え、BIOS のフォントで
  * 結びの文とスタッフのクレジットを下から上へ流す(VDP の縦スクロール R#23 で 1 ドットずつ。名前表は 1800h-1BFFh の 32 行を
  * 輪にして使い、画面に入る直前の行に次の文を書く)。流し終えたら PUSH SPACE KEY を点滅させて待ち、スペースでタイトルへ。
- * 流れている間にスペースを押すと最後まで飛ばす。曲はエンディングの曲をくり返す */
+ * 流れている間にスペースを押すと最後まで飛ばす。曲はエンディングの曲をくり返す。
+ * 文は 1 行おきに書く(続けて書くと行の間が狭すぎた)。結びの文は画面の真ん中でしばらく止め、文・スタッフ・THANK YOU の間は
+ * 大きく空ける(余韻を出す。THANK YOU の画面にクレジットを残さない。2026-11-04 ユーザーの指定) */
 #define ROLL_STEP 4                          /* 1 ドット流すティック数(1 秒に 15 ドット。2 だと速すぎた) */
+#define ROLL_ROW(li) (24 + 2 * (li))         /* 文の li 行目を書く輪の行 */
+#define STORY_Y (16 * 8)                     /* 結びの文(最初の行が輪の 24 行目)が画面の 8〜16 行目に来る位置 */
+#define STORY_HOLD 240                       /* そこで止めるティック数(4 秒) */
 static const char * const roll[] = {
     "The young man brought the",
     "village treasure back home.",
     "",
     "And the village went back",
     "to its peaceful days.",
-    "", "", "",
+    "", "", "", "", "", "",                  /* 文が画面の上へ抜けかけてからスタッフが入る */
     "COASTER HOME RUN",
     "",
     "- STAFF -",
     "",
-    "ORIGINAL CONCEPT / DIRECTION",
+    "ORIGINAL CONCEPT",
     "suzuki-black",
     "",
-    "PROGRAM / GRAPHICS",
+    "DIRECTION",
+    "suzuki-black",
+    "",
+    "PROGRAM",
     "Claude Code (Anthropic Claude)",
     "",
-    "MUSIC / SOUND EFFECTS",
+    "GRAPHICS",
+    "Claude Code (Anthropic Claude)",
+    "",
+    "MUSIC",
+    "Claude Code (Anthropic Claude)",
+    "",
+    "SOUND EFFECTS",
     "Claude Code (Anthropic Claude)",
     "",
     "VOICES",
@@ -87,25 +101,24 @@ static const char * const roll[] = {
     "TITLE ILLUSTRATION",
     "Microsoft Copilot",
     "x Claude Code",
-    "", "", "",
+    "", "", "", "", "", "", "", "", "", "", "", "",   /* 12 行(画面で 25 行): スタッフが抜けて何も無い画面を挟んでから THANK YOU */
     "THANK YOU FOR PLAYING!",
     "",
     "\x01",                                  /* スコア */
-    "",
     "(C) 2026 suzuki-black",
-    "", "",
+    "",
     "PUSH SPACE KEY",
 };
 #define ROLL_N (sizeof(roll) / sizeof(roll[0]))
 static char roll_score[13];
 
-/* 輪の行 k(0〜)に、文の k - 24 行目(範囲の外は空白)を中央にそろえて書く。blank なら空白だけ */
+/* 輪の行 k(0〜)に、文の (k - 24) / 2 行目(奇数の行と範囲の外は空白)を中央にそろえて書く。blank なら空白だけ */
 static void roll_row(u16 k, u8 blank)
 {
     u8 row[32], i, n;
     const char *t = "";
     i16 li = (i16)k - 24;
-    if (!blank && li >= 0 && li < (i16)ROLL_N) t = (roll[li][0] == 1) ? roll_score : roll[li];
+    if (!blank && li >= 0 && !(li & 1) && (li >>= 1) < (i16)ROLL_N) t = (roll[li][0] == 1) ? roll_score : roll[li];
     for (i = 0; i < 32; i++) row[i] = ' ';
     for (n = 0; t[n]; n++) ;
     for (i = 0; i < n; i++) row[(32 - n) / 2 + i] = (u8)t[i];
@@ -124,8 +137,8 @@ void scm_ending(void)
         7, 0x01,        /* 背景 = 黒 */
         23, 0x00,       /* 縦スクロール */
     };
-    const u16 y_end = (u16)(ROLL_N - 1 + 4) * 8;   /* PUSH SPACE KEY が画面の 20 行目に来たら止める */
-    u16 y = 0, t = 0;
+    const u16 y_end = (u16)(ROLL_ROW(ROLL_N - 1) - 16) * 8;   /* PUSH SPACE KEY が画面の 16 行目に来たら止める(THANK YOU から 6〜16 行目 = 真ん中) */
+    u16 y = 0, t = 0, hold = 0;
     u8 i, k = 0, prev = 0xFF, in, d[5];
     u8 row[32];
     u16 sc = g_score;
@@ -169,13 +182,14 @@ void scm_ending(void)
         }
         prev = in;
         if (y < y_end) {
-            if (!(t % ROLL_STEP)) {
+            if (y == STORY_Y && hold < STORY_HOLD) hold++;
+            else if (!(t % ROLL_STEP)) {
                 if (!(y & 7)) roll_row((y >> 3) + 24, 0);   /* 画面の下に入る直前の行に次の文を書く */
                 y++;
                 vdp_wreg(23, (u8)y);
             }
         } else if (!(t & 31)) {
-            roll_row(ROLL_N - 1 + 24, !(t & 32));      /* PUSH SPACE KEY の点滅 */
+            roll_row(ROLL_ROW(ROLL_N - 1), !(t & 32));      /* PUSH SPACE KEY の点滅 */
         }
     }
     bgm_stop();
