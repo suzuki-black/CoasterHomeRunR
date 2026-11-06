@@ -11,6 +11,8 @@
 # シンボル _pset がある版)のどちらでも書き出す。比べるのは tools/frame_cmp.py(同じ 64×48 の並びに直して比べる)。
 # 電飾の点滅は割り込みで数えるティック(g_tick、実時間)で決まり、描画が速くなると位相がずれるので、地形を描く間だけ
 # g_tick をフレーム番号から決めた値に差し替え、描き終えたら実際の値(その間に進んだ分を足す)に戻す。
+# 描いている間に割り込みが g_tick を進めた分も差し替えた値へ戻す(下位ビットで動く水面・風車などが、描画の速さで変わらないように。
+# 2026-11-06: 描画を速くしただけで 2 面の水面が 1 ブロック動き、絵が違うように見えた)。
 # 被弾で飛び散る破片の種(debris_start)も同じように差し替える。
 
 set out_dir $::env(TH_OUT)
@@ -61,13 +63,14 @@ proc on_env {} {
         unset ::coin_real
     }
     set ::real_tick [peek16 [sym _g_tick]]
-    set ::fake_tick [expr {($::fr * 8) & 0xFFFF}]   ;# 点滅は g_tick >> 3。描画中に 7 ティック進んでも位相が変わらない
+    set ::fake_tick [expr {($::fr * 8) & 0xFFFF}]
+    set ::extra 0                                     ;# 描いている間に割り込みが進めたティック数(on_tick)
     debug write memory [sym _g_tick] [expr {$::fake_tick & 255}]
     debug write memory [expr {[sym _g_tick] + 1}] [expr {$::fake_tick >> 8}]
 }
 proc on_env_back {} {
     if {![info exists ::real_tick]} return
-    set t [expr {($::real_tick + [peek16 [sym _g_tick]] - $::fake_tick) & 0xFFFF}]
+    set t [expr {($::real_tick + $::extra) & 0xFFFF}]
     debug write memory [sym _g_tick] [expr {$t & 255}]
     debug write memory [expr {[sym _g_tick] + 1}] [expr {$t >> 8}]
     unset ::real_tick
@@ -98,3 +101,11 @@ debug set_bp [sym _env_draw] {} on_env
 debug set_bp [sym env_back] {} on_env_back
 debug set_bp [sym _vdp_xfer] {} on_xfer
 if {!$::title} { after time 2.0 start_game }
+# 割り込み(sys.s の htimi)が g_tick を書いた直後: 地形を描いている間なら数えて、差し替えた値に戻す。
+# htimi + 7 = ld hl, (_g_tick) / inc hl / ld (_g_tick), hl の次の命令(htimi の頭を変えたらここも直す)
+proc on_tick {} {
+    if {![info exists ::real_tick]} return
+    incr ::extra
+    set_tick $::fake_tick
+}
+debug set_bp [expr {[sym htimi] + 7}] {} on_tick

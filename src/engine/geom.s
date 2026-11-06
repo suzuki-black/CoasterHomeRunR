@@ -6,6 +6,7 @@
 ; 呼出規約は math.s の冒頭を参照。
 
 	.module	geom
+	.r800				; IXH・IXL(draw_model)
 	.include "r800.inc"
 
 
@@ -642,7 +643,8 @@ dm_mode:	.ds	1	; 0 = 求める、1 = 求めて表に書く(縁取りの回)、2 
 dm_cv:		.ds	1	; 1 = 表が直前の縁取りの回のもの
 dm_cc:		.ds	2	; 表を書いたときの足元の点と矩形の列
 dm_cr:		.ds	2
-dm_cache:	.ds	DM_CMAX * 4	; 矩形ごとの x0, x1, y0, y1(ブロック、広げる前)
+dm_cn:		.ds	1	; 表に残した矩形の数
+dm_cache:	.ds	DM_CMAX * 6	; 縁取りの回で空でなかった矩形ごとの x0, x1, y0, y1(ブロック、広げる前)と矩形の番地
 
 	.area	_CODE
 
@@ -814,17 +816,24 @@ _draw_model::
 	ld	a, (_g_dm_id)
 	ld	(57$ + 3), a
 52$:
-	; 矩形の x0, x1, y0, y1(ブロック)は裏の B, C, D, E に置く。裏の HL = 座標の表(縁取りの回と次の回で使い回す)。
+	; 矩形の x0, x1, y0, y1(ブロック)は裏の B, C, D, E に置く。裏の HL = 座標の表。
+	; 縁取りの回(dm_mode = 1)は、空でない矩形だけを表に残す(座標と矩形の番地)。直後の普通の回(2)は表に残した矩形だけを塗る
+	; (細い部品・飾り・空の矩形の判定を 2 回目はしない。塗る矩形・順番・座標は同じ)。
 	; 座標の計算(dm_cx / dm_cy)・塗り(rect_fill)・広げる(dm_grow1)は裏のレジスタを使わない(割り込み処理も使わない)
 	exx
 	ld	hl, #dm_cache
 	exx
+	ld	a, (dm_mode)
+	cp	a, #2
+	jp	z, 60$
+	xor	a, a
+	ld	(dm_cn), a
 	ld	ix, (_g_dm_rects)
 	ld	a, (_g_dm_n)
 	ld	b, a
 1$:
 	push	bc
-	; 飾り(部位 3)は g_dm_deco が 0(遠い敵)なら飛ばす。縁取りの回と次の回で同じに決まるので、座標の表はずれない
+	; 飾り(部位 3)は g_dm_deco が 0(遠い敵)なら飛ばす
 	ld	a, 5 (ix)
 	cp	a, #3
 	jr	nz, 48$
@@ -832,7 +841,7 @@ _draw_model::
 	or	a, a
 	jp	z, 8$
 48$:
-	; 細い部品(幅か高さが g_dm_thin 以下)は飛ばす。縁取りの回と次の回で同じに決まるので、座標の表はずれない
+	; 細い部品(幅か高さが g_dm_thin 以下)は飛ばす
 	ld	a, 2 (ix)
 	sub	a, 0 (ix)
 	ld	c, a			; C = 幅
@@ -846,22 +855,7 @@ _draw_model::
 	cp	a, (hl)
 	jp	z, 8$
 	jp	c, 8$
-	ld	a, (dm_mode)
-	cp	a, #2
-	jr	nz, 44$
-	; 表から
-	exx
-	ld	b, (hl)
-	inc	hl
-	ld	c, (hl)
-	inc	hl
-	ld	d, (hl)
-	inc	hl
-	ld	e, (hl)
-	inc	hl
-	jp	45$
-44$:
-	; 左右 = sx + scale(x0 / x1)、上下 = sy - scale(y1 / y0)
+	; 左右 = sx + scale(x0 / x1)。左右が空なら上下は求めない
 	ld	a, 0 (ix)
 	call	dm_cx
 	exx
@@ -871,7 +865,11 @@ _draw_model::
 	call	dm_cx
 	exx
 	ld	c, a
+	sub	a, b
+	jp	z, 58$
+	jp	c, 58$
 	exx
+	; 上下 = sy - scale(y1 / y0)
 	ld	a, 3 (ix)
 	call	dm_cy
 	exx
@@ -881,6 +879,9 @@ _draw_model::
 	call	dm_cy
 	exx
 	ld	e, a
+	sub	a, d
+	jp	z, 58$
+	jp	c, 58$
 	ld	a, (dm_mode)
 	or	a, a
 	jr	z, 45$
@@ -893,6 +894,15 @@ _draw_model::
 	inc	hl
 	ld	(hl), e
 	inc	hl
+	ld	a, ixl
+	ld	(hl), a
+	inc	hl
+	ld	a, ixh
+	ld	(hl), a
+	inc	hl
+	ld	a, (dm_cn)
+	inc	a
+	ld	(dm_cn), a
 45$:
 	; 飾り(部位 3: 目・模様・刃先など、ほかの矩形の内側の細部)は縁取りの回には塗らない(座標は上で表に書いてある)
 	ld	a, 5 (ix)
@@ -902,18 +912,14 @@ _draw_model::
 	or	a, a
 	jp	nz, 58$
 47$:
-	; 空なら次へ(ここは裏のレジスタのまま)
+	; 塗る(ここは裏のレジスタのまま。空でないことは確かめてある)
 	ld	a, c
 	sub	a, b
-	jp	z, 58$
-	jp	c, 58$
 	ld	(_g_rw), a
 	ld	a, b
 	ld	(_g_rx), a
 	ld	a, e
 	sub	a, d
-	jp	z, 58$
-	jp	c, 58$
 	ld	(_g_rh), a
 	ld	a, d
 	ld	(_g_ry), a
@@ -964,17 +970,49 @@ _draw_model::
 	ld	de, #7
 	add	iy, de
 8$:
+	ld	a, (dm_mode)
+	cp	a, #2
+	jr	z, 62$
 	ld	de, #6
 	add	ix, de
 	pop	bc
 	dec	b
 	jp	nz, 1$
+63$:
 	pop	iy
 	pop	ix
 	ret
+62$:
+	pop	bc
+	djnz	61$
+	jr	63$
 58$:
 	exx
 	jr	8$
+60$:
+	; 普通の回で表を使う: 縁取りの回に残した矩形だけを、同じ順に塗る
+	ld	a, (dm_cn)
+	or	a, a
+	jr	z, 63$
+	ld	b, a
+61$:
+	push	bc
+	exx
+	ld	b, (hl)
+	inc	hl
+	ld	c, (hl)
+	inc	hl
+	ld	d, (hl)
+	inc	hl
+	ld	e, (hl)
+	inc	hl
+	ld	a, (hl)
+	ld	ixl, a
+	inc	hl
+	ld	a, (hl)
+	ld	ixh, a
+	inc	hl
+	jp	47$
 
 ; dm_grow1: HL = 位置、DE = 長さ、C = 画面の端 → 両側に 1 ブロックずつ広げる(画面の外へは出さない)
 dm_grow1:
