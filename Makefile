@@ -54,8 +54,11 @@ P0FLAGS = --constseg PAGE0
 ASM_SRCS = $(ENG)/crt0.s $(ENG)/sys.s $(ENG)/vdp.s $(ENG)/gfx.s $(ENG)/math.s $(ENG)/raster.s $(ENG)/geom.s $(ENG)/pcm.s
 C_SRCS   = $(ENG)/main.c $(ENG)/render.c $(ENG)/rail.c $(ENG)/shared.c \
            $(ENG)/hud.c $(ENG)/sound.c $(ENG)/trolley.c $(ENG)/menu.c $(ENG)/fx.c $(ENG)/vdpbench.c $(ENG)/skydata.c
-# モジュールのリンク: 0x8000 に先頭(modhead)、変数は 0xBC00-0xBFFF。常駐部のシンボルは ressyms(engine.noi から生成)で渡す
+# モジュールのリンク: 0x8000 に先頭(modhead)、変数は 0xBC00-0xBFFF。常駐部のシンボルは ressyms(engine.noi から生成)で渡す。
+# ゲームモジュールだけは変数を 0xBC80- に置き、コードを 0xBC7F まで使う(ステージ 1 のモジュールの空きが無くなったため。
+# 変数の 0 埋めは、読み込みのときではなく ROM のイメージで済ませている。tools/mkrom.py の GAME_BSS)
 MODFLAGS = -mr800 --no-std-crt0 --data-loc 0xBC00 -Wl-j -Wl-m -Wl-u
+GAMEMODFLAGS = -mr800 --no-std-crt0 --data-loc 0xBC80 -Wl-j -Wl-m -Wl-u
 
 # crt0 は必ず先頭にリンクする
 RELS = $(BUILD)/crt0.rel \
@@ -159,26 +162,26 @@ $(BUILD)/sndmod.ihx: $(BUILD)/modhead_snd.rel $(BUILD)/sndtick.rel $(BUILD)/sndf
 # ステージごとのゲームモジュール(ページ2 = セグメント 1 に、ステージの始めに読み込む)
 STG     = src/stage
 $(BUILD)/game%.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models.rel $(BUILD)/stage%.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
-	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
+	$(CC) $(GAMEMODFLAGS) --code-loc 0x8005 -o $@ $^
 
 # 海の面(ステージ 4 の鉄橋)だけの敵(半魚人・大ダコ人とその足)は、GAME_SEA を付けてコンパイルした game.c・models.c に入れる
-# (ゲームモジュールは game.c をステージごとにリンクするので、ほかの面のモジュールの空きを使わない。ステージ 1 は残り 120 B ほど)
+# (ゲームモジュールは game.c をステージごとにリンクするので、ほかの面のモジュールの空きを使わない)
 $(BUILD)/game4.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game_sea.rel $(BUILD)/models_sea.rel $(BUILD)/stage4.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
-	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
+	$(CC) $(GAMEMODFLAGS) --code-loc 0x8005 -o $@ $^
 
 $(BUILD)/%_sea.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -DGAME_SEA -c -o $@ $<
 
 # ステージ 1 のモジュールは置き場が一番きついので、ステージ 1 に出ない敵の絵を外した models.c をリンクする(GAME_S1)
 $(BUILD)/game1.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models_s1.rel $(BUILD)/stage1.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
-	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
+	$(CC) $(GAMEMODFLAGS) --code-loc 0x8005 -o $@ $^
 
 $(BUILD)/%_s1.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -DGAME_S1 -c -o $@ $<
 
 # ステージ 2(地底湖)のモジュールは、地底湖に出ない敵の絵を外し、大ナマズ人の絵を入れた models.c をリンクする(GAME_S2)
 $(BUILD)/game2.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models_s2.rel $(BUILD)/stage2.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
-	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
+	$(CC) $(GAMEMODFLAGS) --code-loc 0x8005 -o $@ $^
 
 $(BUILD)/%_s2.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -DGAME_S2 -c -o $@ $<
@@ -186,14 +189,14 @@ $(BUILD)/%_s2.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
 # ステージ 3・5・6 のモジュールも、その面に出ない敵の絵を外した models.c をリンクする(GAME_S3・S5・S6。周回区間を 3 つにして
 # 台本が長くなったので)。出る種類は tools/check_models.py で台本と突き合わせる
 $(BUILD)/game3.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models_s3.rel $(BUILD)/stage3.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
-	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
+	$(CC) $(GAMEMODFLAGS) --code-loc 0x8005 -o $@ $^
 
 $(BUILD)/game5.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game.rel $(BUILD)/models_s5.rel $(BUILD)/stage5.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
-	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
+	$(CC) $(GAMEMODFLAGS) --code-loc 0x8005 -o $@ $^
 
 # 6 面だけ、最後のボスの登場の演出(game.c の talk_update)を入れた game.c をリンクする
 $(BUILD)/game6.ihx: $(BUILD)/modhead_game.rel $(BUILD)/game_s6.rel $(BUILD)/models_s6.rel $(BUILD)/stage6.rel $(BUILD)/aimhit.rel $(BUILD)/ressyms.rel
-	$(CC) $(MODFLAGS) --code-loc 0x8005 -o $@ $^
+	$(CC) $(GAMEMODFLAGS) --code-loc 0x8005 -o $@ $^
 
 $(BUILD)/%_s3.rel: $(ENG)/%.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -DGAME_S3 -c -o $@ $<

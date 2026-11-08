@@ -9,7 +9,7 @@
 	jp	_game_run		; u8 game_run(const Stage *st, u8 first)
 	.dw	_stage_data
 
-	; 区画の並び(crt0.s と同じ): コードと定数を先に、変数(0xBC00-)を後に置く
+	; 区画の並び(crt0.s と同じ): コードと定数を先に、変数(0xBC80-。Makefile の GAMEMODFLAGS)を後に置く
 	.area	_HOME
 	.area	_CODE
 	.area	_INITIALIZER

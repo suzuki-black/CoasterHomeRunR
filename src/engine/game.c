@@ -1239,12 +1239,24 @@ static void render(void)
 /* ---------------------------------------------------------------------------
  * ステージクリアの加算(悪魔城ドラキュラでボスを倒したときのように、数えながら足す)。ゲーム画面の上に重ねる。
  *   ボーナス(表示で 5,000 × ステージ。1 面より 2 面、2 面より 3 面が高い)を「ピッ」を連打しながら得点へ移し、
- *   ライフを 1 つずつ +2、誘導弾を 1 発ずつ +5(どちらも満タンで止める)。時間はティック(60Hz)で数える
+ *   ライフを 1 つずつ +2、誘導弾を 1 発ずつ +5(どちらも満タンで止める)。時間はティック(60Hz)で数える。
+ *   ボーナスは額を出したままにする(もらうものなので、0 まで数え下げると「BONUS 0」と読めた)。
+ *   ライフと誘導弾は実際に増えた数を出し、初めから満タンなら MAX と出す(2026-11-02 ユーザーの指摘)
  * --------------------------------------------------------------------------- */
+/* ライフと誘導弾の行: 実際に増えた数(+n)を、最初の 1 つが増えたときから出す(+0 は見せない)。
+ * got = 0xFF は、1 つも増えずにその段が終わった(初めから満タン)印で、MAX と出す。x は名前の後ろ(文字は 4 ドット幅) */
+static void tally_line(i8 y, const char *s, i8 x, u8 got)
+{
+    if (!got) return;
+    text_draw(12, y, s, C_WHITE, 1);
+    if (got == 0xFF) text_draw(x, y, "MAX", C_WHITE, 1);
+    else { text_draw(x, y, "+", C_WHITE, 1); num_draw(x + 4, y, got, 1, C_WHITE); }
+}
+static u16 tally_total;                  /* ボーナスの額(表示の単位の 1/10) */
 #define TALLY_BONUS 500                  /* 1 ステージあたりのボーナス(g_score の単位 = 表示の 1/10) */
 static void clear_tally(void)
 {
-    u16 bonus = (u16)g_stage * TALLY_BONUS, t0 = g_tick, t, step = (u16)g_stage * 20, next = 0;
+    u16 bonus = tally_total = (u16)g_stage * TALLY_BONUS, t0 = g_tick, t, step = (u16)g_stage * 20, next = 0;
     u8 phase = 0, add_life = 2, add_mis = 5;
     ctrl = 0;
     hold = 1;                            /* 乗り物はゆっくり止まる */
@@ -1279,6 +1291,7 @@ static void clear_tally(void)
                     se_play(SE_HEAL);
                     next = t + 10;
                 } else {
+                    if (add_life == 2) add_life = 3;   /* 1 つも増えなかった: 増えた数(2 - add_life)を 0xFF にして MAX と出す */
                     phase = 3;
                     next = t + 15;
                 }
@@ -1290,6 +1303,7 @@ static void clear_tally(void)
                     se_play(SE_LOCK);
                     next = t + 8;
                 } else {
+                    if (add_mis == 5) add_mis = 6;     /* 同じく MAX */
                     phase = 4;
                 }
                 break;
@@ -1302,15 +1316,15 @@ static void clear_tally(void)
         g_rx = 8; g_ry = 7; g_rw = 48; g_rh = 30; g_color = C_BLACK;   /* 文字の後ろの黒い板(背景に埋もれないように) */
         rect_fill();
         text_center(10, "STAGE CLEAR", C_YELLOW, 1);
-        if (phase >= 1) {                /* 残りのボーナス(表示の単位。末尾の 0 は文字で) */
+        if (phase >= 1) {                /* ボーナスの額(表示の単位。末尾の 0 は文字で) */
             text_draw(12, 18, "BONUS", C_WHITE, 1);
             /* ボーナスは最大 6 × TALLY_BONUS = 3000 なので 4 桁。末尾の 0 まで黒い板(8〜55)に収める
              * (5 桁ぶん取っていたら、末尾の 0 が板の右端から 1 ドットはみ出した。2026-10-25 ユーザーの指摘) */
-            num_draw(34, 18, bonus, 4, C_WHITE);
-            if (bonus) text_draw(50, 18, "0", C_WHITE, 1);
+            num_draw(34, 18, tally_total, 4, C_WHITE);
+            text_draw(50, 18, "0", C_WHITE, 1);
         }
-        if (phase >= 2) text_draw(12, 24, "LIFE +2", C_WHITE, 1);
-        if (phase >= 3) text_draw(12, 30, "MISSILE +5", C_WHITE, 1);
+        if (phase >= 2) tally_line(24, "LIFE", 32, 2 - add_life);
+        if (phase >= 3) tally_line(30, "MISSILE", 44, 5 - add_mis);
         present();
     }
 }

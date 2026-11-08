@@ -17,8 +17,9 @@
 - bank40-41 : 場面のモジュール(scene.c。エンディング・ゲームオーバー・隠しコンフィグ・SCREEN 3 の作り直し。起動時にセグメント 10 へ)
 - bank42-63 : 空き
 
-モジュール(オーバーレイ、仕様書 7.3)はどれも 0x8000-0xBBFF にコードと定数、0xBC00-0xBFFF に変数(読み込み後に 0 で埋める。
-初期値つきの変数は置けない)。常駐部の変数(DATA/BSS)が 0xCC00-0xDDFF に収まっているかも検査する。
+モジュール(オーバーレイ、仕様書 7.3)はどれも 0x8000-0xBBFF にコードと定数、0xBC00-0xBFFF に変数(初期値つきの変数は置けない)。
+ゲームモジュールだけは 0x8000-0xBC7F がコードと定数、0xBC80-0xBFFF が変数(GAME_BSS)。
+変数の所は ROM のイメージで 0 にしておく(16KB をそのまま写すので、読み込んだときに 0 で始まる)。常駐部の変数(DATA/BSS)が 0xCC00-0xDDFF に収まっているかも検査する。
 """
 import re
 import sys
@@ -32,6 +33,7 @@ VOICE_BANK = 30
 DATA_BASE, DATA_LIMIT = 0xCC00, 0xDE00   # 0xDE00-0xDFFF は行の左右端(raster.s span_a/span_b)
 CODE_LIMIT = 0x8000   # 常駐部はページ1だけ(ページ2はモジュール)
 MOD_BASE, MOD_BSS, MOD_END = 0x8000, 0xBC00, 0xC000
+GAME_BSS = 0xBC80                       # ゲームモジュールの変数の先頭(Makefile の GAMEMODFLAGS の --data-loc)
 STAGES = 6
 def ENV_BANK(n): return 4 if n == 1 else 14 + 2 * n     # game.h の ENV_BANK
 def GAME_BANK(n): return 4 + 2 * n
@@ -72,19 +74,21 @@ def read_noi(path):
 
 
 
-def check_module(name, ihx, noi):
-    """モジュールのイメージ(16KB)を作る。コードと定数は 0x8000-0xBBFF、変数は 0xBC00-0xBFFF、初期値つきの変数は無いこと"""
+def check_module(name, ihx, noi, bss=MOD_BSS):
+    """モジュールのイメージ(16KB)を作る。コードと定数は 0x8000-(bss - 1)、変数は bss-0xBFFF、初期値つきの変数は無いこと。
+    変数の所(bss-0xBFFF)はイメージで 0 にする(読み込んだときに 0 で始まるように)"""
     img = read_ihx(ihx)
     syms = read_noi(noi)
     lo, hi = min(img), max(img)
-    if lo != MOD_BASE or hi >= MOD_BSS:
-        sys.exit(f'mkrom: {name} のコードが 0x{MOD_BASE:04X}-0x{MOD_BSS - 1:04X} に収まっていない (0x{lo:04X}-0x{hi:04X})')
+    if lo != MOD_BASE or hi >= bss:
+        sys.exit(f'mkrom: {name} のコードが 0x{MOD_BASE:04X}-0x{bss - 1:04X} に収まっていない (0x{lo:04X}-0x{hi:04X})')
     dstart, heap = syms.get('s__DATA', 0), syms.get('s__HEAP', 0)
-    if dstart < MOD_BSS or heap > MOD_END:
-        sys.exit(f'mkrom: {name} の変数 0x{dstart:04X}-0x{heap:04X} が 0x{MOD_BSS:04X}-0x{MOD_END - 1:04X} に収まっていない')
+    if dstart < bss or heap > MOD_END:
+        sys.exit(f'mkrom: {name} の変数 0x{dstart:04X}-0x{heap:04X} が 0x{bss:04X}-0x{MOD_END - 1:04X} に収まっていない')
     if syms.get('l__INITIALIZER', 0) or syms.get('l__GSINIT', 0):
         sys.exit(f'mkrom: {name} に初期値つきの変数がある(モジュールでは 0 で始まる変数しか使えない)')
-    return bytes(img.get(MOD_BASE + i, 0xFF) for i in range(0x4000)), f'{name}={hi - MOD_BASE + 1}B+{heap - dstart}B'
+    image = bytes(img.get(MOD_BASE + i, 0xFF) if MOD_BASE + i < bss else 0 for i in range(0x4000))
+    return image, f'{name}={hi - MOD_BASE + 1}B/{bss - MOD_BASE}+{heap - dstart}B/{MOD_END - bss}'
 
 
 def main(boot_ihx, eng_ihx, eng_noi, out_path, *game_args):
@@ -145,7 +149,7 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path, *game_args):
         sys.exit('mkrom: ゲームモジュールは (ihx, noi) の組で渡す')
     for k in range(len(game_args) // 2):
         n = k + 1
-        img, info = check_module(f'stage{n}', game_args[k * 2], game_args[k * 2 + 1])
+        img, info = check_module(f'stage{n}', game_args[k * 2], game_args[k * 2 + 1], GAME_BSS)
         place(GAME_BANK(n), img, f'stage{n}')
         mods.append(info)
     sndimg, info = check_module('snd', snd_ihx, snd_noi)
@@ -163,6 +167,7 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path, *game_args):
     if len(voice) > MOD_BSS - MOD_BASE:
         sys.exit(f'mkrom: 声のモジュールが {len(voice)} B で、{MOD_BSS - MOD_BASE} B を超えた')
     rom[VOICE_BANK * BANK:VOICE_BANK * BANK + len(voice)] = voice
+    rom[VOICE_BANK * BANK + MOD_BSS - MOD_BASE:(VOICE_BANK + 2) * BANK] = bytes(MOD_END - MOD_BSS)   # 変数の所は 0(ほかのモジュールと同じ)
     mods.append(f'voice={len(voice)}B')
     title = open(title_bin, 'rb').read()
     if len(title) > 8 * BANK:

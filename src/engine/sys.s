@@ -33,7 +33,6 @@ SND_TICK = 0x8000		; 音のモジュールの入口(modhead_snd.s)
 SND_PLAY = 0x8003
 SND_STOP = 0x8006
 MOD_ADDR = 0x8000		; モジュールの先頭(0x8000: 入口の jp、0x8003: ゲームは Stage へのポインタ / 地形は 2 つ目の jp)
-MOD_BSS	= 0xBC00		; モジュールの変数(読み込んだら 0 で埋める)。〜0xBFFF
 ENVM_BUILD = MOD_ADDR		; 地形モジュールの入口(jp envm_build / jp envm_draw)
 ENVM_DRAW = MOD_ADDR + 3
 ENVM_SKY = MOD_ADDR + 6
@@ -521,33 +520,20 @@ _sys_install_loader::
 	ldir
 	ret
 
-; void rom_load(u8 bank)   A = 最初のバンク。bank と bank+1(16KB)を、いまページ2に出ているセグメントの 0x8000- へそのまま写す
-;   (モジュールでないデータ用。変数の所を 0 で埋めない。タイトルの絵)
-_rom_load::
-	push	af
-	call	_pcm_stop
-	pop	af
-	ld	hl, #0x4000
-	ld	(RL_LEN), hl
-	ld	de, #MOD_ADDR
-	jp	RL_ADDR
-
-; void mod_load(u8 bank)   A = 最初のバンク。bank と bank+1(16KB)を、いまページ2に出ているセグメントの 0x8000- へ写し、
-;   モジュールの変数(0xBC00-0xBFFF)を 0 で埋める
+; void mod_load(u8 bank) / void rom_load(u8 bank)   A = 最初のバンク。bank と bank+1(16KB)を、
+;   いまページ2に出ているセグメントの 0x8000- へそのまま写す。ページ0を BIOS に戻すので、先に声を止める。
+;   モジュールの変数の所(0xBC00-0xBFFF、ゲームモジュールは 0xBC80-0xBFFF)は ROM のイメージで 0 にしてある(tools/mkrom.py)。
+;   mod_load は読み込んだ後に 0xBC00- を 0 で埋めていたが、ゲームモジュールのコードが 0xBC7F まで延びたのでやめた。
+;   それで rom_load(モジュールでないデータ。タイトルの絵)と同じ処理になった
 _mod_load::
+_rom_load::
 	push	af
 	call	_pcm_stop		; ゲームモジュール(声のデータもここ)を上書きし、ページ0を BIOS に戻すので、声を止める
 	pop	af
 	ld	hl, #0x4000
 	ld	(RL_LEN), hl
 	ld	de, #MOD_ADDR
-	call	RL_ADDR
-	ld	hl, #MOD_BSS
-	ld	de, #MOD_BSS + 1
-	ld	bc, #0x03FF
-	ld	(hl), #0
-	ldir
-	ret
+	jp	RL_ADDR
 
 ; void bios_font(u8 *dst) — BIOS のフォント(CGTABL の指す 2KB。ひらがなを含む)を dst(ページ2・3)へ写す。
 ;   エンディングの SCREEN 1 で使う。写す間だけページ0を BIOS に戻す
