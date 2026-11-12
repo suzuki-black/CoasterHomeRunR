@@ -65,6 +65,8 @@
 #ifndef HAS_BRIDGE
 #define HAS_BRIDGE 0
 #endif
+#define HAS_SLOPE (HAS_PARK || HAS_FOREST)   /* レールに坂がある面(仮リングの中心が手前に無いときの床の投影 vring_floor。坂を足したらここにも足す) */
+#define HAS_STEEP HAS_FOREST  /* 床のある所に急な坂がある面(足もとの床を塗る near_floor。1 面の丘はなだらかで要らない) */
 #define HAS_SKY (HAS_PARK || HAS_BRIDGE || HAS_TOWN || HAS_HOME)   /* 空のスプライト(太陽・月・雲・鳥)を出す面(洞窟と森は出さない) */
 
 #define RSTEP 4            /* リングの間隔[m] */
@@ -77,13 +79,19 @@
 #define VR_D  38           /* 仮リングまでの距離(1/64m) */
 
 /* ステージ開始時に作る表。断面(一番大きい)はページ0の 0x2E00-0x3FFF(いつも見える)、色・飾り・種類は
- * 地形モジュール(セグメント 5)の中の 0xB600-0xBBFF(地形の処理からしか使わない)。
- * モジュールのコードは 0xB600 まで、ページ0の表とコード(_PAGE0)は 0x2E00 まで(tools/mkrom.py が検査する) */
+ * 地形モジュール(セグメント 5)の中の ENV_TAB-0xBBFF(地形の処理からしか使わない。リング 1 本 8 B)。
+ * モジュールのコードは ENV_TAB まで、ページ0の表とコード(_PAGE0)は 0x2E00 まで(tools/mkrom.py が検査する)。
+ * レールの短い面は表を後ろへ詰めて、コードの場所を広げる(4 面: 鉄橋の坂のレールを 3 次元で描く分。2026-11-12) */
+#if defined(ENV_S4)
+#define MAX_RINGS 108              /* 432m(4 面のレールは 420m で 107 本。tools/mkrom.py の ENV_CODE_LIMIT、tools/check_stages.py) */
+#else
 #define MAX_RINGS 192              /* 768m */
+#endif
+#define ENV_TAB (0xBC00 - MAX_RINGS * 8)              /* 192 本で 0xB600 */
 #define PROF   ((i16 *)0x2E00)    /* [リング][6 頂点][u, v] = 4608 B(ページ0) */
-#define TONE   ((u8 *)0xB600)     /* [リング][6 面] の基本の色(0 = 塗らない) = 1152 B */
-#define DECO   ((u8 *)0xBA80)     /* [リング] 飾りの印 */
-#define KIND   ((u8 *)0xBB40)     /* [リング] 地形の種類(〜0xBBFF。0xBC00 からはモジュールの変数) */
+#define TONE   ((u8 *)ENV_TAB)    /* [リング][6 面] の基本の色(0 = 塗らない) */
+#define DECO   ((u8 *)(ENV_TAB + MAX_RINGS * 6))      /* [リング] 飾りの印 */
+#define KIND   ((u8 *)(ENV_TAB + MAX_RINGS * 7))      /* [リング] 地形の種類(〜0xBBFF。0xBC00 からはモジュールの変数) */
 /* 飾りの印。LAMP / TIMBER は森では木の幹 / 葉の塊。
  * 町では LAMP_L / LAMP_R = 左 / 右の家の始まり(手前の妻壁)、ROCK_L / ROCK_R = 家の終わり、TIMBER = 自宅の正面 */
 enum { D_LAMP_L = 1, D_ROCK_L = 2, D_ROCK_R = 4, D_TIMBER = 8, D_LAMP_R = 16,
@@ -131,6 +139,9 @@ static i16 vprof[12];            /* 仮リングの断面(前後のリングか�
 extern u16 g_lerp_f;
 void prof_lerp(const i16 *a, i16 *dst);   /* geom.s */
 static u8  vr_f;                 /* 仮リングの位置: 区間(リング ring_no[VR] からその次まで)の中の 0..255 */
+#if HAS_BRIDGE
+static u16 vr_s;                 /* 仮リングのレール上の位置(1/64m。坂の鉄橋のレール rails3d) */
+#endif
 
 /* ---------------------------------------------------------------------------
  * ステージ開始時: 断面・色・飾りを乱数で作る
@@ -202,6 +213,12 @@ static u8 ab_j;                   /* アーチ橋の径間の中の位置(ring_b
 #define BRIDGEISH(k) ((k) == K_BRIDGE || (k) == K_ARCHBR)
 #endif
 static u8 rail_col;
+#if HAS_FOREST
+static i16 stream_y;              /* 小川の水面の高さ(橋のたもとのレールの高さ。ring_build) */
+#endif
+#if HAS_LAKE
+static i16 lake_y;                /* 湖面の高さ(レールの一番低い所。ring_build) */
+#endif
 static u8 nk;                     /* 地形を作っているリングの次のリングの種類(envm_build) */
 
 /* 地形 kind のリング r の断面・色・飾りを作る。w / h は幅と高さのゆっくりした変化(256 = 基本) */
@@ -487,6 +504,29 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         d = D_OPEN | D_NORAIL | D_EMPTY;
         break;
     }
+#if HAS_FOREST
+    /* 小川の水面も世界の中で平ら: 丸太の橋が持ち上がる所(3 面の 196〜208m の太鼓橋)は、左右の水面の外の縁(岸の足もと)を
+     * 橋のたもとの高さから上がった分だけ下げる(水面は橋の縁から岸へ下っていき、岸の面が水面まで伸びる) */
+    if (kind == K_STREAM) {
+        i16 dv;
+        if (!r || KIND[r - 1] != K_STREAM) stream_y = RAIL_PT((u16)r * RSTEP)->y;
+        dv = RAIL_PT((u16)r * RSTEP)->y - stream_y;
+        p[5] -= dv;
+        p[11] -= dv;
+    }
+#endif
+#if HAS_LAKE
+    /* 湖面は世界の中で平ら: レールが湖面より上にあるリング(2 面の 28〜36m、岩棚から筏へ落ちる所)は、床(水面)を
+     * その高さの分だけ下げる(壁は水面まで伸びる)。断面の v はレールの点からの高さ(8.8 m)、レールの y も 1/256m */
+    if (LAKEISH(kind)) {
+        u16 m = (u16)r * RSTEP;
+        i16 dv;
+        if (m >= rail_len) m = rail_len - RAIL_STEP;
+        dv = RAIL_PT(m)->y - lake_y;
+        p[7] -= dv;
+        p[9] -= dv;
+    }
+#endif
     DECO[r] = d;
     KIND[r] = kind;
 }
@@ -516,6 +556,13 @@ void envm_build(void)
 #endif
     n = (u8)(rail_len / RSTEP + 2);
     if (n > MAX_RINGS) n = MAX_RINGS;
+#if HAS_LAKE
+    {
+        const RailPt *q = rail, *e = &rail[rail_len >> 1];
+        lake_y = q->y;
+        for (; q < e; q++) if (q->y < lake_y) lake_y = q->y;
+    }
+#endif
     for (r = 0; r < n; r++) {
         while (r >= zones[0]) zones += 2;
         kind = zones[1];
@@ -621,6 +668,25 @@ static u8 vring_near(void)
     return 1;
 }
 
+/* 仮リングの中心(レール点。目の 0.7m 上)は 0.6m 先にあるので、下り坂でカメラが下を向くと手前の面(0.5m)より近くなり、
+ * ring_c の q が 0(手前に無い)になって、手前の区間のレールと枕木を描かなかった(2026-11-10 1 面の丘の下りで見つけた)。
+ * そのときは目より下にある床の中心(レールの高さ)を投影し、床の高さの飾りがそこに来るように中心と q を置き直す */
+#define FLOOR_V (-333)            /* 床(レールと枕木)の高さ。リング面の v */
+extern i16 p_q;                   /* 直前の投影の 2^23 / z(raster.s の project2) */
+extern u8 g_rp_last;              /* rpt_a が覚えているリング(0xFF = なし。raster.s) */
+#if HAS_SLOPE
+static void vring_floor(u16 sv)
+{
+    V3 p;
+    rail_cam(sv, 0, FLOOR_V, &p);
+    if (p.z < NEAR_Z) return;
+    project2(&p, ring_c[VR]);
+    ring_c[VR][1] += fmul(FLOOR_V, (u16)p_q >> 6);   /* rpt_a の y = 中心 - v * q >> 14 が床で p の位置に来るように(32 ビットの掛け算を避ける) */
+    ring_c[VR][2] = p_q;
+    g_rp_last = 0xFF;
+}
+#endif
+
 static u8 vring_make(u16 sv)
 {
     V3 p;
@@ -633,13 +699,45 @@ static u8 vring_make(u16 sv)
     g_lerp_f = f;
     prof_lerp(&PROF[no * 12], vprof);            /* vprof = a + (b - a) * f >> 8(a = このリング、b = 次のリングの断面) */
     vr_f = (u8)f;
+#if HAS_BRIDGE
+    vr_s = sv;
+#endif
     rail_at(sv, &p, &rp.yaw);
     rp.x = p.x; rp.y = p.y; rp.z = p.z;
     ring_no[VR] = no;
     g_rm_prof = vprof;
     ring_make(VR, &rp);
+#if HAS_SLOPE
+    if (!ring_c[VR][2]) vring_floor(sv);
+#endif
     return ring_front[VR] == 0x3F || vring_near();
 }
+
+#if HAS_STEEP
+/* 急な坂の足もと: 断面はいつも鉛直に立てているので、坂がきついほど目から床までの(床に垂直な)距離が縮む(56 度で 0.34m)。
+ * 床は手前の面(0.5m)で切られ、それより下の行(床に 0.5m より近い所で当たる行)はどの面も塗らず、空の色が見えていた
+ * (2026-11-12 3 面の根の山で見つけた)。そこは床なので、空と地面を塗った後で、床の中心線が手前の面を横切る行から下を
+ * 床の色で塗る(後から描く物は上に重なる)。前だけか後ろだけを見ているときに、カメラの前後 2m の床の点から求める */
+static void near_floor(u16 s, u8 tone)
+{
+    V3 a, b, t;
+    i16 o[2];
+    u8 row;
+    rail_cam(s >= 128 ? s - 128 : 0, 0, FLOOR_V, &a);
+    rail_cam(s + 128 <= rail_s_max() ? s + 128 : rail_s_max(), 0, FLOOR_V, &b);
+    if (a.z > b.z) { t = a; a = b; b = t; }
+    if (a.z >= NEAR_Z || b.z < NEAR_Z) return;
+    t.x = 0;
+    t.y = a.y + muldiv(b.y - a.y, NEAR_Z - a.z, b.z - a.z);
+    t.z = NEAR_Z;
+    project2(&t, o);
+    if (o[1] < 0) o[1] = 0;
+    row = (u8)((o[1] + 15) >> 4);
+    if (row >= GAME_ROWS) return;
+    g_rh = GAME_ROWS - row;
+    buf_fill_rows(tone, row);
+}
+#endif
 
 /* ---------------------------------------------------------------------------
  * リング面の 2D の形: 中心 + (u, v) * q(raster.s の rpt_a / rquad_a)
@@ -657,10 +755,8 @@ void rp_setdir(u8 u_neg);
 #define RQUAD(idx, u0, u1, v0, v1, color) \
     do { g_qu0 = (u0); g_qu1 = (u1); g_qv0 = (v0); g_qv1 = (v1); g_color = (color); rquad_a(idx); } while (0)
 
-#define FLOOR_V (-333)
-
 #if HAS_BRIDGE
-static u8 br_long;                /* 1 = 鉄橋のレールを区間ごとでなく bridge_rails で 1 枚に描く(前か後ろだけを見ていて、仮リングが鉄橋) */
+static u8 br_long;                /* 1 = 鉄橋のレールを区間ごとでなく bridge_rails で 1 枚に描く(前か後ろだけを見ていて、仮リングが鉄橋で、坂でない) */
 
 /* 床の無い鉄橋の、区間の途中の枕木 2 本(約 1.3m ごと)。リング a・b の枕木の両端を画面で 3 等分した位置に 1 行の横線で描く
  * (遠近で少し奥に寄るが、細いので目立たない) */
@@ -688,10 +784,56 @@ static void ties_mid(u8 a, u8 b)
 }
 #endif
 
+#if HAS_BRIDGE
+/* 坂の鉄橋のレール・枕木・欄干(カメラが傾いているとき)。リング面が画面に正対しているとみなす 2 次元の近似(RPT)は、
+ * カメラが大きく傾くと床の高さの点をずっと遠く・小さく出し、手前のレールが消えて見えた(2026-11-12 4 面のアーチ橋)。
+ * 区間の両端で床の中心と横 1m の点を 3 次元で求め(rail_cam。区間に 4 回)、区間の中の点はそこから足して求め、
+ * 手前の面で切って塗る(poly3)。鉄橋は曲がらないので、横の向きは区間の手前の端のものを使う */
+static u8 r3_near;                                 /* 1 = 手前 8m の区間(3 次元で描くのはここだけ。その先は 2 次元の近似でも外れが小さい) */
+static i16 r3_c[3], r3_d[3], r3_l[3];               /* 区間の手前の端の床の中心、奥の端までの差、横 1m(カメラ空間) */
+static void r3_pt(i16 t, i16 u, i16 v, V3 *o)     /* t: 区間の中の位置(0..256)、u: 右へ、v: 床から上へ(8.8 m) */
+{
+    u8 i;
+    i16 *w = &o->x;
+    for (i = 0; i < 3; i++) w[i] = r3_c[i] + fmul(r3_d[i], t) + fmul(r3_l[i], u);
+    o->y += v;
+}
+/* 塗る四角形: 区間の中の位置 t0..t1(0..256)、横 u0..u1、床からの高さ v(8.8 m)、色。欄干の縁 2 本(海の上だと分かるように)、
+ * 枕木 3 本(平らな所と同じく区間に 3 本)、レール 2 本の順(後のものが上) */
+static const i16 R3_Q[7][6] = {
+    { 0, 256, -BR_U, -BR_U + 24, 115, C_DIRT0 }, { 0, 256, BR_U - 24, BR_U, 115, C_DIRT0 },
+    { 0, 10, -180, 180, 0, C_WOOD }, { 85, 95, -180, 180, 0, C_WOOD }, { 170, 180, -180, 180, 0, C_WOOD },
+    { 0, 256, -128, -102, 0, 10 }, { 0, 256, 102, 128, 0, 10 },   /* レールの色はどの面も 10(ステージの zones の先頭) */
+};
+static u16 ring_s64(u8 idx)                       /* リングのレール上の位置(1/64m) */
+{
+    return idx == VR ? vr_s : (u16)ring_no[idx] * (RSTEP * 64);
+}
+static void rails3d(u8 a, u8 b)
+{
+    u8 k;
+    u16 s0 = ring_s64(a);
+    rail_cam(s0, 0, FLOOR_V, (V3 *)r3_c);
+    rail_cam(ring_s64(b), 0, FLOOR_V, (V3 *)r3_d);
+    rail_cam(s0, 256, FLOOR_V, (V3 *)r3_l);
+    for (k = 0; k < 3; k++) { r3_d[k] -= r3_c[k]; r3_l[k] -= r3_c[k]; }
+    for (k = 0; k < 7; k++) {
+        const i16 *e = R3_Q[k];
+        V3 q[4];
+        u8 j;
+        for (j = 0; j < 4; j++) r3_pt(e[j >> 1], e[((j + 1) & 2) ? 3 : 2], e[4], &q[j]);   /* (t0,u0) (t0,u1) (t1,u1) (t1,u0) */
+        poly3(q, 4, (u8)e[5]);
+    }
+}
+#endif
+
 /* 区間(リング a → b)の床のレール 2 本と枕木 */
 static void rails_draw(u8 a, u8 b)
 {
     u8 side;
+#if HAS_BRIDGE
+    if (cam_pitch && r3_near && BRIDGEISH(KIND[ring_no[a < b ? a : b]])) { rails3d(a, b); return; }
+#endif
     if (!ring_c[a][2] || !ring_c[b][2]) return;
     if (DECO[ring_no[a < b ? a : b]] & D_NORAIL) return;
     /* 枕木(区間の手前のリングの面に、横長の板) */
@@ -1636,7 +1778,12 @@ static void band_draw(u8 a, u8 b, u8 dist)
             }
         }
     }
-    if (dist < 3) rails_draw(a, b);
+    if (dist < 3) {
+#if HAS_BRIDGE
+        r3_near = dist < 2;
+#endif
+        rails_draw(a, b);
+    }
     /* トラスの斜材は 8m まで(その先は細くて目立たない。縦材・頭上の梁・上弦材は遠くまで描く。12m までにすると 1 フレーム約 2ms 重い) */
 #if HAS_BRIDGE
     if (dist < 2 && KIND[na] == K_BRIDGE && fa == 0x3F && fb == 0x3F) truss_draw(a, b);
@@ -1756,6 +1903,9 @@ static const u8 coast[][3] = { { 0, 15, 1 }, { 3, 7, 2 }, { 41, 23, 1 }, { 49, 1
  * (stage4_bridge.c の最後の周回の終わり 368m)から 70m より離して置く(戻ったときに灯台が現れたり消えたりしないように)。
  * レール(420m まで)の先にあるので、最後の周回を抜けると遠くに見えてくる */
 #define LH_M (440 * 4)
+/* 灯台の足もと(海面)の、レールの終わりの点からの高さ。海面はレールの高さ 0 の 12m 下、レールの終わりは 10.5m 下
+ * (stage4_bridge.c の最後で海面すれすれまで落ちる)。灯台はレールの終わりより先なので、終わりの点からの高さで渡す */
+#define LH_UP (-(12 * 256) + (21 * 128))
 extern i16 p_q;                   /* 直前の投影の 2^23 / z(raster.s の project2) */
 static void lighthouse(u16 m)
 {
@@ -1765,7 +1915,7 @@ static void lighthouse(u16 m)
     i16 sc[2], inv, row, c, w, h, x;
     u8 on = (u8)(g_tick >> 4) & 1;
     if ((u16)(m - (LH_M - 280)) > 560) return;                      /* レールの向きに 70m より遠い(投影しない) */
-    rail_cam(LH_M * 16, -22 * 256, -12 * 256, &p);
+    rail_cam(LH_M * 16, -22 * 256, LH_UP, &p);
     if (p.z < 6 * 256) return;                                       /* 6m より近い(後ろも) */
     project2(&p, sc);
     inv = (i16)(p_q >> 4);                                           /* 2048 / 奥行き[m](1m が inv / 64 ブロック) */
@@ -1802,6 +1952,8 @@ static void harbor(u16 m)
     clip_rect(c + 55, sky_row - 4 - k, 6, 1, C_DIRT0);
 }
 
+/* 目から海面までの深さ H[m] の 4 倍(truss.s の sea_dots が毎フレーム求める。12m で 48)。白波・小舟の行の係数 */
+extern u16 g_sea_k;
 static void sea_waves(u16 s, u8 back)
 {
     u8 i;
@@ -1824,7 +1976,7 @@ static void sea_waves(u16 s, u8 back)
     for (i = 0; i < 2; i++) {
         u8 zi = (u8)(back ? m - (i * 101 + 40) : i * 101 + 40 - m);
         i16 inv = (i16)wave_inv[zi];
-        i16 row = sky_row + ((48 * inv) >> 8);
+        i16 row = sky_row + muldiv(g_sea_k, inv, 256);
         i16 col = ((40 + i * 24) * inv) >> 8;            /* 左右 10m・16m */
         i16 w = (24 * inv) >> 8;                         /* 6m */
         if (w < 2) w = 2;
@@ -2258,6 +2410,12 @@ void envm_draw(u16 s, u16 look16)
             if (!capped) buf_fill(C_BLACK);
         }
     }
+#if HAS_STEEP
+    if (fwd != back) {
+        u8 tone = TONE[(u8)((s >> 6) / RSTEP) * 6 + 3];   /* 床の面の色(0 = 床の無い所: 遊園地の高架・宙) */
+        if (tone) near_floor(s, tone);
+    }
+#endif
 
     if (fwd && !back) {
         u16 sv = s + VR_D;
@@ -2282,7 +2440,7 @@ void envm_draw(u16 s, u16 look16)
         vok = vring_make(sv);
         if (!vok) ring_late();
 #if HAS_BRIDGE
-        br_long = vok && BRIDGEISH(KIND[ring_no[VR]]);
+        br_long = vok && !cam_pitch && BRIDGEISH(KIND[ring_no[VR]]);   /* 坂(カメラが傾いている)では鉄橋がまっすぐでないので区間ごと */
 #endif
         for (k = kn - 1; k >= rn; k--) {
             if (k == NF - 1 && kn == NF && k - 1 >= rn && merge_ok(NF - 2)) {
@@ -2330,7 +2488,7 @@ void envm_draw(u16 s, u16 look16)
         vok = vring_make(sv);
         if (!vok) ring_late();
 #if HAS_BRIDGE
-        br_long = vok && BRIDGEISH(KIND[ring_no[VR]]);
+        br_long = vok && !cam_pitch && BRIDGEISH(KIND[ring_no[VR]]);   /* 坂(カメラが傾いている)では鉄橋がまっすぐでないので区間ごと */
 #endif
         for (k = kn; k < rn; k++) {
             if (k == -lb && kn == -lb && k + 2 <= rn && merge_ok(-lb)) {

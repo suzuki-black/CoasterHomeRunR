@@ -41,7 +41,10 @@ def ENV_BANK(n): return 4 if n == 1 else 14 + 2 * n     # game.h の ENV_BANK
 def GAME_BANK(n): return 4 + 2 * n
 P0D_BASE, P0D_LIMIT = 0x1A00, 0x2E00   # ページ0の表とコード(0x0200-0x19FF は辺キャッシュ、0x2E00-0x3FFF は地形の断面の表)
 P0D_STAGE = 0x1800                      # 読み込みは 0xB400-0xCBFF 経由なので 6KB まで
-ENV_CODE_LIMIT = 0xB600                 # 地形モジュールのコード(0xB600-0xBBFF は地形の色・飾り・種類の表)
+def ENV_CODE_LIMIT(n):                  # 地形モジュールのコードの終わり(その先 0xBBFF までは地形の色・飾り・種類の表。リング 1 本 8 B)
+    return 0xBC00 - ENV_MAX_RINGS(n) * 8
+def ENV_MAX_RINGS(n):                   # env.c の MAX_RINGS(4 面はレールが短いので表を詰めてコードの場所を広げた)
+    return 108 if n == 4 else 192
 SONG_BASE = 0x8B40                      # 音のモジュールの曲の表(tools/gen_music.py の BASE、sndfm.s の SONG_TAB)
 
 
@@ -143,10 +146,10 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path, *game_args):
         env_ihx, env_noi = env_args[k * 2], env_args[k * 2 + 1]
         envimg, info = check_module(f'env{n}', env_ihx, env_noi)
         env_hi = max(a for a in read_ihx(env_ihx))
-        if env_hi >= ENV_CODE_LIMIT:
-            sys.exit(f'mkrom: ステージ {n} の地形モジュールのコードが 0x{ENV_CODE_LIMIT:04X}(地形の表)に食い込んだ: 0x{env_hi:04X}')
+        if env_hi >= ENV_CODE_LIMIT(n):
+            sys.exit(f'mkrom: ステージ {n} の地形モジュールのコードが 0x{ENV_CODE_LIMIT(n):04X}(地形の表)に食い込んだ: 0x{env_hi:04X}')
         place(ENV_BANK(n), envimg, f'env{n}')
-        mods.append(f'env{n}={env_hi - MOD_BASE + 1}B/{ENV_CODE_LIMIT - MOD_BASE}')
+        mods.append(f'env{n}={env_hi - MOD_BASE + 1}B/{ENV_CODE_LIMIT(n) - MOD_BASE}')
     snd_ihx, snd_noi, songs_bin, voice_bin, title_bin, scene_ihx, scene_noi = game_args[-7:]
     game_args = game_args[:-7]
     if len(game_args) % 2:

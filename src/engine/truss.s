@@ -9,7 +9,7 @@
 	.r800
 	.include "r800.inc"
 
-	.globl	_pset, _g_rx, _g_ry, _g_color
+	.globl	_pset, _g_rx, _g_ry, _g_color, _cam_y
 
 GAME_ROWS = 46
 C_WAVE	= 14			; 白波の色(env.c の C_DIRT1)
@@ -19,6 +19,7 @@ _wave_inv::	.ds	2 * 256	; 8192 / (24 + i)(白波の奥行き(1/4m)の逆数。en
 _sw_m::		.ds	1	; 白波の奥行きの進み(1/4m の下位 8 ビット。前を見ているときは負)
 _sw_back::	.ds	1	; 1 = 後ろを見ている(同じ白波が、奥行きと左右を反転して見える)
 _sw_row::	.ds	1	; 地平線の行
+_g_sea_k::	.ds	2	; 4 × 目から海面までの深さ[m](env.c の sea_waves が毎フレーム書く。12m で 48)
 sd_i:		.ds	1
 sd_zi:		.ds	1
 sd_s:		.ds	1
@@ -176,6 +177,19 @@ _truss_pt::
 ;   C で書くと 1 個 約 80µs かかっていた(1 フレーム 20 個)
 ; ---------------------------------------------------------------------------
 _sea_dots::
+	; 目から海面までの深さ: 海面はレールの高さ 0(鉄橋の始まり)の 12m 下。g_sea_k = 4H = 48 + (目の高さ + 0.7m) / 64
+	; (目の高さは 1/256m。0.7m = 179 は目がレールより下にある分。game.c の EYE_DROP)。4 面のレールは -10.5m〜+21m なので
+	; g_sea_k は 6〜132(海面すれすれで 1.5m)。小舟(env.c の sea_waves)も、この後でこの値を使う
+	ld	hl, (_cam_y)
+	ld	de, #179
+	add	hl, de
+	add	hl, hl
+	add	hl, hl
+	ld	a, h
+	add	a, #48
+	ld	(_g_sea_k), a
+	xor	a, a
+	ld	(_g_sea_k + 1), a
 	ld	a, #C_WAVE
 	ld	(_g_color), a
 	xor	a, a
@@ -203,7 +217,7 @@ sd_loop:
 	ld	h, (hl)
 	ld	l, a
 	ld	(sd_inv), hl
-	ld	bc, #48			; 行 = 地平線 + 48 * inv / 256(12m × 32 ブロック / 奥行き)
+	ld	bc, (_g_sea_k)		; 行 = 地平線 + 4H * inv / 256(深さ H[m] × 32 ブロック / 奥行き。H = 12m で 48)
 	MULUW_HL_BC
 	ld	a, e
 	or	a, a

@@ -6,11 +6,14 @@
 #include "rail.h"
 #include "game.h"
 #include "env.h"
+#include "fx.h"
 
 u16 rail_len;                    /* 長さ[m](点の数 × 2) */
 /* 次に置く点の番号と、そのときの向き・位置(geom.s。rail_add がそこで使う) */
 extern u16 rb_n, rb_yaw;
 extern i16 rb_x, rb_y, rb_z;
+static const RailSeg *alt_segs;  /* 合流の側をまだ入れていない、選ばれていない側の区間(0 = 無い・入れた) */
+u16 g_alt_m;
 static u16 fk_n, fk_yaw;         /* 分岐点の状態 */
 static i16 fk_x, fk_y, fk_z;
 
@@ -19,6 +22,7 @@ void rail_begin(void)
     rb_n = 0; rb_yaw = 0;
     rb_x = rb_y = rb_z = 0;
     rail_len = 0;
+    alt_segs = 0;
 }
 
 /* rail_add は geom.s(アセンブラ。C だと分岐を選んだフレームで約 190 点を作り直すのに 13ms かかっていた) */
@@ -34,26 +38,59 @@ u16 rail_fork_m(void)
     return fk_n << 1;
 }
 
-/* 分岐点から branch をたどった点を out へ最大 max 個(2m ごと)。選ばれていない側の線路を描くのに使う */
-u8 rail_sample(const RailSeg *segs, RailPt *out, u8 max)
+/* 選ばれていない側の線路の点(2m ごと)。分岐点から segs をたどり、k 番目の点(分岐点が 0)を out[k - base] に入れる
+ * (base から max 個)。最後の点は合流点。戻り値は入れた個数 */
+static u8 alt_walk(const RailSeg *segs, RailPt *out, u8 max, u8 base)
 {
-    u8 i, steps, n = 0;
+    u8 i = 0, steps = 0, k = 0, j, n = 0;
+    i16 dyaw = 0;
+    i8 dy = 0;
     u16 yaw = fk_yaw;
     i16 x = fk_x, y = fk_y, z = fk_z;
-    for (; segs->len && n < max; segs++) {
-        i16 dyaw;
-        steps = segs->len >> 1;
-        dyaw = segs->dyaw / steps;
-        for (i = 0; i < steps && n < max; i++) {
-            out[n].x = x; out[n].y = y; out[n].z = z; out[n].yaw = yaw;
+    for (;;) {
+        j = k - base;
+        if (k >= base) {
+            if (j >= max) break;
+            out[j].x = x; out[j].y = y; out[j].z = z; out[j].yaw = yaw;
             n++;
-            yaw += dyaw;
-            x += SIN(yaw >> 8) << 1;
-            z += COS(yaw >> 8) << 1;
-            y += (i16)segs->dy << 5;
         }
+        if (i == steps) {                /* 次の区間へ */
+            if (!segs->len) break;
+            steps = segs->len >> 1;
+            dyaw = segs->dyaw / steps;
+            dy = segs->dy;
+            segs++;
+            i = 0;
+        }
+        i++;
+        k++;
+        yaw += dyaw;
+        x += SIN(yaw >> 8) << 1;
+        z += COS(yaw >> 8) << 1;
+        y += (i16)dy << 5;
     }
     return n;
+}
+
+
+u8 rail_sample(const RailSeg *segs, RailPt *out, u8 max)
+{
+    alt_segs = segs;
+    g_alt_m = fk_n << 1;
+    return alt_walk(segs, out, max, 0);
+}
+
+/* 合流してくる線路: 分岐点を 30m 過ぎたら(分岐の側の線路は描き終えている)、合流点の手前 2m × (ALT_DRAW_N - 1) から
+ * 合流点までを入れる。点の並びは分岐の側と同じく、奥(合流点)へ向かう順 */
+void rail_alt_merge(void)
+{
+    const RailSeg *s;
+    u8 last = 0;
+    if (!alt_segs || cam_s < (u16)(g_alt_m + 30) << 6) return;
+    for (s = alt_segs; s->len; s++) last += s->len >> 1;     /* 合流点の番号 */
+    g_alt_m += last << 1;
+    g_alt_n = alt_walk(alt_segs, g_alt, ALT_DRAW_N, last + 1 - ALT_DRAW_N);
+    alt_segs = 0;
 }
 
 void rail_refork(const RailSeg *branch, const RailSeg *tail)

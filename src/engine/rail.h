@@ -20,7 +20,7 @@ typedef struct { i16 x, y, z; u16 yaw; } RailPt;
 #define RAIL_STEP 2
 #define RAIL_MAX 400                                /* 800m */
 #define rail     ((RailPt *)0xE100)                 /* 8 × 400 = 3200 B */
-#define rail_spd ((u8 *)(0xE100 + 8 * RAIL_MAX))     /* 400 B → 0xEF0F まで */
+#define rail_spd ((u8 *)(0xE100 + 8 * RAIL_MAX))     /* 400 B → 0xEF0F まで。0xEF10-0xEFFF は音のモジュールの変数(Makefile の SNDMODFLAGS) */
 #define RAIL_PT(m) (&rail[(m) >> 1])                /* レール上の位置 m[m](偶数)の点 */
 extern u16    rail_len;        /* 長さ[m] */
 
@@ -31,8 +31,11 @@ void rail_add(const RailSeg *segs);
 void rail_fork(void);
 u16  rail_fork_m(void);        /* 分岐点の位置[m] */
 void rail_refork(const RailSeg *branch, const RailSeg *tail);
-/* 分岐点から segs をたどった点を out へ最大 max 個(2m ごと)。戻り値は個数 */
+/* 分岐点から segs をたどった点を out へ最大 max 個(2m ごと)。戻り値は個数。g_alt_m を分岐点にし、segs を合流の側のために覚える */
 u8   rail_sample(const RailSeg *segs, RailPt *out, u8 max);
+/* 分岐点を 30m 過ぎたら、選ばれていない側の線路(g_alt)を合流点の手前の点に入れ替え、g_alt_m を合流点にする(1 回だけ) */
+void rail_alt_merge(void);
+extern u16 g_alt_m;            /* g_alt の線路を描く基準の位置[m](分岐点か合流点) */
 /* 位置 s の点(ワールド)と向き。s は末尾で止める */
 void rail_at(u16 s, V3 *p, u16 *yaw);
 /* 位置 s から右へ lat、上へ up(8.8 m)の点をカメラ空間へ */

@@ -25,6 +25,7 @@ LOOP_K = 6
 RING = 4
 RAIL_MAX_M = 800
 MAX_RINGS = 192
+MAX_RINGS_STAGE = {'stage4_bridge.c': 108}   # env.c の MAX_RINGS(4 面は表を詰めた)
 
 
 def preprocess(path):
@@ -110,8 +111,9 @@ def main():
                 if r < zones[i]:
                     return zones[i + 1]
             return zones[-1]
-        if nrings > MAX_RINGS:
-            err(f'リングが {nrings} 本(最大 {MAX_RINGS})')
+        mr = MAX_RINGS_STAGE.get(path.name, MAX_RINGS)
+        if nrings > mr:
+            err(f'リングが {nrings} 本(最大 {mr})')
         # 周回区間
         lname = next((n for n in names if n.endswith('_loops')), None)
         loops = []

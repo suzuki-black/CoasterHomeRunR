@@ -990,7 +990,9 @@ void alt_draw(void)
     AltP mm[2];
     const RailPt *rp;
     const V3 *cv;
-    u16 f = rail_fork_m() << 6;
+    u16 f;
+    rail_alt_merge();                                /* 分岐点を過ぎたら、合流してくる側の線路に入れ替える */
+    f = g_alt_m << 6;
     if (!g_alt_n || cam_s + M(40) < f || cam_s > f + M(30)) return;
     g_al_fy = FLOOR_Y;
     g_al_dv = 0;                                     /* カメラが変わったので、横の向きを求め直させる */
