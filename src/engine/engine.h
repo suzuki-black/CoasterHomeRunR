@@ -60,6 +60,7 @@ void vdp_init(void);                /* SCREEN 3 を作り直す(場面のモジ�
 void ending_show(void);             /* エンドロール(scene.c。曲は g_end_bgm) */
 void gameover_show(void);           /* ゲームオーバー(scene.c) */
 u8   continue_ask(void);            /* 耐久が 0 になったときの CONTINUE?(scene.c)。続けるなら 1 */
+u8   rank_show(void);               /* ランキング(scene.c)を約 6 秒。スペースで 1 */
 void config_show(void);             /* 隠しコンフィグ(scene.c) */
 void title_show(void);              /* タイトルの絵(SCREEN 11)を出す(main.c) */
 void title_blink(u8 on);            /* タイトルの PUSH SPACE KEY を出す・消す(表示するページを替える) */

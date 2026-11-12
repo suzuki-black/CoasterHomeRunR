@@ -25,9 +25,6 @@ static const u8 se_alarm[] = {          /* 警告: 高い音 2 発 */
 static const u8 se_kill[] = {           /* 敵を倒す: 短い「ばごん」(大きく低いノイズと、下がっていく低い音程。約 0.2 秒) */
     0x00, 6, 15, 31,  0x80, 6, 15, 31,  0x00, 7, 14, 31,  0x80, 7, 12, 31,  0x00, 8, 11, 31,  0x80, 8, 9, 30,
     0x00, 9, 8, 28,   0x80, 9, 6, 28,   0x00, 10, 5, 28,  0x80, 10, 3, 28,  0x00, 11, 2, 28,  0, 0, 0xFF, 0 };
-static const u8 se_train[] = {
-    0x00, 8, 15, 31,  0x00, 8, 15, 31,  0x00, 9, 14, 31,  0x00, 9, 13, 31,
-    0x00, 10, 12, 31,  0x00, 10, 10, 31,  0x00, 11, 8, 31,  0x00, 11, 5, 31,  0, 0, 0xFF, 0 };
 static const u8 se_damage[] = {         /* 被弾: 重い「ドゴン」(とても低い音程と一番低いノイズを 2 段で。約 0.27 秒) */
     0x00, 8, 15, 31,  0x80, 8, 15, 31,  0x00, 9, 13, 31,  0x80, 9, 10, 31,  0x00, 10, 8, 31,
     0x00, 12, 15, 31, 0x80, 12, 14, 31, 0x00, 13, 13, 31, 0x80, 13, 11, 31, 0x00, 14, 9, 31,
@@ -50,8 +47,30 @@ static const u8 se_boss[] = {           /* ボスを倒す: 派手な「ばご�
 static const u8 se_tally[] = {          /* ステージクリアの加算: 短い「ピッ」(連打して「とぅるるる」) */
     0x50, 0, 11, 0xFF,  0x50, 0, 7, 0xFF,  0, 0, 0xFF, 0 };
 
+/* 着地の PSG: トーンなしの中くらいのノイズを長く(「ザザーッ」。被弾の「ドゴン」は低いトーンと一番低いノイズなので、聞き分けられるように) */
+static const u8 se_land[] = {
+    0, 0, 15, 8,  0, 0, 15, 10,  0, 0, 14, 12,  0, 0, 13, 14,  0, 0, 12, 16,  0, 0, 11, 18,  0, 0, 10, 20,
+    0, 0, 9, 22,  0, 0, 7, 24,  0, 0, 5, 26,  0, 0, 3, 28,  0, 0, 1, 30,  0, 0, 0xFF, 0 };
+static const u8 se_jolt[] = {           /* ガコン: 短く硬いノイズ */
+    0, 0, 14, 4,  0, 0, 11, 6,  0, 0, 7, 8,  0, 0, 3, 10,  0, 0, 0xFF, 0 };
+
 static const u8 * const se_tab[SE_COUNT] = {
-    0, se_heal, se_shot, se_hit, se_alarm, se_kill, se_train, se_damage, se_lock, se_tally, se_boss };
+    0, se_heal, se_shot, se_hit, se_alarm, se_kill, 0, se_damage, se_lock, se_tally, se_boss,
+    0, se_land, se_jolt };
+
+/* FM の効果音(sndfm.s の fm_se_tick。段の形はそこに)。音程は F ナンバー >> 1 とブロック: 周波数 = F × 49716 / 2^(19 - ブロック) */
+static const u8 se_fm_fall[] = {         /* 落下: 「バキッ」(スネアとシンバル)から、フルートの「ヒューーッ」が下がっていく。
+                                            着地(SE_LAND)が来たところで切れるので、宙にいる時間だけ鳴る(最長 4.3 秒で 2.5 オクターブ下がる) */
+    4,   0x0F, 0, 0,    0, 0, 0,  0x0A,
+    255, 0x40, 0, 0xA4, 6, 7, 0,  0,
+    0 };
+static const u8 se_fm_land[] = {         /* 着地: 「ドシャーン」(バスドラムとシンバル、低いピアノが下がる) */
+    50,  0x30, 0, 0xAB, 1, 6, 3,  0x12,
+    0 };
+static const u8 se_fm_jolt[] = {         /* ガコン: バスドラムとタム、低いベースが短く下がる */
+    14,  0xE0, 0, 0xD8, 1, 5, 1,  0x14,
+    0 };
+static const u8 * const se_fm[SE_COUNT - SE_FALL] = { se_fm_fall, se_fm_land, se_fm_jolt };
 
 extern const u8 g_se_pri[SE_COUNT];      /* 常駐部(sound.c) */
 extern volatile u8 g_se_req;
@@ -60,6 +79,8 @@ extern volatile u8 g_se_req;
 void fm_bgm_tick(void);
 void fm_play(u8 song);
 void fm_stop(void);
+void fm_se_start(const u8 *p);
+void fm_se_tick(void);
 extern const u8 *g_psg_top;              /* 曲の PSG のパート(無ければ 0)。fm_play が見出しから読む */
 u8 g_drm;                                /* このティックに FM のリズムが打った音(bit3 スネア、bit1 シンバル、bit0 ハイハット) */
 u8 g_hha;                                /* 曲のリズムの音量 0x37 の値(上位 4 ビット = ハイハットの減衰。sndfm.s が書く) */
@@ -169,11 +190,13 @@ void sndm_tick(void)
     if (pa_on) mix &= ~0x01;
     if (req) {
         g_se_req = 0;
-        if (!se_ptr || g_se_pri[req] >= g_se_pri[se_cur]) {
+        if (se_tab[req] && (!se_ptr || g_se_pri[req] >= g_se_pri[se_cur])) {
             se_ptr = se_tab[req];
             se_cur = req;
         }
+        if (req >= SE_FALL) fm_se_start(se_fm[req - SE_FALL]);
     }
+    fm_se_tick();                        /* FM の効果音(リズムを打ったら g_drm に入る。下のドラムが同じティックに重ねる) */
     if (se_ptr) {
         if (se_ptr[2] == 0xFF) {
             psg_write(10, 0);

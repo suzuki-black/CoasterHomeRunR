@@ -19,6 +19,7 @@
 
 モジュール(オーバーレイ、仕様書 7.3)はどれも 0x8000-0xBBFF にコードと定数、0xBC00-0xBFFF に変数(初期値つきの変数は置けない)。
 ゲームモジュールだけは 0x8000-0xBC7F がコードと定数、0xBC80-0xBFFF が変数(GAME_BSS)。
+音のモジュールは 0x8000-0xBFFF がすべてコードと曲。変数はページ3 の 0xEF10-0xEFFF(SND_VARS。起動時に main.c が 0 にする)。
 変数の所は ROM のイメージで 0 にしておく(16KB をそのまま写すので、読み込んだときに 0 で始まる)。常駐部の変数(DATA/BSS)が 0xCC00-0xDDFF に収まっているかも検査する。
 """
 import re
@@ -34,13 +35,14 @@ DATA_BASE, DATA_LIMIT = 0xCC00, 0xDE00   # 0xDE00-0xDFFF は行の左右端(rast
 CODE_LIMIT = 0x8000   # 常駐部はページ1だけ(ページ2はモジュール)
 MOD_BASE, MOD_BSS, MOD_END = 0x8000, 0xBC00, 0xC000
 GAME_BSS = 0xBC80                       # ゲームモジュールの変数の先頭(Makefile の GAMEMODFLAGS の --data-loc)
+SND_VARS = (0xEF10, 0xF000)             # 音のモジュールの変数(ページ3。Makefile の SNDMODFLAGS の --data-loc、src/engine/main.c の SND_VARS)
 STAGES = 6
 def ENV_BANK(n): return 4 if n == 1 else 14 + 2 * n     # game.h の ENV_BANK
 def GAME_BANK(n): return 4 + 2 * n
 P0D_BASE, P0D_LIMIT = 0x1A00, 0x2E00   # ページ0の表とコード(0x0200-0x19FF は辺キャッシュ、0x2E00-0x3FFF は地形の断面の表)
 P0D_STAGE = 0x1800                      # 読み込みは 0xB400-0xCBFF 経由なので 6KB まで
 ENV_CODE_LIMIT = 0xB600                 # 地形モジュールのコード(0xB600-0xBBFF は地形の色・飾り・種類の表)
-SONG_BASE = 0x8A40                      # 音のモジュールの曲の表(tools/gen_music.py の BASE、sndfm.s の SONG_TAB)
+SONG_BASE = 0x8B40                      # 音のモジュールの曲の表(tools/gen_music.py の BASE、sndfm.s の SONG_TAB)
 
 
 def read_ihx(path):
@@ -74,21 +76,23 @@ def read_noi(path):
 
 
 
-def check_module(name, ihx, noi, bss=MOD_BSS):
+def check_module(name, ihx, noi, bss=MOD_BSS, vars=None):
     """モジュールのイメージ(16KB)を作る。コードと定数は 0x8000-(bss - 1)、変数は bss-0xBFFF、初期値つきの変数は無いこと。
-    変数の所(bss-0xBFFF)はイメージで 0 にする(読み込んだときに 0 で始まるように)"""
+    変数の所(bss-0xBFFF)はイメージで 0 にする(読み込んだときに 0 で始まるように)。
+    vars = (先頭, 終わり) なら変数はモジュールの外のその範囲(0 にするのは読み込む側)"""
     img = read_ihx(ihx)
     syms = read_noi(noi)
     lo, hi = min(img), max(img)
     if lo != MOD_BASE or hi >= bss:
         sys.exit(f'mkrom: {name} のコードが 0x{MOD_BASE:04X}-0x{bss - 1:04X} に収まっていない (0x{lo:04X}-0x{hi:04X})')
     dstart, heap = syms.get('s__DATA', 0), syms.get('s__HEAP', 0)
-    if dstart < bss or heap > MOD_END:
-        sys.exit(f'mkrom: {name} の変数 0x{dstart:04X}-0x{heap:04X} が 0x{bss:04X}-0x{MOD_END - 1:04X} に収まっていない')
+    vlo, vhi = vars if vars else (bss, MOD_END)
+    if dstart < vlo or heap > vhi:
+        sys.exit(f'mkrom: {name} の変数 0x{dstart:04X}-0x{heap:04X} が 0x{vlo:04X}-0x{vhi - 1:04X} に収まっていない')
     if syms.get('l__INITIALIZER', 0) or syms.get('l__GSINIT', 0):
         sys.exit(f'mkrom: {name} に初期値つきの変数がある(モジュールでは 0 で始まる変数しか使えない)')
     image = bytes(img.get(MOD_BASE + i, 0xFF) if MOD_BASE + i < bss else 0 for i in range(0x4000))
-    return image, f'{name}={hi - MOD_BASE + 1}B/{bss - MOD_BASE}+{heap - dstart}B/{MOD_END - bss}'
+    return image, f'{name}={hi - MOD_BASE + 1}B/{bss - MOD_BASE}+{heap - dstart}B/{vhi - vlo}'
 
 
 def main(boot_ihx, eng_ihx, eng_noi, out_path, *game_args):
@@ -152,17 +156,17 @@ def main(boot_ihx, eng_ihx, eng_noi, out_path, *game_args):
         img, info = check_module(f'stage{n}', game_args[k * 2], game_args[k * 2 + 1], GAME_BSS)
         place(GAME_BANK(n), img, f'stage{n}')
         mods.append(info)
-    sndimg, info = check_module('snd', snd_ihx, snd_noi)
+    sndimg, info = check_module('snd', snd_ihx, snd_noi, MOD_END, SND_VARS)
     snd_hi = max(a for a in read_ihx(snd_ihx))
     if snd_hi >= SONG_BASE:
         sys.exit(f'mkrom: 音のモジュールのドライバが 0x{SONG_BASE:04X}(曲の表)に食い込んだ: 0x{snd_hi:04X}')
     songs = open(songs_bin, 'rb').read()
-    if SONG_BASE + len(songs) > MOD_BSS:
-        sys.exit(f'mkrom: 曲が {len(songs)} B で、0x{SONG_BASE:04X}-0x{MOD_BSS - 1:04X} に収まらない')
+    if SONG_BASE + len(songs) > MOD_END:
+        sys.exit(f'mkrom: 曲が {len(songs)} B で、0x{SONG_BASE:04X}-0x{MOD_END - 1:04X} に収まらない')
     sndimg = bytearray(sndimg)
     sndimg[SONG_BASE - MOD_BASE:SONG_BASE - MOD_BASE + len(songs)] = songs
     rom[SND_BANK * BANK:(SND_BANK + 2) * BANK] = bytes(sndimg)
-    mods.append(f'snd={snd_hi - MOD_BASE + 1}B+songs={len(songs)}B')
+    mods.append(f'snd={snd_hi - MOD_BASE + 1}B/{SONG_BASE - MOD_BASE}+songs={len(songs)}B/{MOD_END - SONG_BASE}')
     voice = open(voice_bin, 'rb').read()
     if len(voice) > MOD_BSS - MOD_BASE:
         sys.exit(f'mkrom: 声のモジュールが {len(voice)} B で、{MOD_BSS - MOD_BASE} B を超えた')

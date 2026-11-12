@@ -11,7 +11,7 @@
 	.module	sndfm
 	.globl	_fm_write, _g_drm, _g_hha
 
-SONG_TAB = 0x8A40		; 曲の表(tools/gen_music.py の BASE。ドライバのコードはその手前まで。tools/mkrom.py が確かめる)
+SONG_TAB = 0x8B40		; 曲の表(tools/gen_music.py の BASE。ドライバのコードはその手前まで。tools/mkrom.py が確かめる)
 FMC_P	= 0			; チャンネル: 今読んでいる所(0 = 止まっている)
 FMC_TOP	= 2			; 頭
 FMC_LOOP = 4			; ループで戻る所(0 = 頭)
@@ -36,23 +36,23 @@ fm_flags:	.ds	1
 fm_hdr:		.ds	2	; 見出しを読んでいる所(リズムの初期化の間とっておく)
 _g_bgm_on::	.ds	1	; 1 = 鳴らしている
 _g_psg_top::	.ds	2	; 曲の PSG のパート(無ければ 0)
+fm_v5:		.ds	1	; 曲が ch5 に書いた音色・音量(レジスタ 0x35)。効果音が ch5 を返すときに戻す
+fse_on:		.ds	1	; 1 = FM の効果音が ch5 を使っている(曲の ch5 は書かない)
+fse_p:		.ds	2	; 効果音の次の段
+fse_t:		.ds	1	; 今の段の残りティック(ここから 7 バイトは段の並びと同じ順。段を読むときにまとめて写す)
+fse_iv:		.ds	1	; 音色 << 4 | 音量(0 が最大、15 が無音)
+fse_f:		.ds	2	; F ナンバー << 7(bit15 が立つように保つ。下がって 0x8000 を割ったら 2 倍してブロックを 1 つ下げる)
+fse_blk:	.ds	1	; ブロック
+fse_k:		.ds	1	; 毎ティック F ナンバーを 1/2^k 下げる(0 = 下げない)
+fse_vm:		.ds	1	; 残りティック & fse_vm が 0 のティックに音量を 1 下げる(0 = 下げない)
 
 	.area	_CODE
 
-; 音程の表: MIDI 24〜107 の (F ナンバーの下位 8 ビット, F ナンバーの bit8 | ブロック << 1)。
+; 音程の表: 1 オクターブ 12 音の F ナンバーの下位 8 ビット(上位の bit8 はどれも 1)。MIDI の音番号 n は、n - 19 を 12 で割った
+; 商がブロック、余りが表の位置(MIDI 24〜107 = ブロック 0〜7。もとは 84 音ぶんの表だったのを、同じ値になる形にした)。
 ; F ナンバー = 周波数 × 2^(19 - ブロック) / (3579545 / 72)、512 未満になる一番小さいブロック
-fm_ftab:
-	.db	0x59,0x01, 0x6D,0x01, 0x83,0x01, 0x9A,0x01, 0xB3,0x01, 0xCC,0x01, 0xE8,0x01, 0x02,0x03
-	.db	0x12,0x03, 0x22,0x03, 0x33,0x03, 0x46,0x03, 0x59,0x03, 0x6D,0x03, 0x83,0x03, 0x9A,0x03
-	.db	0xB3,0x03, 0xCC,0x03, 0xE8,0x03, 0x02,0x05, 0x12,0x05, 0x22,0x05, 0x33,0x05, 0x46,0x05
-	.db	0x59,0x05, 0x6D,0x05, 0x83,0x05, 0x9A,0x05, 0xB3,0x05, 0xCC,0x05, 0xE8,0x05, 0x02,0x07
-	.db	0x12,0x07, 0x22,0x07, 0x33,0x07, 0x46,0x07, 0x59,0x07, 0x6D,0x07, 0x83,0x07, 0x9A,0x07
-	.db	0xB3,0x07, 0xCC,0x07, 0xE8,0x07, 0x02,0x09, 0x12,0x09, 0x22,0x09, 0x33,0x09, 0x46,0x09
-	.db	0x59,0x09, 0x6D,0x09, 0x83,0x09, 0x9A,0x09, 0xB3,0x09, 0xCC,0x09, 0xE8,0x09, 0x02,0x0B
-	.db	0x12,0x0B, 0x22,0x0B, 0x33,0x0B, 0x46,0x0B, 0x59,0x0B, 0x6D,0x0B, 0x83,0x0B, 0x9A,0x0B
-	.db	0xB3,0x0B, 0xCC,0x0B, 0xE8,0x0B, 0x02,0x0D, 0x12,0x0D, 0x22,0x0D, 0x33,0x0D, 0x46,0x0D
-	.db	0x59,0x0D, 0x6D,0x0D, 0x83,0x0D, 0x9A,0x0D, 0xB3,0x0D, 0xCC,0x0D, 0xE8,0x0D, 0x02,0x0F
-	.db	0x12,0x0F, 0x22,0x0F, 0x33,0x0F, 0x46,0x0F
+fm_ft12:
+	.db	0x02, 0x12, 0x22, 0x33, 0x46, 0x59, 0x6D, 0x83, 0x9A, 0xB3, 0xCC, 0xE8
 
 ; リズムモードの準備: ch6〜8 の F ナンバー(YM2413 の推奨値)と音量(中くらいから。曲が 0x84 で変える)
 rhy_init:
@@ -259,15 +259,21 @@ mel_tick:
 	jr	c, 13$
 	ld	a, #107
 13$:
-	sub	a, #24
-	add	a, a
-	ld	e, a
-	ld	d, #0
-	ld	hl, #fm_ftab
-	add	hl, de
-	ld	e, (hl)
-	inc	hl
-	ld	d, (hl)			; E = F ナンバーの下位、D = 上位とブロック
+	sub	a, #19
+	ld	d, #0xFF
+14$:
+	inc	d			; D = ブロック << 1 | 1(F ナンバーの bit8)
+	inc	d
+	sub	a, #12
+	jr	nc, 14$
+	add	a, #12
+	ld	hl, #fm_ft12
+	add	a, l
+	ld	l, a
+	adc	a, h
+	sub	a, l
+	ld	h, a
+	ld	e, (hl)			; E = F ナンバーの下位、D = 上位とブロック
 	ld	a, FMC_DET (ix)		; 音程のずらし(符号つき)を F ナンバーに足す
 	ld	l, a
 	add	a, a
@@ -283,16 +289,16 @@ mel_tick:
 	ld	a, c
 	add	a, #0x10
 	ld	l, e
-	call	_fm_write
+	call	chw
 	ld	a, c
 	add	a, #0x20
 	ld	l, d
-	call	_fm_write		; キーオフしてから
+	call	chw		; キーオフしてから
 	ld	a, c
 	add	a, #0x20
 	ld	l, d
 	set	4, l
-	call	_fm_write		; キーオン(エンベロープを頭から)
+	call	chw		; キーオン(エンベロープを頭から)
 	ld	FMC_ON (ix), #1
 	ret
 20$:
@@ -311,7 +317,7 @@ mel_tick:
 	add	a, #0x30
 	push	hl
 	ld	l, (hl)
-	call	_fm_write
+	call	chw
 	pop	hl
 	inc	hl
 	jp	11$
@@ -376,7 +382,29 @@ key_off:
 	ld	a, c
 	add	a, #0x20
 	ld	l, FMC_HI (ix)
+	jp	chw
+
+; chw: 曲のメロディの書き込み(A = レジスタ、L = 値、C = チャンネル)。FM の効果音が ch5 を使っている間は ch5 に書かない。
+;   ch5 の音色・音量(0x35)は覚えておき、効果音が終わったら戻す
+chw:
+	push	af
+	cp	a, #0x35
+	jr	nz, 1$
+	ld	a, l
+	ld	(fm_v5), a
+1$:
+	ld	a, c
+	cp	a, #5
+	jr	nz, 2$
+	ld	a, (fse_on)
+	or	a, a
+	jr	nz, 3$
+2$:
+	pop	af
 	jp	_fm_write
+3$:
+	pop	af
+	ret
 
 ; rhy_tick: IX = リズムのチャンネル
 rhy_tick:
@@ -539,3 +567,126 @@ rv:
 	pop	hl
 	inc	hl
 	ret
+
+; ---------------------------------------------------------------------------
+; FM の効果音(落下の「ヒューッ」、着地の「ドシャーン」など。sndtick.c の se_fm_)。FM の ch5 を鳴っている間だけ借りる
+;   (曲の ch5 は止まり、終わったら音色・音量を戻す。ch5 を使わない曲もある)。リズムの音も打てる(PSG のドラムも重なる)。
+;   段(8 バイト): ティック数, 音色 << 4 | 音量, 0, F ナンバー >> 1(0 = ch5 は鳴らさない), ブロック, k, 音量のマスク, リズム
+;   (bit4 バスドラム、bit3 スネア、bit2 タム、bit1 シンバル、bit0 ハイハット)。毎ティック F ナンバーを 1/2^k 下げる(k = 0 は下げない)。
+;   音量は残りティック & マスク が 0 のティックに 1 下げる(マスク 0 は下げない)。
+;   ティック数 0 = 終わり。ほかの FM の効果音が来たら、そこで切れて入れ替わる
+; void fm_se_start(const u8 *p)   HL = 段の並び
+; void fm_se_tick(void)
+; ---------------------------------------------------------------------------
+_fm_se_start::
+	ld	(fse_p), hl
+	ld	a, #1
+	ld	(fse_t), a
+	ld	(fse_on), a
+	ret
+
+_fm_se_tick::
+	ld	a, (fse_on)
+	or	a, a
+	ret	z
+	ld	hl, #fse_t
+	dec	(hl)
+	jr	nz, 5$
+	ld	hl, (fse_p)		; 次の段
+	ld	a, (hl)
+	or	a, a
+	jr	nz, 1$
+9$:
+	xor	a, a			; 終わり: ch5 を曲に返す
+	ld	(fse_on), a
+	ld	l, a
+	ld	a, #0x25
+	call	_fm_write
+	ld	a, (fm_v5)
+	ld	l, a
+	ld	a, #0x35
+	jp	_fm_write
+1$:
+	ld	de, #fse_t
+	ld	bc, #7
+	ldir
+	ld	c, (hl)			; リズム
+	inc	hl
+	ld	(fse_p), hl
+	ld	a, #0x25		; ch5 を離す(段ごとに音の頭から)
+	ld	l, b
+	call	_fm_write
+	ld	a, c
+	or	a, a
+	jr	z, 6$
+	ld	hl, #_g_drm		; PSG のドラムも重ねる(sndtick.c)
+	or	a, (hl)
+	ld	(hl), a
+	ld	a, (fm_rhy)		; リズムモードの曲だけ FM のリズムを打つ
+	or	a, a
+	jr	z, 6$
+	ld	l, #0x20
+	call	rhy_w
+	ld	a, c
+	or	a, #0x20
+	ld	l, a
+	call	rhy_w
+	jr	6$
+5$:
+	ld	a, (fse_vm)		; 音量を下げる(HL = fse_t)
+	or	a, a
+	jr	z, 4$
+	and	a, (hl)
+	jr	nz, 4$
+	inc	hl			; fse_iv
+	ld	a, (hl)
+	cpl
+	and	a, #0x0F
+	jr	z, 4$
+	inc	(hl)
+4$:
+	ld	a, (fse_k)		; 音程を下げる: F -= F >> k
+	or	a, a
+	jr	z, 6$
+	ld	b, a
+	ld	hl, (fse_f)
+	ld	d, h
+	ld	e, l
+3$:
+	srl	d
+	rr	e
+	djnz	3$
+	or	a, a
+	sbc	hl, de
+	bit	7, h
+	jr	nz, 7$
+	add	hl, hl			; 下のブロックへ
+	ex	de, hl
+	ld	hl, #fse_blk
+	dec	(hl)
+	ex	de, hl
+7$:
+	ld	(fse_f), hl
+6$:
+	ld	a, (fse_iv)
+	ld	l, a
+	ld	a, #0x35
+	call	_fm_write
+	ld	hl, (fse_f)
+	ld	a, h
+	or	a, a
+	ret	z			; 鳴らさない段
+	add	hl, hl			; H = F ナンバーの下位 8 ビット
+	ld	l, h
+	ld	a, #0x15
+	call	_fm_write
+	ld	a, (fse_blk)
+	add	a, a
+	or	a, #0x11		; キーオン、F ナンバーの bit8
+	ld	l, a
+	ld	a, #0x25
+	jp	_fm_write
+
+rhy_w:
+	ld	a, #0x0E
+	jp	_fm_write

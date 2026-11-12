@@ -57,8 +57,11 @@ C_SRCS   = $(ENG)/main.c $(ENG)/render.c $(ENG)/rail.c $(ENG)/shared.c \
 # モジュールのリンク: 0x8000 に先頭(modhead)、変数は 0xBC00-0xBFFF。常駐部のシンボルは ressyms(engine.noi から生成)で渡す。
 # ゲームモジュールだけは変数を 0xBC80- に置き、コードを 0xBC7F まで使う(ステージ 1 のモジュールの空きが無くなったため。
 # 変数の 0 埋めは、読み込みのときではなく ROM のイメージで済ませている。tools/mkrom.py の GAME_BSS)
+# 音のモジュールは変数をページ3 の空き 0xEF10-0xEFFF(レールの点の後ろ。src/engine/rail.h)に置き、0x8000-0xBFFF をすべてコードと曲に使う
+# (曲とドライバの所が埋まったため。変数は起動時に main.c が 0 にする。tools/mkrom.py の SND_VARS)
 MODFLAGS = -mr800 --no-std-crt0 --data-loc 0xBC00 -Wl-j -Wl-m -Wl-u
 GAMEMODFLAGS = -mr800 --no-std-crt0 --data-loc 0xBC80 -Wl-j -Wl-m -Wl-u
+SNDMODFLAGS = -mr800 --no-std-crt0 --data-loc 0xEF10 -Wl-j -Wl-m -Wl-u
 
 # crt0 は必ず先頭にリンクする
 RELS = $(BUILD)/crt0.rel \
@@ -87,7 +90,7 @@ $(BUILD):
 $(BUILD)/gen_data.c: $(TOOLS)/gen_data.py | $(BUILD)
 	$(PYTHON) $< $@
 
-# FM 音源の曲(src/sound/songs.mml)→ 音のモジュールの曲の部分(0x8A40-)と曲の番号(songs.h)
+# FM 音源の曲(src/sound/songs.mml)→ 音のモジュールの曲の部分(0x8B40-)と曲の番号(songs.h)
 $(BUILD)/songs.bin $(BUILD)/songs.h: src/sound/songs.mml $(TOOLS)/gen_music.py | $(BUILD)
 	$(PYTHON) $(TOOLS)/gen_music.py src/sound/songs.mml $(BUILD)/songs.bin $(BUILD)/songs.h
 
@@ -150,14 +153,15 @@ $(BUILD)/env6.ihx: $(BUILD)/modhead_env.rel $(BUILD)/env_s6.rel $(BUILD)/skyspr.
 $(BUILD)/env_s%.rel: $(ENG)/env.c $(HDRS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -DENV_S$* -c -o $@ $<
 
-# 場面のモジュール(マッパーのセグメント 10 に置く。エンディング・ゲームオーバー・隠しコンフィグ・SCREEN 3 の作り直し)
+# 場面のモジュール(マッパーのセグメント 10 に置く。エンディング・ゲームオーバー・隠しコンフィグ・SCREEN 3 の作り直し・ハイスコア)
+# --code-loc は入口の表(modhead_scene.s の jp × 6 = 18 B)のすぐ後。表に足したら、ここもずらす(重なってもリンカは何も言わない)
 $(BUILD)/scenemod.ihx: $(BUILD)/modhead_scene.rel $(BUILD)/scene.rel $(BUILD)/ressyms.rel
-	$(CC) $(MODFLAGS) --code-loc 0x800F -o $@ $^
+	$(CC) $(MODFLAGS) --code-loc 0x8012 -o $@ $^
 
-# 音のモジュール(マッパーのセグメント 8 に置く。効果音・ドラムのノイズ・PSG のパート・FM の曲のドライバ。曲のデータは 0x8A40- に
+# 音のモジュール(マッパーのセグメント 8 に置く。効果音・ドラムのノイズ・PSG のパート・FM の曲のドライバ。曲のデータは 0x8B40- に
 # tools/mkrom.py が合わせる)。割り込み(Z80 転送の間も)から動くので、C は Z80_SAFE_C で確かめる
 $(BUILD)/sndmod.ihx: $(BUILD)/modhead_snd.rel $(BUILD)/sndtick.rel $(BUILD)/sndfm.rel $(BUILD)/ressyms.rel
-	$(CC) $(MODFLAGS) --code-loc 0x8009 -o $@ $^
+	$(CC) $(SNDMODFLAGS) --code-loc 0x8009 -o $@ $^
 
 # ステージごとのゲームモジュール(ページ2 = セグメント 1 に、ステージの始めに読み込む)
 STG     = src/stage

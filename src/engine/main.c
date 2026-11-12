@@ -193,6 +193,10 @@ void main(void)
     mod_load(SCENE_BANK);
     sys_seg2(SEG_SND);               /* 音のモジュール(効果音・曲のドライバと FM の曲)をセグメント 8 へ */
     mod_load(SND_BANK);
+    {                                /* 音のモジュールの変数(ページ3 の 0xEF10-0xEFFF。Makefile の SNDMODFLAGS)を 0 で始める */
+        u8 *p = (u8 *)0xEF10;
+        do *p++ = 0; while (p != (u8 *)0xF000);
+    }
     g_snd_ok = 1;                    /* ここから割り込みが音の処理を呼ぶ */
     sys_seg2(SEG_VOICE);             /* 声のモジュール(内蔵 PCM の英語の声)をセグメント 9 へ */
     mod_load(VOICE_BANK);

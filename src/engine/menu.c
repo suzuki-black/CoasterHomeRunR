@@ -59,6 +59,14 @@ void title(void)
         }
         if ((in & IN_A) && !(prev & IN_A)) break;
         prev = in;
+        if (t >= 600) {                  /* 約 10 秒待つとランキング(約 6 秒)。その間にスペースを押せば始める */
+            vdp_init();
+            if (rank_show()) break;
+            title_show();
+            t = 0;
+            kn = 0;
+            prev = 0xFF;
+        }
     }
     bgm_stop();
     vdp_init();                          /* SCREEN 3 に戻す */

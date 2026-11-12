@@ -3,7 +3,9 @@
 #define SOUND_H
 #include "engine.h"
 
-enum { SE_NONE, SE_HEAL, SE_SHOT, SE_HIT, SE_ALARM, SE_KILL, SE_TRAIN, SE_DAMAGE, SE_LOCK, SE_TALLY, SE_BOSS, SE_COUNT };
+enum { SE_NONE, SE_HEAL, SE_SHOT, SE_HIT, SE_ALARM, SE_KILL, SE_TRAIN, SE_DAMAGE, SE_LOCK, SE_TALLY, SE_BOSS,
+       SE_FALL, SE_LAND, SE_JOLT,     /* FM の効果音(sndtick.c の se_fm。ch5 を借りる): 落下(着地で切れる)・着地・ガコン */
+       SE_COUNT };
 
 void sound_init(void);
 void se_play(u8 id);

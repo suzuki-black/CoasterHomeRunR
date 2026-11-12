@@ -15,6 +15,7 @@ extern const u8 pal_fixed[], pal_title[];
 extern u8 g_end_bgm;
 extern Config g_cfg;
 void scm_vdp_init(void);
+static void rk_entry(void);
 
 void scm_vdp_init(void)
 {
@@ -195,6 +196,7 @@ void scm_ending(void)
     bgm_stop();
     vdp_wreg(23, 0);
     scm_vdp_init();
+    rk_entry();                          /* 5 位以内なら名前を入れてもらう */
 }
 
 /* ゲームオーバー(約 4 秒)。GAME OVER の点滅、COASTER BROKEN、最終スコア(内部は 1/10 なので末尾に 0)。
@@ -221,6 +223,7 @@ void scm_gameover(void)
         text_center(38, s, C_WHITE, 1);
         present();
     }
+    rk_entry();                          /* 5 位以内なら名前を入れてもらう */
 }
 
 /* 耐久が 0 になったとき、止まった画面に CONTINUE? を重ねる。続けるなら耐久を満タンに、誘導弾を始めの数まで戻し、スコアを 0 にして 1 を返す。
@@ -254,6 +257,124 @@ u8 scm_continue(void)
     if (mis_left < MIS_START) mis_left = MIS_START;
     g_score = 0;
     return 1;
+}
+
+/* ---------------------------------------------------------------------------
+ * ハイスコア(2026-11-09): 上位 5 つの得点と 3 文字の名前。この場面のモジュールは起動時に 1 回しか読み込まないので、
+ * 変数は電源を切るまで残る(カートリッジに電池で残す SRAM は無い)。
+ *   rk_entry: ゲームオーバーとエンディングの最後に、得点が 5 位以内なら名前を入れてもらう
+ *   scm_rank: タイトルで待っていると出すランキング(sys.s の rank_show から)
+ * --------------------------------------------------------------------------- */
+#define RK_N 5
+static u16 rk_score[RK_N];               /* 得点(g_score と同じく表示の 1/10) */
+static char rk_name[RK_N][4];            /* 3 文字 + 0 */
+static u8 rk_ok;                         /* 初期値を入れたか(モジュールの変数は 0 で始まる) */
+static const u16 rk_def_score[RK_N] = { 5000, 4000, 3000, 2000, 1000 };
+static const char rk_def_name[] = "SBKCLDMSXFMPPCM";
+static const char * const rk_ord[RK_N] = { "1ST", "2ND", "3RD", "4TH", "5TH" };
+static const char rk_cs[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-!?";   /* 名前に使える字(ブロックの字にある物) */
+#define RK_CS_N (sizeof(rk_cs) - 1)
+
+static void rk_init(void)
+{
+    u8 i, j;
+    if (rk_ok) return;
+    rk_ok = 1;
+    for (i = 0; i < RK_N; i++) {
+        rk_score[i] = rk_def_score[i];
+        for (j = 0; j < 3; j++) rk_name[i][j] = rk_def_name[i * 3 + j];
+    }
+}
+
+/* 順位・得点(末尾の 0 は文字で)を 1 行に。name が 0 なら名前は書かない */
+static void rk_line(u8 i, i8 y, u8 c, const char *name)
+{
+    text_draw(4, y, rk_ord[i], c, 1);
+    num_draw(18, y, rk_score[i], 5, c);
+    text_draw(38, y, "0", c, 1);
+    if (name) text_draw(46, y, name, c, 1);
+}
+
+/* ランキングを len ティック見せる。hi の行(0xFF = 無し)は点滅させる。スペース(A)で 1 を返す */
+static u8 rk_view(u8 hi, u16 len)
+{
+    u16 t0 = g_tick;
+    u8 i, in, prev = 0xFF;
+    while ((u16)(g_tick - t0) < len) {
+        buf_fill(C_BLACK);
+        text_center(3, "HIGH SCORES", C_YELLOW, 1);
+        for (i = 0; i < RK_N; i++) {
+            u8 c = (i == 0) ? C_ORANGE : (i & 1) ? C_CYAN : C_WHITE;
+            if (i == hi && (g_tick & 16)) continue;
+            rk_line(i, (i8)(13 + i * 7), c, rk_name[i]);
+        }
+        present();
+        in = input_raw();
+        if ((in & IN_A) && !(prev & IN_A)) return 1;
+        prev = in;
+    }
+    return 0;
+}
+
+u8 scm_rank(void)
+{
+    rk_init();
+    return rk_view(0xFF, 360);
+}
+
+/* 得点が 5 位以内なら、名前を入れてもらってランキングに入れる。上下で字を変え(押し続けると送る)、A で次の字、B で 1 字戻る。
+ * 撃ち続けていた指で決めないように、0.75 秒は入力を受けない */
+static void rk_entry(void)
+{
+    u8 r, i, pos = 0, in, edge, prev = 0xFF, hold = 0;
+    u8 ci[3];
+    char nm[2];
+    u16 t0 = g_tick;
+    rk_init();
+    for (r = 0; r < RK_N && g_score <= rk_score[r]; r++) ;
+    if (r == RK_N) return;
+    bgm_play(SONG_NAMEENTRY);            /* 木琴の曲(src/sound/songs.mml)。この後のランキングまで */
+    for (i = RK_N - 1; i > r; i--) {
+        rk_score[i] = rk_score[i - 1];
+        rk_name[i][0] = rk_name[i - 1][0]; rk_name[i][1] = rk_name[i - 1][1]; rk_name[i][2] = rk_name[i - 1][2];
+    }
+    rk_score[r] = g_score;
+    ci[0] = ci[1] = ci[2] = 0;
+    nm[1] = 0;
+    for (;;) {
+        buf_fill(C_BLACK);
+        text_center(3, "NEW RECORD!", C_YELLOW, 1);
+        rk_line(r, 11, C_WHITE, 0);
+        text_center(20, "ENTER YOUR NAME", C_CYAN, 1);
+        for (i = 0; i < 3; i++) {        /* 2 倍の字(幅 6)を 8 ドットおきに。入れている字は点滅させ、下に線を引く */
+            if (i > pos) break;
+            if (i == pos && (g_tick & 16)) continue;
+            nm[0] = rk_cs[ci[i]];
+            text_draw((i8)(21 + i * 8), 28, nm, (i == pos) ? C_YELLOW : C_WHITE, 2);
+        }
+        g_rx = 21 + pos * 8; g_ry = 39; g_rw = 6; g_rh = 1; g_color = C_YELLOW;
+        rect_fill();
+        text_center(43, "A:OK  B:BACK", C_WHITE, 1);
+        present();
+        in = input_raw();
+        edge = in & ~prev;
+        prev = in;
+        if ((u16)(g_tick - t0) < 45) continue;
+        if (edge & (IN_UP | IN_DOWN)) hold = 0;
+        else if (in & (IN_UP | IN_DOWN)) {
+            if (++hold >= 10) { hold = 7; edge |= in & (IN_UP | IN_DOWN); }
+        }
+        if (edge & IN_UP) { ci[pos] = (ci[pos] + 1 < RK_CS_N) ? ci[pos] + 1 : 0; se_play(SE_TALLY); }
+        if (edge & IN_DOWN) { ci[pos] = ci[pos] ? ci[pos] - 1 : RK_CS_N - 1; se_play(SE_TALLY); }
+        if (edge & IN_A) {
+            se_play(SE_LOCK);
+            if (pos == 2) break;
+            pos++;
+        } else if ((edge & IN_B) && pos) pos--;
+    }
+    for (i = 0; i < 3; i++) rk_name[r][i] = rk_cs[ci[i]];
+    rk_view(r, 240);
+    bgm_stop();
 }
 
 /* 項目: 名前、最小、最大、値の名前(0 = 数字で出す) */

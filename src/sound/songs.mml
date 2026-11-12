@@ -401,3 +401,35 @@ R V15,15,12,11,15
 R [ bc8 r8 sh8 r8 b8 r8 sh8 r8
 R  [ b8 r8 sh8 r8 b8 r8 sh8 r8 ]6
 R    b8 r8 sh8 s16 s16 t8 t8 bs8 s8 ]2
+
+@song NAMEENTRY loop
+# 名前入力とその後のランキング(2026-11-09 ユーザー: 「ハイスコアとネームエントリーにそれっぽい BGM」)。ハ長調、t120、8 小節。
+#   遊び終えて名前を書く、肩の力の抜けた晴れやかなオリジナル。C・Am・F・G / C・Am・Dm G・C
+#   場面の音の個性: 木琴(マリンバ)。モジュレーター 4 倍が打った瞬間だけ鳴る木を叩いた音で、どの面にも無い。
+#   旋律を +2 ずらして 2 チャンネルで重ね、分散和音も同じ木琴、PSG は 1 オクターブ上で減衰させて鉄琴を重ね、ベースはウッドベースで歩く
+@tempo 120
+@voice 04 01 1C 03 F8 F6 F5 25   # オリジナル音色 0: 木琴(モジュレーター 4 倍を素早く減衰、キャリアも減衰)
+A @0 @v0 v13 q5 l8
+A o5 e g o6 c4 o5 b o6 c d4 | o6 e4 c o5 a o6 c4 o5 a4 | o5 f a o6 c4 o5 a o6 c f4 | o6 d4 o5 b g b4 o6 d4 |
+A o5 e g o6 c4 o5 b o6 c d4 | o6 e g a4 g e c4 | o5 f a o6 d4 o5 g b o6 d4 | o6 c4 o5 g e c4 r4 |
+F K+2 @0 v12 q5 l8
+F o5 e g o6 c4 o5 b o6 c d4 | o6 e4 c o5 a o6 c4 o5 a4 | o5 f a o6 c4 o5 a o6 c f4 | o6 d4 o5 b g b4 o6 d4 |
+F o5 e g o6 c4 o5 b o6 c d4 | o6 e g a4 g e c4 | o5 f a o6 d4 o5 g b o6 d4 | o6 c4 o5 g e c4 r4 |
+P D+8 v7 E3 q5 l8
+P o6 e g o7 c4 o6 b o7 c d4 | o7 e4 c o6 a o7 c4 o6 a4 | o6 f a o7 c4 o6 a o7 c f4 | o7 d4 o6 b g b4 o7 d4 |
+P o6 e g o7 c4 o6 b o7 c d4 | o7 e g a4 g e c4 | o6 f a o7 d4 o6 g b o7 d4 | o7 c4 o6 g e c4 r4 |
+#   分散和音(8 分で根音・5 度・3 度・5 度)
+B @0 v10 q4 l8
+B o4 [c g e g]2 | o3 [a o4 e c e o3]2 | o3 [a o4 f c f o3]2 | o3 [b o4 g d g o3]2 |
+B o4 [c g e g]2 | o3 [a o4 e c e o3]2 | o3 a o4 f d f o3 b o4 g d g | o4 c g e g c2 |
+#   長い和音(3 度の音)
+C @0 v9 q8 o4 e1 | e1 | f1 | d1 | e1 | e1 | f2 d2 | e1 |
+#   歩くベース(4 分で和音の音を)
+D @14 v14 q6 l4
+D o3 c e g e | o2 a o3 c e c | o2 f a o3 c o2 a | o2 g b o3 d o2 b |
+D o3 c e g e | o2 a o3 c e c | o2 d f g b | o3 c o2 g o3 c2 |
+#   リズム: 軽い 4 拍(1・3 拍と 3 拍の裏にバスドラム、2・4 拍にスネアとハイハット)、8 小節目にタムのフィル、頭にシンバル
+R V13,12,11,10,13
+R bc4 sh4 b8 b8 sh4
+R [ b4 sh4 b8 b8 sh4 ]6
+R b4 sh4 s8 t8 t8 s8

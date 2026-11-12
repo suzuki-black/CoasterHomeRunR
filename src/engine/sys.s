@@ -187,7 +187,8 @@ _sys_seg2::
 	ret
 
 ; ---------------------------------------------------------------------------
-; void vdp_init(void) / ending_show(void) / gameover_show(void) / config_show(void) / u8 scm_continue_call(void) — 場面のモジュール(scene.c)を呼ぶ
+; void vdp_init(void) / ending_show(void) / gameover_show(void) / config_show(void) / u8 scm_continue_call(void) / u8 rank_show(void)
+;   — 場面のモジュール(scene.c)を呼ぶ
 ;   ページ2を場面のセグメントにして呼び、呼ぶ前のセグメントに戻す(タイトルからも、ゲームのあとからも呼ぶため)。A の戻り値は残す
 ; ---------------------------------------------------------------------------
 SEG_SCENE = 10			; game.h の SEG_SCENE
@@ -205,6 +206,9 @@ _config_show::
 	jr	scm_call
 _scm_continue_call::
 	ld	hl, #MOD_ADDR + 12
+	jr	scm_call
+_rank_show::
+	ld	hl, #MOD_ADDR + 15
 scm_call:
 	ld	a, (_g_seg2)
 	push	af
