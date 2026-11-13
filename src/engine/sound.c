@@ -8,7 +8,7 @@
 #include "sound.h"
 
 /* 優先度(大きいほど強い)。ロックは射撃と同じ。ボスの撃破は一番強い(ほかの音に消されない)。音のモジュールも見る */
-const u8 g_se_pri[SE_COUNT] = { 0, 1, 2, 2, 3, 4, 5, 6, 2, 1, 7, 5, 5, 5 };
+const u8 g_se_pri[SE_COUNT] = { 0, 1, 2, 2, 3, 4, 5, 6, 2, 1, 7, 5, 5, 5, 5 };
 volatile u8 g_se_req;
 u8 g_snd_ok;
 

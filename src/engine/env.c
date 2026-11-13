@@ -65,8 +65,8 @@
 #ifndef HAS_BRIDGE
 #define HAS_BRIDGE 0
 #endif
-#define HAS_SLOPE (HAS_PARK || HAS_FOREST)   /* レールに坂がある面(仮リングの中心が手前に無いときの床の投影 vring_floor。坂を足したらここにも足す) */
-#define HAS_STEEP HAS_FOREST  /* 床のある所に急な坂がある面(足もとの床を塗る near_floor。1 面の丘はなだらかで要らない) */
+#define HAS_SLOPE (HAS_PARK || HAS_FOREST || HAS_TOWN || HAS_HOME)   /* レールに坂がある面(仮リングの中心が手前に無いときの床の投影 vring_floor。坂を足したらここにも足す) */
+#define HAS_STEEP (HAS_FOREST || HAS_TOWN || HAS_HOME)  /* 床のある所に急な坂がある面(足もとの床を塗る near_floor。1 面の丘はなだらかで要らない) */
 #define HAS_SKY (HAS_PARK || HAS_BRIDGE || HAS_TOWN || HAS_HOME)   /* 空のスプライト(太陽・月・雲・鳥)を出す面(洞窟と森は出さない) */
 
 #define RSTEP 4            /* リングの間隔[m] */
@@ -213,6 +213,9 @@ static u8 ab_j;                   /* アーチ橋の径間の中の位置(ring_b
 #define BRIDGEISH(k) ((k) == K_BRIDGE || (k) == K_ARCHBR)
 #endif
 static u8 rail_col;
+#if HAS_HOME
+static i16 field_y;               /* 田んぼ・水車の池の高さ(区間の始まりのレールの高さ。ring_build) */
+#endif
 #if HAS_FOREST
 static i16 stream_y;              /* 小川の水面の高さ(橋のたもとのレールの高さ。ring_build) */
 #endif
@@ -504,6 +507,19 @@ static void ring_build(u8 r, u8 kind, i16 w, i16 h)
         d = D_OPEN | D_NORAIL | D_EMPTY;
         break;
     }
+#if HAS_HOME
+    /* 田んぼと水車の池も世界の中で平ら: 水車の所の丘(6 面の 360〜380m)は、レールの両脇から外の田と池の点(断面の頂点 0・1・2・5)を
+     * 区間の始まりの高さから上がった分だけ下げる(レールだけが土手のように持ち上がる) */
+    if (kind == K_PADDY || kind == K_MILL) {
+        i16 dv;
+        if (!r || KIND[r - 1] != kind) field_y = RAIL_PT((u16)r * RSTEP)->y;
+        dv = RAIL_PT((u16)r * RSTEP)->y - field_y;
+        p[1] -= dv;
+        p[3] -= dv;
+        p[5] -= dv;
+        p[11] -= dv;
+    }
+#endif
 #if HAS_FOREST
     /* 小川の水面も世界の中で平ら: 丸太の橋が持ち上がる所(3 面の 196〜208m の太鼓橋)は、左右の水面の外の縁(岸の足もと)を
      * 橋のたもとの高さから上がった分だけ下げる(水面は橋の縁から岸へ下っていき、岸の面が水面まで伸びる) */
@@ -945,6 +961,18 @@ static void farm_house(u8 idx, i8 sgn)
 }
 
 /* かかし(田の中): 杭と腕、白い顔、藁の笠。sgn = 1 右 / -1 左 */
+/* トランポリン(6 面の 4m。レールはここから崖を駆け上がる。stage6_home.c): 赤い枠に黒い跳ね布、白いばね、4 本の脚 */
+#define TRAMP_RING 1
+static void trampoline(u8 idx)
+{
+    RQUAD(idx, -560, -520, FLOOR_V, FLOOR_V + 60, C_RED);            /* 脚(床から 0.25m) */
+    RQUAD(idx, 520, 560, FLOOR_V, FLOOR_V + 60, C_RED);
+    RQUAD(idx, -560, 560, FLOOR_V + 60, FLOOR_V + 130, C_RED);       /* 枠 */
+    RQUAD(idx, -480, 480, FLOOR_V + 75, FLOOR_V + 115, C_ROCK0);     /* 跳ね布 */
+    RQUAD(idx, -540, -500, FLOOR_V + 60, FLOOR_V + 130, C_WHITE);    /* ばね */
+    RQUAD(idx, 500, 540, FLOOR_V + 60, FLOOR_V + 130, C_WHITE);
+}
+
 static void scarecrow(u8 idx, i8 sgn)
 {
     i16 u = 1300 * sgn;
@@ -1584,6 +1612,7 @@ static void deco_draw(u8 idx)
         if (d & D_LAMP_L) { if (sp_post && sd_l) house_side(idx, -1); else farm_house(idx, -1); }
         if (d & D_LAMP_R) { if (sp_post && sd_r) house_side(idx, 1); else farm_house(idx, 1); }
         if (d & D_TIMBER) home_draw(idx);
+        if (no == TRAMP_RING) trampoline(idx);
         break;
     case K_PADDY:
     case K_MILL: {

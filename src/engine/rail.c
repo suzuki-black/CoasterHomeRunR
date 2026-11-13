@@ -45,6 +45,7 @@ static u8 alt_walk(const RailSeg *segs, RailPt *out, u8 max, u8 base)
     u8 i = 0, steps = 0, k = 0, j, n = 0;
     i16 dyaw = 0;
     i8 dy = 0;
+    u8 st = 0;
     u16 yaw = fk_yaw;
     i16 x = fk_x, y = fk_y, z = fk_z;
     for (;;) {
@@ -59,6 +60,7 @@ static u8 alt_walk(const RailSeg *segs, RailPt *out, u8 max, u8 base)
             steps = segs->len >> 1;
             dyaw = segs->dyaw / steps;
             dy = segs->dy;
+            st = segs->spd & 0x80;               /* 石段(rail.h の STAIRS): 区間の頭から 1 つおきの点だけ上げ下げする */
             segs++;
             i = 0;
         }
@@ -67,7 +69,7 @@ static u8 alt_walk(const RailSeg *segs, RailPt *out, u8 max, u8 base)
         yaw += dyaw;
         x += SIN(yaw >> 8) << 1;
         z += COS(yaw >> 8) << 1;
-        y += (i16)dy << 5;
+        if (!st || ((i ^ (dy < 0)) & 1)) y += (i16)dy << 5;   /* 上りは蹴上げから、下りは踏み面から */
     }
     return n;
 }

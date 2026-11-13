@@ -56,7 +56,7 @@ static const u8 se_jolt[] = {           /* ガコン: 短く硬いノイズ */
 
 static const u8 * const se_tab[SE_COUNT] = {
     0, se_heal, se_shot, se_hit, se_alarm, se_kill, 0, se_damage, se_lock, se_tally, se_boss,
-    0, se_land, se_jolt };
+    0, se_land, se_jolt, 0 };
 
 /* FM の効果音(sndfm.s の fm_se_tick。段の形はそこに)。音程は F ナンバー >> 1 とブロック: 周波数 = F × 49716 / 2^(19 - ブロック) */
 static const u8 se_fm_fall[] = {         /* 落下: 「バキッ」(スネアとシンバル)から、フルートの「ヒューーッ」が下がっていく。
@@ -70,7 +70,12 @@ static const u8 se_fm_land[] = {         /* 着地: 「ドシャーン」(バス
 static const u8 se_fm_jolt[] = {         /* ガコン: バスドラムとタム、低いベースが短く下がる */
     14,  0xE0, 0, 0xD8, 1, 5, 1,  0x14,
     0 };
-static const u8 * const se_fm[SE_COUNT - SE_FALL] = { se_fm_fall, se_fm_land, se_fm_jolt };
+static const u8 se_fm_boing[] = {        /* トランポリン: 「ボ・ヨーン」(ビブラフォンの揺れる音で、低い音から 1 オクターブ半上がって伸びる) */
+    3,   0xC0, 0, 0x80, 3, 0, 0,  0x10,
+    3,   0xC0, 0, 0x80, 4, 0, 0,  0,
+    48,  0xC0, 0, 0xC0, 4, 0, 7,  0,
+    0 };
+static const u8 * const se_fm[SE_COUNT - SE_FALL] = { se_fm_fall, se_fm_land, se_fm_jolt, se_fm_boing };
 
 extern const u8 g_se_pri[SE_COUNT];      /* 常駐部(sound.c) */
 extern volatile u8 g_se_req;

@@ -1095,6 +1095,7 @@ _rail_add::
 	push	hl
 	add	hl, de
 	ld	a, (ra_spd)
+	and	a, #0x7F		; 石段の印(rail.h の STAIRS)を外す
 	ld	(hl), a
 	pop	hl
 	add	hl, hl
@@ -1144,11 +1145,21 @@ _rail_add::
 	ld	de, (_rb_z)
 	add	hl, de
 	ld	(_rb_z), hl
+	pop	bc
+	ld	a, (ra_spd)		; 石段(rail.h の STAIRS): 上りは残りの点の数 B が奇数の点、下りは偶数の点(踏み面)で高さを変えない
+	rlca
+	jr	nc, 7$
+	ld	a, (ra_dy + 1)
+	rlca
+	xor	a, b
+	rrca
+	jr	c, 6$
+7$:
 	ld	hl, (_rb_y)
 	ld	de, (ra_dy)
 	add	hl, de
 	ld	(_rb_y), hl
-	pop	bc
+6$:
 	dec	b
 	jp	nz, 2$
 8$:

@@ -90,6 +90,16 @@ and from behind.
   | 4 The Bridge | a truss bridge high above the sea, waves and boats far below, a lighthouse, an arch span, the harbour ahead |
   | 5 The Town | a festival street with stalls and lanterns, a canal bridge, a fountain plaza where the route branches, the town gate |
   | 6 The Village | fences and thatched farmhouses, rice paddies with a scarecrow, a turning water wheel, the King's entrance, the village gate |
+- **Ups and downs that make no sense.** Each stage has its own kind of climb or drop, and they are exaggerated on purpose:
+
+  | Stage | Ups and downs |
+  |---|---|
+  | 1 | over a hill past the route branch |
+  | 2 | down the mine shaft, then off a rock ledge into the lake 10 m below, landing on the raft |
+  | 3 | a hump of tree roots, a 12 m-high arched bridge over the stream, a 30 m climb and drop inside the branch |
+  | 4 | an arch span that throws you 21 m up over the sea, then a drop to just above the waves |
+  | 5 | track laid straight up and down stone stairs (3 m a step) |
+  | 6 | a trampoline that bounces you up a 28 m cliff, a hill against the moon, a 30 m plunge to the village gate |
 - **Front and back.** Attacks come from ahead and from behind; a warning (`ENEMY BEHIND!` / `ENEMY AHEAD!`) blinks and a
   voice calls it out. Press B to turn around.
 - **Homing missiles.** Hold A and sweep the sight over enemies to lock up to four (beep-beep), then press B to fire one
@@ -113,7 +123,9 @@ and from behind.
 - **Sound.** Every stage, the opening, the stage-clear jingle, the ending and the title have their own music on
   MSX-MUSIC (YM2413) with original instrument voices, doubled on the PSG with a slight detune; the last boss has two
   pieces of its own, one for the entrance and one for the battle. The drums are layered with PSG noise. Sound effects are
-  on the PSG.
+  on the PSG, except falls, landings and the trampoline, which play on MSX-MUSIC so they never sound like taking a hit.
+- **High scores and name entry.** Wait on the title screen to see the top five. Make the list and you enter three
+  letters for your name, with its own tune.
 - **turboR internal PCM.** English voices — "Fire!", "Enemy ahead!", "Enemy behind!", "Warning!" and the last boss's
   "You will go no further!" — played during the game.
 - **Title screen in natural-image mode.** The title illustration is shown in SCREEN 11 (YJK + YAE), with the logo and
@@ -323,6 +335,16 @@ This game is fiction. The beast-men, the places and the events are imaginary.
   | 4 海の鉄橋 | 海の上の高いトラス橋、ずっと下の白波と小舟、沖の灯台、アーチ橋、向こう岸の港 |
   | 5 町 | 屋台と提灯の祭りの通り、運河の橋、線路が分かれる噴水の広場、町の門 |
   | 6 村 | 柵と茅葺きの農家、かかしの立つ田んぼ、回る水車、亜人の王の登場、村の門 |
+- **ありえない高低差。** 面ごとに一つずつ、上り下りの趣向があります。わざと大げさにしています。
+
+  | ステージ | 高低差 |
+  |---|---|
+  | 1 | 分岐の先で丘を越える |
+  | 2 | 坑道を下り、岩棚から 10m 下の湖へ落ちて筏に着地する |
+  | 3 | 木の根の山、小川に架かる高さ 12m の太鼓橋、分岐の中の 30m の上り下り |
+  | 4 | アーチ橋で海の上へ 21m 跳ね上がり、最後は海面すれすれまで落ちる |
+  | 5 | 石段にそのまま敷いたレール（1 段 3m） |
+  | 6 | トランポリンで 28m の崖を跳ね上がり、月を背に丘を越え、村の門へ 30m 一気に下る |
 - **前と後ろ。** 敵は前からも後ろからも来ます。警告（`ENEMY BEHIND!` / `ENEMY AHEAD!`）が点滅し、声でも知らせます。
   B で振り向きます。
 - **誘導弾。** A を押したまま照準で敵をなぞると最大 4 体までロックし（「ピピ」）、B で 1 発ずつ撃ちます。各面の始めに 3 発、
@@ -340,7 +362,8 @@ This game is fiction. The beast-men, the places and the events are imaginary.
 - **手応え。** ヒットストップ、吹き飛ぶ敵、破片、被弾の画面の揺れ。ボスを倒すと効果音に合わせて爆発が続きます。
 - **音楽と効果音。** 各面・オープニング・クリア・エンディング・タイトルの曲を MSX-MUSIC（YM2413）のオリジナル音色で鳴らし、
   PSG でわずかにずらして重ね、ドラムには PSG のノイズを重ねます。最後のボスには、登場と戦いの 2 曲を別に用意しました。
-  効果音は PSG です。
+  効果音は PSG で、落下・着地・トランポリンなどの音だけは MSX-MUSIC で鳴らします（被弾の音と聞き分けられるように）。
+- **ハイスコアとネームエントリー。** タイトルで待つと上位 5 位の表が出ます。5 位以内に入ると名前を 3 文字で入れられます（専用の曲付き）。
 - **turbo R 内蔵 PCM。** 英語の声（「Fire!」「Enemy ahead!」「Enemy behind!」「Warning!」、最後のボスの「You will go no
   further!」）をゲーム中に鳴らします。
 - **自然画のタイトル画面。** タイトルの絵を SCREEN 11（YJK + YAE）で出し、ロゴと文字はパレットの色で重ねてにじませません。
